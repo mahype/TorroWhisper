@@ -52,10 +52,16 @@ impl AutostartManager {
                 Ok(None)
             }
             StartupBehavior::LaunchAtLogin => {
-                if !launcher
+                let was_enabled = launcher
                     .is_enabled()
-                    .map_err(|err| format!("Startup status could not be read: {err}"))?
-                {
+                    .map_err(|err| format!("Startup status could not be read: {err}"))?;
+                let stale = was_enabled && has_stale_program_path();
+
+                if stale {
+                    let _ = launcher.disable();
+                }
+
+                if !was_enabled || stale {
                     launcher
                         .enable()
                         .map_err(|err| format!("Launch at login could not be enabled: {err}"))?;
@@ -152,6 +158,37 @@ fn current_executable_path() -> Result<PathBuf, String> {
     }
 
     Ok(path)
+}
+
+#[cfg(target_os = "macos")]
+fn has_stale_program_path() -> bool {
+    let Some(registered) = read_registered_program_path() else {
+        return false;
+    };
+    let Ok(current) = env::current_exe() else {
+        return false;
+    };
+    registered != current
+}
+
+#[cfg(not(target_os = "macos"))]
+fn has_stale_program_path() -> bool {
+    false
+}
+
+#[cfg(target_os = "macos")]
+fn read_registered_program_path() -> Option<PathBuf> {
+    let home = env::var_os("HOME")?;
+    let plist = PathBuf::from(home).join("Library/LaunchAgents/open-whisper.plist");
+    let content = std::fs::read_to_string(&plist).ok()?;
+    content
+        .split("<key>ProgramArguments</key>")
+        .nth(1)?
+        .split("<string>")
+        .nth(1)?
+        .split("</string>")
+        .next()
+        .map(PathBuf::from)
 }
 
 #[cfg(test)]
