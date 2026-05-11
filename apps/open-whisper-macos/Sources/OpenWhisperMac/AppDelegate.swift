@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var settingsItem: NSMenuItem!
     private var modeSwitchItem: NSMenuItem!
     private var modelSwitchItem: NSMenuItem!
+    private var micSwitchItem: NSMenuItem!
     private var statusItemLine: NSMenuItem!
     private var quitItem: NSMenuItem!
     private var checkForUpdatesItem: NSMenuItem!
@@ -26,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let recordingLevelFeed = RecordingLevelFeed()
     private let modeMenu = NSMenu()
     private let modelMenu = NSMenu()
+    private let micMenu = NSMenu()
     private var escapeGlobalMonitor: Any?
     private var escapeLocalMonitor: Any?
     private static let escapeKeyCode: UInt16 = 53
@@ -45,6 +47,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         modeSwitchItem.submenu = modeMenu
         modelSwitchItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         modelSwitchItem.submenu = modelMenu
+        micSwitchItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        micSwitchItem.submenu = micMenu
         statusItemLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         statusItemLine.isEnabled = false
         quitItem = NSMenuItem(title: "", action: #selector(quitApp), keyEquivalent: "q")
@@ -65,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             .separator(),
             settingsItem,
             .separator(),
+            micSwitchItem,
             modeSwitchItem,
             modelSwitchItem,
             statusItemLine,
@@ -183,6 +188,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         model.persistWhisperPresetImmediately(preset)
     }
 
+    @objc private func selectInputDevice(_ sender: NSMenuItem) {
+        guard let name = sender.representedObject as? String else { return }
+        model.persistInputDeviceImmediately(name)
+    }
+
     private func refreshMenuState() {
         let runtime = model.runtime
         let locale = currentLocale
@@ -192,11 +202,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         settingsItem.title = L("Settings…", locale: locale)
         modeSwitchItem.title = L("Post-processing", locale: locale)
         modelSwitchItem.title = L("Transcription model", locale: locale)
+        micSwitchItem.title = L("Microphone", locale: locale)
         quitItem.title = L("Quit", locale: locale)
         checkForUpdatesItem.title = L("Check for updates…", locale: locale)
         feedbackItem.title = L("Send feedback…", locale: locale)
         rebuildModeMenu()
         rebuildModelMenu()
+        rebuildMicMenu()
         statusItemLine.title = model.bridgeError ?? runtime.lastStatus
         statusItem.button?.image = statusImage(recording: runtime.isRecording)
         statusItem.button?.toolTip = buildStatusTooltip(runtime: runtime)
@@ -455,6 +467,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             item.representedObject = preset.rawValue
             item.state = (preset == activePreset) ? .on : .off
             modelMenu.addItem(item)
+        }
+    }
+
+    private func rebuildMicMenu() {
+        micMenu.removeAllItems()
+        let activeName = model.runtime.activeInputDeviceName.isEmpty
+            ? model.settings.inputDeviceName
+            : model.runtime.activeInputDeviceName
+        let locale = currentLocale
+
+        var names = model.devices.map(\.name)
+        if names.isEmpty {
+            names = [model.settings.inputDeviceName]
+        }
+        if !activeName.isEmpty && !names.contains(activeName) {
+            names.insert(activeName, at: 0)
+        }
+
+        for name in names {
+            let label = name == "System Default"
+                ? L("System default", locale: locale)
+                : name
+            let item = NSMenuItem(
+                title: label,
+                action: #selector(selectInputDevice(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = name
+            item.state = (name == activeName) ? .on : .off
+            micMenu.addItem(item)
         }
     }
 

@@ -669,6 +669,18 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func persistInputDeviceImmediately(_ name: String) {
+        do {
+            var freshSettings = try bridge.loadSettings()
+            guard freshSettings.inputDeviceName != name else { return }
+            freshSettings.inputDeviceName = name
+            _ = try bridge.saveSettings(freshSettings)
+            reloadAll()
+        } catch {
+            publish(error)
+        }
+    }
+
     func persistWhisperPresetImmediately(_ preset: ModelPreset) {
         do {
             var freshSettings = try bridge.loadSettings()
