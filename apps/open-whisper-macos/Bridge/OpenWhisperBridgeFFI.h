@@ -6,6 +6,7 @@
 char *ow_load_settings(void);
 char *ow_save_settings(const char *settings_json);
 char *ow_list_input_devices(void);
+char *ow_notify_device_change(void);
 char *ow_get_model_status(void);
 char *ow_get_model_status_list(void);
 char *ow_start_model_download(const char *request_json);

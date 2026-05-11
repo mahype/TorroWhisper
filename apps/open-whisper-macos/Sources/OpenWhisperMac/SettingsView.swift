@@ -97,6 +97,14 @@ struct SettingsView: View {
             } label: {
                 Text("Refresh devices", bundle: .module)
             }
+
+            Toggle(isOn: model.binding(for: \.autoSwitchMicOnHotplug)) {
+                Text("Switch microphone automatically when unplugged", bundle: .module)
+            }
+            Toggle(isOn: model.binding(for: \.showMicSwitchNotifications)) {
+                Text("Show notification when microphone changes", bundle: .module)
+            }
+            .disabled(!model.settings.autoSwitchMicOnHotplug)
         } header: {
             Text("Audio source", bundle: .module)
         }
@@ -470,9 +478,13 @@ struct SettingsView: View {
     }
 
     private var deviceNames: [String] {
-        let names = model.devices.map(\.name)
+        var names = model.devices.map(\.name)
         if names.isEmpty {
             return [model.settings.inputDeviceName]
+        }
+        let saved = model.settings.inputDeviceName
+        if !saved.isEmpty && !names.contains(saved) {
+            names.insert(saved, at: 0)
         }
         return names
     }

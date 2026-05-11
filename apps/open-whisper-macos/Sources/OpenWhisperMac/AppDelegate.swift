@@ -20,6 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var onboardingWindow: NSWindow?
     private var feedbackWindow: NSWindow?
     private var recordingIndicatorWindow: NSWindow?
+    private var micSwitchToastWindow: NSPanel?
+    private var micSwitchToastDismissTask: Task<Void, Never>?
+    private let audioDeviceMonitor = AudioDeviceMonitor()
     private let recordingLevelFeed = RecordingLevelFeed()
     private let modeMenu = NSMenu()
     private let modelMenu = NSMenu()
@@ -76,12 +79,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         model.onStateChanged = { [weak self] in
             self?.refreshMenuState()
         }
+        model.onMicSwitched = { [weak self] notification in
+            self?.showMicSwitchToast(notification)
+        }
         refreshMenuState()
+
+        audioDeviceMonitor.onDevicesChanged = { [weak self] in
+            self?.model.notifyDeviceListChanged()
+        }
+        audioDeviceMonitor.start()
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.model.refreshDiagnostics()
-            if !self.model.runtime.onboardingCompleted {
+            if !self.model.runtime.onboardingCompleted
+                && !self.model.settings.onboardingCompleted {
                 self.showOnboarding(nil)
             }
         }
@@ -187,9 +199,88 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         rebuildModelMenu()
         statusItemLine.title = model.bridgeError ?? runtime.lastStatus
         statusItem.button?.image = statusImage(recording: runtime.isRecording)
-        statusItem.button?.toolTip = model.bridgeError ?? runtime.lastStatus
+        statusItem.button?.toolTip = buildStatusTooltip(runtime: runtime)
         updateRecordingIndicatorVisibility()
         refreshWindowTitles()
+    }
+
+    private func buildStatusTooltip(runtime: RuntimeStatusDTO) -> String {
+        let base = model.bridgeError ?? runtime.lastStatus
+        let mic = runtime.activeInputDeviceName
+        guard !mic.isEmpty else { return base }
+        return "\(base)\nMicrophone: \(mic)"
+    }
+
+    private func showMicSwitchToast(_ notification: MicSwitchNotification) {
+        let message = notification.message.isEmpty
+            ? "Microphone changed to '\(notification.activeDevice)'."
+            : notification.message
+        let window = micSwitchToastWindow ?? makeMicSwitchToastWindow(message: message)
+        if let hosting = window.contentViewController as? NSHostingController<MicSwitchToastView> {
+            hosting.rootView = MicSwitchToastView(message: message)
+        }
+        micSwitchToastWindow = window
+        positionMicSwitchToastWindow(window)
+        window.alphaValue = 0
+        window.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            window.animator().alphaValue = 1
+        }
+
+        micSwitchToastDismissTask?.cancel()
+        micSwitchToastDismissTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_800_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let window = self?.micSwitchToastWindow else { return }
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.25
+                    window.animator().alphaValue = 0
+                } completionHandler: {
+                    Task { @MainActor in
+                        window.orderOut(nil)
+                    }
+                }
+            }
+        }
+    }
+
+    private func makeMicSwitchToastWindow(message: String) -> NSPanel {
+        let size = NSSize(width: 340, height: 60)
+        let panel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isFloatingPanel = true
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.level = .statusBar
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = true
+        panel.hidesOnDeactivate = false
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        panel.isReleasedWhenClosed = false
+
+        let hosting = NSHostingController(rootView: MicSwitchToastView(message: message))
+        hosting.view.frame = NSRect(origin: .zero, size: size)
+        panel.contentViewController = hosting
+        return panel
+    }
+
+    private func positionMicSwitchToastWindow(_ window: NSWindow) {
+        guard let screenFrame = NSScreen.main?.visibleFrame else { return }
+        let margin: CGFloat = 16
+        let size = window.frame.size
+        let topPadding: CGFloat = recordingIndicatorWindow?.isVisible == true ? 120 : 0
+        let origin = NSPoint(
+            x: screenFrame.midX - size.width / 2,
+            y: screenFrame.maxY - size.height - margin - topPadding
+        )
+        window.setFrameOrigin(origin)
     }
 
     private func refreshWindowTitles() {

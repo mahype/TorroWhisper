@@ -295,9 +295,13 @@ struct OnboardingView: View {
     }
 
     private var deviceNames: [String] {
-        let names = model.devices.map(\.name)
+        var names = model.devices.map(\.name)
         if names.isEmpty {
             return [model.settings.inputDeviceName]
+        }
+        let saved = model.settings.inputDeviceName
+        if !saved.isEmpty && !names.contains(saved) {
+            names.insert(saved, at: 0)
         }
         return names
     }

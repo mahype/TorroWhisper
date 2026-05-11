@@ -488,12 +488,34 @@ impl Default for ProcessingMode {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct PreferredDevice {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uid: Option<String>,
+    pub last_selected_at: i64,
+}
+
+impl Default for PreferredDevice {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            uid: None,
+            last_selected_at: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct AppSettings {
     pub onboarding_completed: bool,
     pub startup_behavior: StartupBehavior,
     pub input_device_name: String,
+    pub preferred_input_devices: Vec<PreferredDevice>,
+    pub auto_switch_mic_on_hotplug: bool,
+    pub show_mic_switch_notifications: bool,
     pub hotkey: String,
     pub trigger_mode: TriggerMode,
     pub transcription_language: String,
@@ -532,8 +554,46 @@ pub enum UiLanguage {
     De,
 }
 
+pub const MAX_PREFERRED_INPUT_DEVICES: usize = 10;
+pub const SYSTEM_DEFAULT_DEVICE_LABEL: &str = "System Default";
+
 impl AppSettings {
+    pub fn record_input_device_choice(&mut self, name: &str, uid: Option<String>, now_unix: i64) {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        self.preferred_input_devices
+            .retain(|entry| entry.name != trimmed);
+        self.preferred_input_devices.insert(
+            0,
+            PreferredDevice {
+                name: trimmed.to_owned(),
+                uid,
+                last_selected_at: now_unix,
+            },
+        );
+        if self.preferred_input_devices.len() > MAX_PREFERRED_INPUT_DEVICES {
+            self.preferred_input_devices
+                .truncate(MAX_PREFERRED_INPUT_DEVICES);
+        }
+    }
+
+    pub fn preferred_input_devices_sorted(&self) -> Vec<&PreferredDevice> {
+        let mut list: Vec<&PreferredDevice> = self.preferred_input_devices.iter().collect();
+        list.sort_by(|a, b| b.last_selected_at.cmp(&a.last_selected_at));
+        list
+    }
+
     pub fn normalize(&mut self) {
+        if self.preferred_input_devices.is_empty() && !self.input_device_name.trim().is_empty() {
+            self.preferred_input_devices.push(PreferredDevice {
+                name: self.input_device_name.clone(),
+                uid: None,
+                last_selected_at: 0,
+            });
+        }
+
         let had_standard = self.modes.iter().any(|mode| mode.id == "standard");
         if had_standard {
             self.post_processing_enabled = self.active_mode_id != "standard";
@@ -646,6 +706,9 @@ impl Default for AppSettings {
             onboarding_completed: false,
             startup_behavior: StartupBehavior::default(),
             input_device_name: "System Default".to_owned(),
+            preferred_input_devices: Vec::new(),
+            auto_switch_mic_on_hotplug: true,
+            show_mic_switch_notifications: true,
             hotkey: "Ctrl+Shift+Space".to_owned(),
             trigger_mode: TriggerMode::default(),
             transcription_language: "auto".to_owned(),
@@ -681,6 +744,8 @@ impl Default for AppSettings {
 pub struct DeviceDto {
     pub name: String,
     pub is_selected: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uid: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -801,6 +866,9 @@ pub struct RuntimeStatusDto {
     pub blocked_model_label: String,
     pub blocked_model_is_downloading: bool,
     pub blocked_model_progress_basis_points: Option<u16>,
+    pub active_input_device_name: String,
+    pub last_mic_switch_message: String,
+    pub mic_switch_event_count: u64,
 }
 
 #[cfg(test)]
@@ -871,9 +939,50 @@ mod tests {
         let dto = DeviceDto {
             name: "Mic".to_owned(),
             is_selected: true,
+            uid: None,
         };
 
         assert!(dto.is_selected);
+    }
+
+    #[test]
+    fn record_input_device_choice_promotes_existing() {
+        let mut settings = AppSettings::default();
+        settings.record_input_device_choice("USB Mic", None, 100);
+        settings.record_input_device_choice("Bluetooth Mic", None, 200);
+        settings.record_input_device_choice("USB Mic", None, 300);
+        let names: Vec<&str> = settings
+            .preferred_input_devices
+            .iter()
+            .map(|d| d.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["USB Mic", "Bluetooth Mic"]);
+        assert_eq!(settings.preferred_input_devices[0].last_selected_at, 300);
+    }
+
+    #[test]
+    fn record_input_device_choice_accepts_system_default() {
+        let mut settings = AppSettings {
+            preferred_input_devices: Vec::new(),
+            ..AppSettings::default()
+        };
+        settings.record_input_device_choice(SYSTEM_DEFAULT_DEVICE_LABEL, None, 100);
+        assert_eq!(
+            settings.preferred_input_devices.first().map(|d| d.name.as_str()),
+            Some(SYSTEM_DEFAULT_DEVICE_LABEL)
+        );
+    }
+
+    #[test]
+    fn normalize_seeds_preferred_from_input_device_name() {
+        let mut settings = AppSettings {
+            input_device_name: "USB Mic".to_owned(),
+            preferred_input_devices: Vec::new(),
+            ..AppSettings::default()
+        };
+        settings.normalize();
+        assert_eq!(settings.preferred_input_devices.len(), 1);
+        assert_eq!(settings.preferred_input_devices[0].name, "USB Mic");
     }
 
     #[test]

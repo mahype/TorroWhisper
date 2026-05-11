@@ -26,7 +26,7 @@ use std::{
 };
 
 use autostart::AutostartManager;
-use dictation::{DictationController, DictationOutcome};
+use dictation::{DictationController, DictationOutcome, MicSwitchEvent};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
 use llm_model_manager::LlmModelDownloadManager;
 use model_manager::ModelDownloadManager;
@@ -215,8 +215,12 @@ impl BridgeRuntime {
             }
         }
 
-        let outcomes = self.dictation.poll(&self.settings);
+        let previous_input_device = self.settings.input_device_name.clone();
+        let outcomes = self.dictation.poll(&mut self.settings);
         self.apply_dictation_outcomes(outcomes);
+        if self.settings.input_device_name != previous_input_device {
+            let _ = settings_store::save(&self.settings);
+        }
     }
 
     fn apply_dictation_outcomes(&mut self, outcomes: Vec<DictationOutcome>) {
@@ -335,12 +339,22 @@ impl BridgeRuntime {
     fn save_settings(&mut self, mut next_settings: AppSettings) -> Result<String, String> {
         let previous_path = self.settings.local_model_path.clone();
         let previous_model = self.settings.local_model;
+        let previous_input_device_name = self.settings.input_device_name.clone();
         next_settings.normalize();
 
         if next_settings.local_model_path.trim().is_empty()
             && let Ok(path) = self.dictation.suggested_model_path(&next_settings)
         {
             next_settings.local_model_path = path.display().to_string();
+        }
+
+        if next_settings.input_device_name != previous_input_device_name
+            && !next_settings.input_device_name.trim().is_empty()
+        {
+            let now = current_unix_seconds();
+            let chosen_name = next_settings.input_device_name.clone();
+            next_settings.record_input_device_choice(&chosen_name, None, now);
+            self.dictation.clear_mic_switch_message();
         }
 
         for message in self.dictation.refresh_input_devices(&mut next_settings) {
@@ -380,14 +394,29 @@ impl BridgeRuntime {
             self.last_status = message;
         }
 
+        let active = self.dictation.active_input_device_name().to_owned();
         self.dictation
             .available_input_devices()
             .iter()
             .map(|device| DeviceDto {
                 name: device.clone(),
-                is_selected: *device == self.settings.input_device_name,
+                is_selected: *device == self.settings.input_device_name || *device == active,
+                uid: None,
             })
             .collect()
+    }
+
+    fn notify_device_change(&mut self) -> Option<MicSwitchEvent> {
+        self.poll();
+        let previous_input_device = self.settings.input_device_name.clone();
+        let event = self.dictation.handle_device_change(&mut self.settings);
+        if let Some(event) = &event {
+            self.last_status = event.message.clone();
+        }
+        if self.settings.input_device_name != previous_input_device {
+            let _ = settings_store::save(&self.settings);
+        }
+        event
     }
 
     fn model_status(&mut self) -> ModelStatusDto {
@@ -753,8 +782,19 @@ impl BridgeRuntime {
             blocked_model_label: blocked_label,
             blocked_model_is_downloading: blocked_is_downloading,
             blocked_model_progress_basis_points: blocked_progress,
+            active_input_device_name: self.dictation.active_input_device_name().to_owned(),
+            last_mic_switch_message: self.dictation.last_mic_switch_message().to_owned(),
+            mic_switch_event_count: self.dictation.mic_switch_event_count(),
         }
     }
+}
+
+fn current_unix_seconds() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 mod hotkey {
@@ -993,6 +1033,25 @@ pub extern "C" fn ow_save_settings(settings_json: *const c_char) -> *mut c_char 
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_list_input_devices() -> *mut c_char {
     response_ok(with_runtime_value(BridgeRuntime::list_input_devices))
+}
+
+#[derive(Serialize)]
+struct MicSwitchEventDto {
+    from: String,
+    to: String,
+    was_recording: bool,
+    message: String,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_notify_device_change() -> *mut c_char {
+    let event = with_runtime_value(BridgeRuntime::notify_device_change);
+    response_ok(event.map(|event| MicSwitchEventDto {
+        from: event.from,
+        to: event.to,
+        was_recording: event.was_recording,
+        message: event.message,
+    }))
 }
 
 #[unsafe(no_mangle)]

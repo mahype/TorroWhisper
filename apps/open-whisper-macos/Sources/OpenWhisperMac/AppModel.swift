@@ -24,6 +24,7 @@ final class AppModel: ObservableObject {
     @Published var hotkeyCaptureError: String?
 
     var onStateChanged: (() -> Void)?
+    var onMicSwitched: ((MicSwitchNotification) -> Void)?
 
     private let bridge = BridgeClient()
     private var timer: Timer?
@@ -31,6 +32,7 @@ final class AppModel: ObservableObject {
     private var persistedSettingsSnapshot: AppSettings = .default
     private var pendingAutoSaveTask: Task<Void, Never>?
     private static let autoSaveDebounceNanoseconds: UInt64 = 500_000_000
+    private var lastSeenMicSwitchEventCount: UInt64 = 0
 
     init() {
         reloadAll()
@@ -456,6 +458,7 @@ final class AppModel: ObservableObject {
             customLlmStatusList = (try? bridge.getCustomLlmStatusList()) ?? []
             diagnostics = try bridge.runPermissionDiagnostics()
             runtime = try bridge.getRuntimeStatus()
+            lastSeenMicSwitchEventCount = runtime.micSwitchEventCount
             bridgeError = nil
             isCapturingHotkey = false
             hotkeyCapturePreview = ""
@@ -481,6 +484,38 @@ final class AppModel: ObservableObject {
             if let list = try? bridge.getCustomLlmStatusList() {
                 customLlmStatusList = list
             }
+            checkMicSwitchEvent()
+            bridgeError = nil
+            onStateChanged?()
+        } catch {
+            publish(error)
+        }
+    }
+
+    private func checkMicSwitchEvent() {
+        let current = runtime.micSwitchEventCount
+        guard current != lastSeenMicSwitchEventCount else { return }
+        let previous = lastSeenMicSwitchEventCount
+        lastSeenMicSwitchEventCount = current
+        if previous == 0 && runtime.lastMicSwitchMessage.isEmpty { return }
+        guard settings.showMicSwitchNotifications else { return }
+        let notification = MicSwitchNotification(
+            message: runtime.lastMicSwitchMessage,
+            activeDevice: runtime.activeInputDeviceName
+        )
+        devices = (try? bridge.listInputDevices()) ?? devices
+        onMicSwitched?(notification)
+    }
+
+    func notifyDeviceListChanged() {
+        do {
+            _ = try bridge.notifyDeviceChange()
+            let refreshedSettings = try bridge.loadSettings()
+            settings = refreshedSettings
+            persistedSettingsSnapshot = refreshedSettings
+            devices = try bridge.listInputDevices()
+            runtime = try bridge.getRuntimeStatus()
+            checkMicSwitchEvent()
             bridgeError = nil
             onStateChanged?()
         } catch {
@@ -491,10 +526,6 @@ final class AppModel: ObservableObject {
     func refreshDevices() {
         do {
             devices = try bridge.listInputDevices()
-            if !devices.contains(where: { $0.name == settings.inputDeviceName }) && !devices.isEmpty {
-                settings.inputDeviceName = devices[0].name
-                requestAutoSave()
-            }
             bridgeError = nil
         } catch {
             publish(error)
@@ -917,4 +948,9 @@ private struct InlineHotkeyValidationError: LocalizedError {
     let message: String
 
     var errorDescription: String? { message }
+}
+
+struct MicSwitchNotification {
+    let message: String
+    let activeDevice: String
 }

@@ -33,6 +33,10 @@ final class BridgeClient {
         try decodeResponse(from: ow_list_input_devices())
     }
 
+    func notifyDeviceChange() throws -> MicSwitchEventDTO? {
+        try decodeResponse(from: ow_notify_device_change())
+    }
+
     func getModelStatus() throws -> ModelStatusDTO {
         try decodeResponse(from: ow_get_model_status())
     }

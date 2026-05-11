@@ -15,7 +15,7 @@ use cpal::{
     Device, FromSample, I24, Sample, SampleFormat, SizedSample, Stream, SupportedStreamConfig, U24,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
-use open_whisper_core::{AppSettings, TriggerMode};
+use open_whisper_core::{AppSettings, SYSTEM_DEFAULT_DEVICE_LABEL, TriggerMode};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 const CUE_NOTE_GAP_MS: u32 = 18;
@@ -35,6 +35,9 @@ pub struct DictationController {
     transcription_rx: Option<Receiver<Result<String, String>>>,
     model_cache: Option<ModelCache>,
     dictation_blocked_at: Option<Instant>,
+    active_input_device_name: String,
+    last_mic_switch_message: String,
+    mic_switch_event_count: u64,
 }
 
 impl DictationController {
@@ -45,7 +48,22 @@ impl DictationController {
             transcription_rx: None,
             model_cache: None,
             dictation_blocked_at: None,
+            active_input_device_name: String::new(),
+            last_mic_switch_message: String::new(),
+            mic_switch_event_count: 0,
         }
+    }
+
+    pub fn active_input_device_name(&self) -> &str {
+        &self.active_input_device_name
+    }
+
+    pub fn last_mic_switch_message(&self) -> &str {
+        &self.last_mic_switch_message
+    }
+
+    pub fn mic_switch_event_count(&self) -> u64 {
+        self.mic_switch_event_count
     }
 
     pub fn mark_blocked_now(&mut self) {
@@ -74,22 +92,16 @@ impl DictationController {
                     return messages;
                 }
 
-                let should_reset = settings.input_device_name.trim().is_empty()
-                    || (settings.input_device_name != system_default_label()
-                        && !self
-                            .available_input_devices
-                            .iter()
-                            .any(|device| device == &settings.input_device_name));
-
-                if should_reset {
-                    settings.input_device_name = default_input_device_name()
-                        .or_else(|| self.available_input_devices.first().cloned())
-                        .unwrap_or_else(|| system_default_label().to_owned());
-                    messages.push(format!(
-                        "Input device set to '{}'.",
-                        settings.input_device_name
-                    ));
+                if settings.input_device_name.trim().is_empty() {
+                    settings.input_device_name = system_default_label().to_owned();
                 }
+
+                let resolved =
+                    resolve_input_device_name(settings, &self.available_input_devices);
+                if settings.input_device_name != resolved {
+                    settings.input_device_name = resolved.clone();
+                }
+                self.active_input_device_name = resolved;
             }
             Err(err) => messages.push(format!("Input devices could not be loaded: {err}")),
         }
@@ -99,6 +111,74 @@ impl DictationController {
 
     pub fn available_input_devices(&self) -> &[String] {
         &self.available_input_devices
+    }
+
+    pub fn handle_device_change(&mut self, settings: &mut AppSettings) -> Option<MicSwitchEvent> {
+        let new_list = match discover_input_devices() {
+            Ok(list) => list,
+            Err(_) => return None,
+        };
+        self.available_input_devices = new_list;
+
+        let previous_active = self.active_input_device_name.clone();
+        let new_active = resolve_input_device_name(settings, &self.available_input_devices);
+
+        if new_active == previous_active && settings.input_device_name == new_active {
+            return None;
+        }
+
+        if !settings.auto_switch_mic_on_hotplug && self.recording.is_none() {
+            self.active_input_device_name = new_active.clone();
+            settings.input_device_name = new_active;
+            return None;
+        }
+
+        let swap_error = self
+            .recording
+            .as_mut()
+            .and_then(|recording| recording.swap_device(&new_active).err());
+
+        if let Some(err) = swap_error {
+            self.recording.take();
+            self.last_mic_switch_message =
+                format!("Mic switch failed: {err}. Recording stopped — please restart.");
+            self.mic_switch_event_count = self.mic_switch_event_count.wrapping_add(1);
+            self.active_input_device_name = new_active.clone();
+            settings.input_device_name = new_active.clone();
+            return Some(MicSwitchEvent {
+                from: previous_active,
+                to: new_active,
+                was_recording: true,
+                message: self.last_mic_switch_message.clone(),
+            });
+        }
+
+        let was_recording = self.recording.is_some();
+        self.active_input_device_name = new_active.clone();
+        settings.input_device_name = new_active.clone();
+
+        if new_active == previous_active {
+            return None;
+        }
+
+        self.mic_switch_event_count = self.mic_switch_event_count.wrapping_add(1);
+        let message = if previous_active.is_empty() {
+            format!("Microphone active: {new_active}.")
+        } else {
+            format!("Microphone '{previous_active}' unavailable — using '{new_active}'.")
+        };
+        self.last_mic_switch_message = message.clone();
+
+        Some(MicSwitchEvent {
+            from: previous_active,
+            to: new_active,
+            was_recording,
+            message,
+        })
+    }
+
+    pub fn clear_mic_switch_message(&mut self) {
+        self.last_mic_switch_message.clear();
     }
 
     pub fn suggested_model_path(&self, settings: &AppSettings) -> Result<PathBuf, String> {
@@ -191,14 +271,16 @@ impl DictationController {
             ));
         }
 
-        let recording = ActiveRecording::start(settings)?;
+        let resolved_name = resolve_input_device_name(settings, &self.available_input_devices);
+        let (recording, used_name) = ActiveRecording::start(settings, &resolved_name)?;
         self.recording = Some(recording);
+        self.active_input_device_name = used_name.clone();
         self.clear_blocked();
         play_recording_cue(RecordingCue::Start);
 
         Ok(format!(
             "Recording started via '{}'{}.",
-            settings.input_device_name,
+            used_name,
             if settings.vad_enabled {
                 ", silence stop active"
             } else {
@@ -255,7 +337,7 @@ impl DictationController {
         self.transcription_rx.take().is_some()
     }
 
-    pub fn poll(&mut self, settings: &AppSettings) -> Vec<DictationOutcome> {
+    pub fn poll(&mut self, settings: &mut AppSettings) -> Vec<DictationOutcome> {
         let mut outcomes = Vec::new();
 
         let pending_recording_event = self
@@ -270,8 +352,16 @@ impl DictationController {
                 }
             }
             Some(RecordingEvent::StreamError(err)) => {
-                self.recording.take();
-                outcomes.push(DictationOutcome::Status(err));
+                let switch = self.handle_device_change(settings);
+                match switch {
+                    Some(event) => {
+                        outcomes.push(DictationOutcome::Status(event.message));
+                    }
+                    None => {
+                        self.recording.take();
+                        outcomes.push(DictationOutcome::Status(err));
+                    }
+                }
             }
             None => {}
         }
@@ -344,15 +434,18 @@ struct ModelCache {
 }
 
 struct ActiveRecording {
-    _stream: Stream,
+    stream: Option<Stream>,
+    event_tx: Sender<RecordingEvent>,
     event_rx: Receiver<RecordingEvent>,
     shared: Arc<Mutex<RecordingBuffer>>,
     started_at: Instant,
+    sample_rate: u32,
+    current_device_name: String,
 }
 
 impl ActiveRecording {
-    fn start(settings: &AppSettings) -> Result<Self, String> {
-        let device = select_input_device(&settings.input_device_name)?;
+    fn start(settings: &AppSettings, resolved_device_name: &str) -> Result<(Self, String), String> {
+        let (device, used_name) = select_input_device_for_recording(resolved_device_name)?;
         let config = device
             .default_input_config()
             .map_err(|err| format!("Input configuration could not be loaded: {err}"))?;
@@ -367,17 +460,62 @@ impl ActiveRecording {
             settings.vad_silence_ms,
         )));
 
-        let stream = build_input_stream(&device, &config, channels, shared.clone(), event_tx)?;
+        let stream =
+            build_input_stream(&device, &config, channels, shared.clone(), event_tx.clone())?;
         stream
             .play()
             .map_err(|err| format!("Audio recording could not be started: {err}"))?;
 
-        Ok(Self {
-            _stream: stream,
-            event_rx,
-            shared,
-            started_at: Instant::now(),
-        })
+        Ok((
+            Self {
+                stream: Some(stream),
+                event_tx,
+                event_rx,
+                shared,
+                started_at: Instant::now(),
+                sample_rate,
+                current_device_name: used_name.clone(),
+            },
+            used_name,
+        ))
+    }
+
+    fn swap_device(&mut self, new_resolved_name: &str) -> Result<(), String> {
+        if new_resolved_name == self.current_device_name {
+            return Ok(());
+        }
+
+        self.stream.take();
+
+        let (device, used_name) = select_input_device_for_recording(new_resolved_name)?;
+        let config = device
+            .default_input_config()
+            .map_err(|err| format!("Input configuration could not be loaded: {err}"))?;
+
+        if config.sample_rate() != self.sample_rate {
+            return Err(format!(
+                "Sample rate mismatch: recording at {} Hz, '{}' offers {} Hz",
+                self.sample_rate,
+                used_name,
+                config.sample_rate()
+            ));
+        }
+
+        let channels = config.channels() as usize;
+        let stream = build_input_stream(
+            &device,
+            &config,
+            channels,
+            self.shared.clone(),
+            self.event_tx.clone(),
+        )?;
+        stream
+            .play()
+            .map_err(|err| format!("Audio recording could not be restarted: {err}"))?;
+
+        self.stream = Some(stream);
+        self.current_device_name = used_name;
+        Ok(())
     }
 
     fn poll_event(&mut self) -> Option<RecordingEvent> {
@@ -399,6 +537,14 @@ impl ActiveRecording {
             .map_err(|_| "Recording buffer could not be read.".to_owned())?;
         Ok(guard.finish(duration))
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct MicSwitchEvent {
+    pub from: String,
+    pub to: String,
+    pub was_recording: bool,
+    pub message: String,
 }
 
 enum RecordingEvent {
@@ -787,37 +933,63 @@ fn discover_input_devices() -> Result<Vec<String>, String> {
     Ok(devices)
 }
 
-fn select_input_device(selected_name: &str) -> Result<Device, String> {
+fn select_input_device_for_recording(resolved_name: &str) -> Result<(Device, String), String> {
     let host = cpal::default_host();
 
-    if selected_name == system_default_label() {
-        return host
+    if resolved_name == system_default_label() || resolved_name.is_empty() {
+        let device = host
             .default_input_device()
-            .ok_or_else(|| "No default input device available.".to_owned());
+            .ok_or_else(|| "No default input device available.".to_owned())?;
+        let name = device
+            .description()
+            .ok()
+            .map(|description| description.name().to_owned())
+            .unwrap_or_else(|| system_default_label().to_owned());
+        return Ok((device, name));
     }
 
     if let Some(default_device) = host.default_input_device()
         && default_device
             .description()
-            .map(|description| description.name() == selected_name)
+            .map(|description| description.name() == resolved_name)
             .unwrap_or(false)
     {
-        return Ok(default_device);
+        return Ok((default_device, resolved_name.to_owned()));
     }
 
-    let mut matching = host
+    let matching = host
         .input_devices()
         .map_err(|err| err.to_string())?
         .find(|device| {
             device
                 .description()
-                .map(|description| description.name() == selected_name)
+                .map(|description| description.name() == resolved_name)
                 .unwrap_or(false)
         });
 
     matching
-        .take()
-        .ok_or_else(|| format!("Input device '{}' was not found.", selected_name))
+        .map(|device| (device, resolved_name.to_owned()))
+        .ok_or_else(|| format!("Input device '{}' was not found.", resolved_name))
+}
+
+fn resolve_input_device_name(settings: &AppSettings, available: &[String]) -> String {
+    for preferred in settings.preferred_input_devices_sorted() {
+        if preferred.name == system_default_label() {
+            return system_default_label().to_owned();
+        }
+        if available.iter().any(|name| name == &preferred.name) {
+            return preferred.name.clone();
+        }
+    }
+
+    let primary = settings.input_device_name.trim();
+    if !primary.is_empty()
+        && (primary == system_default_label() || available.iter().any(|name| name == primary))
+    {
+        return primary.to_owned();
+    }
+
+    system_default_label().to_owned()
 }
 
 fn default_input_device_name() -> Option<String> {
@@ -832,7 +1004,7 @@ fn default_input_device_name() -> Option<String> {
 }
 
 fn system_default_label() -> &'static str {
-    "System Default"
+    SYSTEM_DEFAULT_DEVICE_LABEL
 }
 
 #[derive(Clone, Copy)]

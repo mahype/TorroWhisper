@@ -588,10 +588,21 @@ struct TranscriptionLanguageOption: Identifiable, Hashable {
     }
 }
 
+struct PreferredDevice: Codable, Equatable, Identifiable {
+    var name: String
+    var uid: String?
+    var lastSelectedAt: Int64
+
+    var id: String { uid ?? name }
+}
+
 struct AppSettings: Codable, Equatable {
     var onboardingCompleted: Bool
     var startupBehavior: StartupBehavior
     var inputDeviceName: String
+    var preferredInputDevices: [PreferredDevice]
+    var autoSwitchMicOnHotplug: Bool
+    var showMicSwitchNotifications: Bool
     var hotkey: String
     var triggerMode: TriggerMode
     var transcriptionLanguage: String
@@ -624,6 +635,9 @@ struct AppSettings: Codable, Equatable {
         onboardingCompleted: false,
         startupBehavior: .askOnFirstLaunch,
         inputDeviceName: "System Default",
+        preferredInputDevices: [],
+        autoSwitchMicOnHotplug: true,
+        showMicSwitchNotifications: true,
         hotkey: "Ctrl+Shift+Space",
         triggerMode: .toggle,
         transcriptionLanguage: "auto",
@@ -665,6 +679,7 @@ enum UiLanguage: String, Codable, CaseIterable, Identifiable {
 struct DeviceDTO: Codable, Identifiable {
     var name: String
     var isSelected: Bool
+    var uid: String?
 
     var id: String { name }
 }
@@ -758,6 +773,9 @@ struct RuntimeStatusDTO: Codable {
     var blockedModelLabel: String
     var blockedModelIsDownloading: Bool
     var blockedModelProgressBasisPoints: UInt16?
+    var activeInputDeviceName: String
+    var lastMicSwitchMessage: String
+    var micSwitchEventCount: UInt64
 
     static let empty = RuntimeStatusDTO(
         isRecording: false,
@@ -775,6 +793,16 @@ struct RuntimeStatusDTO: Codable {
         dictationBlockedByMissingModel: false,
         blockedModelLabel: "",
         blockedModelIsDownloading: false,
-        blockedModelProgressBasisPoints: nil
+        blockedModelProgressBasisPoints: nil,
+        activeInputDeviceName: "",
+        lastMicSwitchMessage: "",
+        micSwitchEventCount: 0
     )
+}
+
+struct MicSwitchEventDTO: Codable {
+    var from: String
+    var to: String
+    var wasRecording: Bool
+    var message: String
 }
