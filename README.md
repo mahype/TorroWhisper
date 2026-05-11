@@ -45,7 +45,7 @@ Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md
 - **Global hotkey** with push-to-talk or toggle mode, plus a built-in recorder that warns about risky single-key bindings.
 - **Menu-bar-only** UI — no Dock icon, no window clutter.
 - **Guided onboarding** for mic, models, hotkey, and autostart.
-- **Autostart at login** via native macOS Login Items.
+- **Autostart at login** via native macOS Login Items. The registered launch path is refreshed automatically on each start, so moving the app (e.g., after a reinstall into `/Applications`) doesn't break Launch-at-Login.
 
 ### Transcription models
 
@@ -65,6 +65,7 @@ Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md
 - Live **Waveform indicator** in three styles (centered bars, line, envelope) and eight colors. Separate visual phases for recording, transcribing, post-processing, and "model not ready".
 - **Voice-activity-based silence-stop** (VAD) with configurable threshold and silence duration.
 - **Automatic paste** into the focused app via simulated keystroke, with a **clipboard fallback** if the app blocks synthetic input.
+- **Automatic microphone fallback** — keeps a history of mics you've actively picked and switches to the next-best one when the current device disconnects, even mid-recording. Reconnects automatically when your preferred mic comes back. Optional toast notification can be disabled in Settings.
 
 ### System integration
 
@@ -128,6 +129,7 @@ How the Rust core, FFI bridge, and Swift UI fit together: → [docs/ARCHITECTURE
 | [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Dev setup, build scripts, debugging |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Rust core ↔ FFI bridge ↔ Swift UI |
 | [RELEASING.md](docs/RELEASING.md) | Tagging, signing, notarization, publishing, Sparkle |
+| [CI.md](docs/CI.md) | GitHub Actions workflows, SwiftLint, CodeQL, cargo-deny |
 | [CHANGELOG.md](CHANGELOG.md) | Release-by-release summary of changes |
 
 ---
@@ -136,6 +138,8 @@ How the Rust core, FFI bridge, and Swift UI fit together: → [docs/ARCHITECTURE
 
 - [ ] Native UI shells for Windows and Linux on top of the existing Rust bridge
 - [ ] Optional cloud transcription providers
+
+Larger feature ideas under discussion — chat / voice-assistant mode, custom dictionary, adaptive learning from manual corrections, auto-correct toggle — are tracked in [ROADMAP.md](ROADMAP.md).
 
 ---
 

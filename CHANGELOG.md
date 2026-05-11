@@ -5,10 +5,14 @@ All notable changes to Open Whisper are documented here. The format is based on 
 ## [Unreleased]
 
 ### Added
+- **Automatic microphone fallback on hotplug** — Open Whisper keeps a history of input devices you've actively picked. If the current mic disconnects (even mid-recording) the app seamlessly switches to the next-best mic from the history, falling back to the system default; it switches back automatically when the preferred mic returns. A short toast surfaces the change and can be turned off in Settings ([`655fdba`](https://github.com/mahype/open-whisper/commit/655fdba)).
 - **English and German UI** with automatic selection based on the macOS system language. Source language is English; a full German translation ships alongside. A new *UI language* picker lives in Settings → Start & behavior (System / English / Deutsch; requires app restart) ([`e2579a4`](https://github.com/mahype/open-whisper/commit/e2579a4)).
 
 ### Changed
 - Post-processing is now switched on and off via an "Off" entry at the top of the Modes list instead of a separate toggle ([`b1a1f40`](https://github.com/mahype/open-whisper/commit/b1a1f40)).
+
+### Fixed
+- Autostart: the registered `SMAppService` program path is refreshed on launch so Launch-at-Login keeps working after the app is moved or reinstalled into a different folder ([`c1d56d6`](https://github.com/mahype/open-whisper/commit/c1d56d6)).
 
 ### CI
 - Release workflow publishes a GitHub Release directly instead of creating a draft ([`e1d5966`](https://github.com/mahype/open-whisper/commit/e1d5966)).

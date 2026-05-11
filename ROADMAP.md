@@ -90,28 +90,7 @@ Wenn der User den eingefügten Text **direkt nach dem Diktat** im Eingabefeld ä
 
 ---
 
-## 4. Automatisches Mikrofon-Fallback bei Hotplug
-
-**Status:** In Umsetzung (Plan: `~/.claude/plans/ich-wechsle-mit-meinem-snoopy-melody.md`)
-
-### Problem
-Beim Wechsel zwischen Arbeitsplätzen ist das in den Settings eingestellte USB-/Bluetooth-Mikrofon oft nicht mehr verfügbar. Aktuell behält Open Whisper die Auswahl bei und scheitert beim Recording (`Input device '...' was not found`). Ein Mini-Fallback existiert nur beim Aufnahmestart, ohne Präferenz-Reihenfolge.
-
-### Idee
-Implizite Lern-Logik: Die App führt eine Historie der vom Nutzer im Picker aktiv gewählten Mikrofone (mit Zeitstempel). Bei Hotplug-Detection via CoreAudio (`kAudioHardwarePropertyDevices`) wird automatisch das nächstbeste bevorzugte Mic gewählt — oder als letzter Fallback das System-Default-Mic. Wird das bevorzugte Mic wieder angeschlossen, wechselt die App zurück.
-
-### Verhalten
-- **Hotplug bei aktiver Aufnahme:** Stream wird nahtlos auf Fallback umgeschaltet (kleine Audio-Lücke, kein Verlust des bisher Aufgenommenen)
-- **Auto-Rückwechsel:** Wenn das vom Nutzer zuletzt explizit gewählte Mic wieder verfügbar wird, schaltet die App selbsttätig zurück — auch während einer Aufnahme
-- **Sichtbarkeit:** Dezenter Toast (~2 Sek) + Tooltip im Menüleisten-Icon zeigen den aktuellen Mic-Namen; in Settings abschaltbar
-
-### Phase A (jetzt) vs. Phase B (später)
-- **Phase A:** Identifikation per Name (cpal-kompatibel); Hotplug-Detection; Fallback-Algorithmus; Live-Stream-Restart
-- **Phase B:** Identifikation zusätzlich per CoreAudio-DeviceUID, um zwei gleichnamige USB-Mics unterscheiden zu können
-
----
-
-## 5. Auto-Korrektur Toggle
+## 4. Auto-Korrektur Toggle
 
 ### Idee
 Manchmal ist nach der Whisper-Transkription klar, dass der Text Rechtschreib-/Grammatikfehler enthält (z. B. erkennbar an Wörtern, die im Wörterbuch nicht existieren). Eine optionale **automatische Korrektur** kann das beheben — soll aber **per Schalter in den Einstellungen** an-/abschaltbar sein.

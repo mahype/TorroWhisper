@@ -38,7 +38,7 @@ You have two equivalent ways to enable this:
 
 To disable autostart, flip either switch back off. You can also choose **Ask on first launch** in Settings to have Open Whisper show the prompt the next time you start it manually.
 
-> **Note:** Autostart only works when Open Whisper is installed in `/Applications` or `~/Applications`. If you run it from a different folder (e.g., your Downloads), move the app first.
+> **Note:** Autostart only works when Open Whisper is installed in `/Applications` or `~/Applications`. If you run it from a different folder (e.g., your Downloads), move the app first. If you move the app to a new location later (for example after a reinstall), the registered launch path is refreshed automatically on the next start — you don't need to re-toggle the Login Item.
 
 ### Update
 
@@ -69,6 +69,9 @@ That's the **Accessibility** permission — the app needs it to simulate the pas
 
 **App didn't start after login even though autostart is on.**
 Check that Open Whisper is in `/Applications` or `~/Applications`. macOS's `SMAppService` API refuses to register Login Items for apps outside those locations.
+
+**Recording fails with "Input device not found" after switching between workstations.**
+Open Whisper now falls back to the next-best mic from your selection history when the configured device disappears, and to the system default if no preferred mic is plugged in. If you've never picked the desired mic explicitly, open Settings → Recording and select it once so it becomes part of the preference history.
 
 ---
 
