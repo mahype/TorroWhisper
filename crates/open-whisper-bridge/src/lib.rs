@@ -406,6 +406,13 @@ impl BridgeRuntime {
             .collect()
     }
 
+    fn reregister_hotkey(&mut self) -> Result<String, String> {
+        if let Some(hotkey) = &mut self.hotkey {
+            hotkey.force_reapply(&self.settings)?;
+        }
+        Ok(self.last_status.clone())
+    }
+
     fn notify_device_change(&mut self) -> Option<MicSwitchEvent> {
         self.poll();
         let previous_input_device = self.settings.input_device_name.clone();
@@ -849,6 +856,13 @@ mod hotkey {
             Ok(())
         }
 
+        /// Re-registers the hotkey unconditionally — used when the keyboard
+        /// hardware changes and the OS may have lost the prior registration.
+        pub fn force_reapply(&mut self, settings: &AppSettings) -> Result<(), String> {
+            self.registered_text = None;
+            self.apply_settings(settings)
+        }
+
         pub fn poll_actions(&mut self) -> Vec<HotKeyAction> {
             let mut actions = Vec::new();
 
@@ -1190,6 +1204,11 @@ pub extern "C" fn ow_validate_hotkey(request_json: *const c_char) -> *mut c_char
         };
 
     response_from_result(validate_hotkey_text(&request.hotkey))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_reregister_hotkey() -> *mut c_char {
+    response_from_result(with_runtime(BridgeRuntime::reregister_hotkey))
 }
 
 /// Frees a C string returned by any `ow_*` function.

@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var micSwitchToastWindow: NSPanel?
     private var micSwitchToastDismissTask: Task<Void, Never>?
     private let audioDeviceMonitor = AudioDeviceMonitor()
+    private let keyboardHardwareMonitor = KeyboardHardwareMonitor()
     private let recordingLevelFeed = RecordingLevelFeed()
     private let modeMenu = NSMenu()
     private let modelMenu = NSMenu()
@@ -93,6 +94,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             self?.model.notifyDeviceListChanged()
         }
         audioDeviceMonitor.start()
+
+        keyboardHardwareMonitor.onKeyboardChanged = { [weak self] in
+            self?.model.reregisterHotkey()
+        }
+        keyboardHardwareMonitor.start()
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }

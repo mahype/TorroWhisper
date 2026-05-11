@@ -313,6 +313,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Hotkey darf nicht leer sein." } }
       }
     },
+    "If your keyboard maps the F-keys to brightness/volume by default, enable macOS Settings → Keyboard → 'Use F1, F2, etc. keys as standard function keys', or hold the fn key while pressing the shortcut." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Falls die F-Tasten an deiner Tastatur standardmäßig Helligkeit/Lautstärke etc. steuern: aktiviere macOS-Einstellungen → Tastatur → 'F1, F2 etc. als Standard-Funktionstasten verwenden', oder halte zusätzlich fn gedrückt." } }
+      }
+    },
     "Insert text automatically" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Text automatisch einfügen" } }

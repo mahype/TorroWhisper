@@ -2,6 +2,7 @@
 "+ Choose file…" = "+ Datei auswählen…";
 "+ Load from URL" = "+ Von URL laden";
 "A single global key may collide with regular typing. Combinations stay safer." = "Eine einzelne globale Taste kann mit normaler Texteingabe kollidieren. Kombinationen bleiben sicherer.";
+"If your keyboard maps the F-keys to brightness/volume by default, enable macOS Settings → Keyboard → 'Use F1, F2, etc. keys as standard function keys', or hold the fn key while pressing the shortcut." = "Falls die F-Tasten an deiner Tastatur standardmäßig Helligkeit/Lautstärke etc. steuern: aktiviere macOS-Einstellungen → Tastatur → 'F1, F2 etc. als Standard-Funktionstasten verwenden', oder halte zusätzlich fn gedrückt.";
 "About Open Whisper" = "Über Open Whisper";
 "Active" = "Aktiv";
 "Add" = "Hinzufügen";

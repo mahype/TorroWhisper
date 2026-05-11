@@ -109,6 +109,10 @@ final class BridgeClient {
         try encodeAndCall(["hotkey": hotkey], function: ow_validate_hotkey)
     }
 
+    func reregisterHotkey() throws -> String {
+        try decodeResponse(from: ow_reregister_hotkey())
+    }
+
     private func encodeAndCall<Input: Encodable, Output: Decodable>(
         _ input: Input,
         function: (UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?

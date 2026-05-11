@@ -25,6 +25,7 @@ char *ow_cancel_dictation(void);
 char *ow_get_runtime_status(void);
 char *ow_get_recording_levels(void);
 char *ow_validate_hotkey(const char *request_json);
+char *ow_reregister_hotkey(void);
 void ow_string_free(char *raw);
 
 #endif

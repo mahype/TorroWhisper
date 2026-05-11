@@ -151,9 +151,17 @@ final class AppModel: ObservableObject {
 
     var hotkeyRiskHint: String? {
         let source = isCapturingHotkey && !hotkeyCapturePreview.isEmpty ? hotkeyCapturePreview : settings.hotkey
-        return isSingleKeyHotkey(source)
-            ? L("A single global key may collide with regular typing. Combinations stay safer.", locale: settings.effectiveLocale)
-            : nil
+        var hints: [String] = []
+        if isSingleKeyHotkey(source) {
+            hints.append(L("A single global key may collide with regular typing. Combinations stay safer.", locale: settings.effectiveLocale))
+        }
+        if hotkeyContainsFunctionKey(source) {
+            hints.append(L(
+                "If your keyboard maps the F-keys to brightness/volume by default, enable macOS Settings → Keyboard → 'Use F1, F2, etc. keys as standard function keys', or hold the fn key while pressing the shortcut.",
+                locale: settings.effectiveLocale
+            ))
+        }
+        return hints.isEmpty ? nil : hints.joined(separator: "\n\n")
     }
 
     var availableModes: [ProcessingMode] {
@@ -505,6 +513,17 @@ final class AppModel: ObservableObject {
         )
         devices = (try? bridge.listInputDevices()) ?? devices
         onMicSwitched?(notification)
+    }
+
+    func reregisterHotkey() {
+        do {
+            _ = try bridge.reregisterHotkey()
+            runtime = try bridge.getRuntimeStatus()
+            bridgeError = nil
+            onStateChanged?()
+        } catch {
+            publish(error)
+        }
     }
 
     func notifyDeviceListChanged() {
@@ -954,6 +973,21 @@ final class AppModel: ObservableObject {
 private func isSingleKeyHotkey(_ hotkey: String) -> Bool {
     let normalized = hotkey.trimmingCharacters(in: .whitespacesAndNewlines)
     return !normalized.isEmpty && !normalized.contains("+")
+}
+
+private func hotkeyContainsFunctionKey(_ hotkey: String) -> Bool {
+    let tokens = hotkey
+        .split(separator: "+")
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+    for token in tokens {
+        guard token.hasPrefix("f"),
+              let number = Int(token.dropFirst()),
+              (1...20).contains(number) else {
+            continue
+        }
+        return true
+    }
+    return false
 }
 
 private struct InlineHotkeyValidationError: LocalizedError {

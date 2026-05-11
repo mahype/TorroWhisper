@@ -37,6 +37,7 @@ let package = Package(
                 .linkedFramework("AudioToolbox"),
                 .linkedFramework("Carbon"),
                 .linkedFramework("CoreAudio"),
+                .linkedFramework("IOKit"),
                 .linkedFramework("SystemConfiguration"),
             ]
         ),
@@ -53,6 +54,7 @@ let package = Package(
                 .linkedFramework("AudioToolbox"),
                 .linkedFramework("Carbon"),
                 .linkedFramework("CoreAudio"),
+                .linkedFramework("IOKit"),
                 .linkedFramework("SystemConfiguration"),
             ]
         ),
