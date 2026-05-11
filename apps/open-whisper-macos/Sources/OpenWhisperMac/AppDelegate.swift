@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 @MainActor
@@ -29,9 +30,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let modeMenu = NSMenu()
     private let modelMenu = NSMenu()
     private let micMenu = NSMenu()
-    private var escapeGlobalMonitor: Any?
+    private var escapeHotKeyRef: EventHotKeyRef?
+    private var escapeEventHandler: EventHandlerRef?
     private var escapeLocalMonitor: Any?
     private static let escapeKeyCode: UInt16 = 53
+    // "OWES" — Open Whisper Escape
+    private static let escapeHotKeySignature: OSType = 0x4F57_4553
+    private static let escapeHotKeyID: UInt32 = 1
 
     private var currentLocale: Locale { model.settings.effectiveLocale }
 
@@ -536,14 +541,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func installEscapeMonitor() {
-        if escapeGlobalMonitor == nil {
-            escapeGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard event.keyCode == AppDelegate.escapeKeyCode else { return }
-                Task { @MainActor [weak self] in
-                    self?.model.cancelDictation()
-                }
-            }
-        }
+        installEscapeCarbonHotKey()
 
         if escapeLocalMonitor == nil {
             escapeLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -555,13 +553,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func removeEscapeMonitor() {
-        if let monitor = escapeGlobalMonitor {
-            NSEvent.removeMonitor(monitor)
-            escapeGlobalMonitor = nil
-        }
+        removeEscapeCarbonHotKey()
+
         if let monitor = escapeLocalMonitor {
             NSEvent.removeMonitor(monitor)
             escapeLocalMonitor = nil
         }
+    }
+
+    private func installEscapeCarbonHotKey() {
+        guard escapeHotKeyRef == nil else { return }
+
+        if escapeEventHandler == nil {
+            var spec = EventTypeSpec(
+                eventClass: OSType(kEventClassKeyboard),
+                eventKind: UInt32(kEventHotKeyPressed)
+            )
+            let selfPtr = Unmanaged.passUnretained(self).toOpaque()
+            let installStatus = InstallEventHandler(
+                GetApplicationEventTarget(),
+                AppDelegate.escapeHotKeyHandler,
+                1,
+                &spec,
+                selfPtr,
+                &escapeEventHandler
+            )
+            if installStatus != noErr {
+                NSLog("Open Whisper: failed to install Escape event handler (OSStatus %d)", Int(installStatus))
+                escapeEventHandler = nil
+                return
+            }
+        }
+
+        let hotKeyID = EventHotKeyID(
+            signature: AppDelegate.escapeHotKeySignature,
+            id: AppDelegate.escapeHotKeyID
+        )
+        let registerStatus = RegisterEventHotKey(
+            UInt32(AppDelegate.escapeKeyCode),
+            0,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &escapeHotKeyRef
+        )
+
+        if registerStatus == noErr { return }
+
+        escapeHotKeyRef = nil
+        if registerStatus == OSStatus(eventHotKeyExistsErr) { return }
+        NSLog("Open Whisper: failed to register Escape hotkey (OSStatus %d)", Int(registerStatus))
+    }
+
+    private func removeEscapeCarbonHotKey() {
+        if let ref = escapeHotKeyRef {
+            UnregisterEventHotKey(ref)
+            escapeHotKeyRef = nil
+        }
+        if let handler = escapeEventHandler {
+            RemoveEventHandler(handler)
+            escapeEventHandler = nil
+        }
+    }
+
+    private static let escapeHotKeyHandler: EventHandlerUPP = { _, event, userData in
+        guard let event, let userData else { return OSStatus(eventNotHandledErr) }
+
+        var hotKeyID = EventHotKeyID()
+        let status = GetEventParameter(
+            event,
+            EventParamName(kEventParamDirectObject),
+            EventParamType(typeEventHotKeyID),
+            nil,
+            MemoryLayout<EventHotKeyID>.size,
+            nil,
+            &hotKeyID
+        )
+
+        guard status == noErr,
+              hotKeyID.signature == AppDelegate.escapeHotKeySignature,
+              hotKeyID.id == AppDelegate.escapeHotKeyID
+        else {
+            return OSStatus(eventNotHandledErr)
+        }
+
+        let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
+        DispatchQueue.main.async {
+            delegate.model.cancelDictation()
+        }
+        return noErr
     }
 }
