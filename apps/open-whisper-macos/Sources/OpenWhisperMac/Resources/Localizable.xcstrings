@@ -38,6 +38,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Hinzufügen" } }
       }
     },
+    "Add entry" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Eintrag hinzufügen" } }
+      }
+    },
     "Add language model by URL" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Sprachmodell per URL hinzufügen" } }
@@ -51,6 +56,11 @@
     "App language" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "App-Sprache" } }
+      }
+    },
+    "Apply dictionary in this mode" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Wörterbuch in diesem Modus anwenden" } }
       }
     },
     "approx." : {
@@ -193,6 +203,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Löschen" } }
       }
     },
+    "Delete entry" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Eintrag löschen" } }
+      }
+    },
     "Delete file" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Datei löschen" } }
@@ -216,6 +231,11 @@
     "Dictation stop" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Diktat-Stopp" } }
+      }
+    },
+    "Dictionary" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Wörterbuch" } }
       }
     },
     "Display name" : {
@@ -298,6 +318,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Grün" } }
       }
     },
+    "Heard" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Gehört" } }
+      }
+    },
     "Help" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Hilfe" } }
@@ -311,6 +336,11 @@
     "Hotkey must not be empty." : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Hotkey darf nicht leer sein." } }
+      }
+    },
+    "If enabled, global word replacements are applied to the transcript before this mode runs." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Wenn aktiv, werden globale Wort-Ersetzungen vor diesem Modus auf das Transkript angewendet." } }
       }
     },
     "If your keyboard maps the F-keys to brightness/volume by default, enable macOS Settings → Keyboard → 'Use F1, F2, etc. keys as standard function keys', or hold the fn key while pressing the shortcut." : {
@@ -423,6 +453,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Sprachmodelle verwalten…" } }
       }
     },
+    "Match case" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Groß-/Kleinschreibung beachten" } }
+      }
+    },
     "Maximum" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Maximal" } }
@@ -496,6 +531,11 @@
     "No custom language models added yet." : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Noch keine eigenen Sprachmodelle hinzugefügt." } }
+      }
+    },
+    "No entries yet. Add a word that Whisper transcribes incorrectly and the replacement that should be used instead." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Noch keine Einträge. Lege ein Wort an, das Whisper falsch transkribiert, und gib die gewünschte Ersetzung ein." } }
       }
     },
     "No hotkey set" : {
@@ -686,6 +726,16 @@
     "Remove" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Entfernen" } }
+      }
+    },
+    "Replacement" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ersetzung" } }
+      }
+    },
+    "Replacements run on the raw transcript before any post-processing. Each replacement can be applied case-sensitively or only to whole words." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ersetzungen werden vor jeder Nachbearbeitung auf das rohe Transkript angewendet. Jede Ersetzung lässt sich auf Groß-/Kleinschreibung oder nur ganze Wörter einschränken." } }
       }
     },
     "Report bugs or submit feature requests." : {
@@ -956,6 +1006,16 @@
     "Whisper presets" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Whisper-Presets" } }
+      }
+    },
+    "Whole word only" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nur ganze Wörter" } }
+      }
+    },
+    "Word replacements" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Wort-Ersetzungen" } }
       }
     },
     "You can restart the setup assistant anytime to reconfigure microphone, hotkey, and language models." : {

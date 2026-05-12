@@ -328,7 +328,7 @@ struct DictionaryEntryRow: View {
             }
             .toggleStyle(.button)
             .controlSize(.small)
-            .help(L("Match case", locale: locale))
+            .help(Text("Match case", bundle: .module))
 
             Toggle(isOn: $wholeWord) {
                 Text("W")
@@ -337,13 +337,13 @@ struct DictionaryEntryRow: View {
             }
             .toggleStyle(.button)
             .controlSize(.small)
-            .help(L("Whole word only", locale: locale))
+            .help(Text("Whole word only", bundle: .module))
 
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
-            .help(L("Delete entry", locale: locale))
+            .help(Text("Delete entry", bundle: .module))
         }
         .padding(.vertical, 2)
     }
