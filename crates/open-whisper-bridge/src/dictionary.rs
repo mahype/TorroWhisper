@@ -40,7 +40,9 @@ fn apply_entry(entry: &DictionaryEntry, text: &str) -> String {
         .case_insensitive(!entry.case_sensitive)
         .build()
     {
-        Ok(re) => re.replace_all(text, entry.replacement.as_str()).into_owned(),
+        Ok(re) => re
+            .replace_all(text, entry.replacement.as_str())
+            .into_owned(),
         Err(_) => text.to_owned(),
     }
 }

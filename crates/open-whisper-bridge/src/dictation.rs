@@ -96,8 +96,7 @@ impl DictationController {
                     settings.input_device_name = system_default_label().to_owned();
                 }
 
-                let resolved =
-                    resolve_input_device_name(settings, &self.available_input_devices);
+                let resolved = resolve_input_device_name(settings, &self.available_input_devices);
                 if settings.input_device_name != resolved {
                     settings.input_device_name = resolved.clone();
                 }

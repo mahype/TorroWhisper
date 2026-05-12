@@ -1000,7 +1000,10 @@ mod tests {
         };
         settings.record_input_device_choice(SYSTEM_DEFAULT_DEVICE_LABEL, None, 100);
         assert_eq!(
-            settings.preferred_input_devices.first().map(|d| d.name.as_str()),
+            settings
+                .preferred_input_devices
+                .first()
+                .map(|d| d.name.as_str()),
             Some(SYSTEM_DEFAULT_DEVICE_LABEL)
         );
     }
