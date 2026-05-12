@@ -207,9 +207,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func refreshMenuState() {
         let runtime = model.runtime
         let locale = currentLocale
-        dictationItem.title = runtime.isRecording
+        let dictationLabel = runtime.isRecording
             ? L("Stop dictation", locale: locale)
             : L("Start dictation", locale: locale)
+        let hotkeySuffix = runtime.hotkeyText.trimmingCharacters(in: .whitespaces)
+        dictationItem.title = hotkeySuffix.isEmpty
+            ? dictationLabel
+            : "\(dictationLabel) — \(hotkeySuffix)"
         settingsItem.title = L("Settings…", locale: locale)
         modeSwitchItem.title = L("Post-processing", locale: locale)
         modelSwitchItem.title = L("Transcription model", locale: locale)
