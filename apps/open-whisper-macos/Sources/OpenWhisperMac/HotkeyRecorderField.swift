@@ -8,6 +8,7 @@ struct HotkeyRecorderField: View {
     let preview: String
     let errorText: String?
     let warningText: String?
+    let warningDetails: String?
     let onStartCapture: () -> Void
     let onCommit: (String) -> Void
     let onCancel: () -> Void
@@ -71,9 +72,19 @@ struct HotkeyRecorderField: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             } else if let warningText, !warningText.isEmpty {
-                Text(warningText)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                HStack(alignment: .top, spacing: 4) {
+                    Text(warningText)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let warningDetails, !warningDetails.isEmpty {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .help(Text(warningDetails))
+                    }
+                    Spacer(minLength: 0)
+                }
             }
         }
     }

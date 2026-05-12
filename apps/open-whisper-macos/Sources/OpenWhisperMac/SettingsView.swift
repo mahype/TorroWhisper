@@ -132,6 +132,7 @@ struct SettingsView: View {
                 preview: model.hotkeyCapturePreview,
                 errorText: model.hotkeyCaptureError,
                 warningText: model.hotkeyRiskHint,
+                warningDetails: model.hotkeyRiskHintDetails,
                 onStartCapture: { model.startHotkeyCapture() },
                 onCommit: { model.commitCapturedHotkey($0) },
                 onCancel: { model.cancelHotkeyCapture() },

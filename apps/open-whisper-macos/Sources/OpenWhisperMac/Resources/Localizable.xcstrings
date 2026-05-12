@@ -293,6 +293,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Fehler" } }
       }
     },
+    "F-keys may need the fn modifier or a macOS keyboard setting." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "F-Tasten benötigen ggf. fn oder eine macOS-Tastatureinstellung." } }
+      }
+    },
     "Fast Large-v3 Turbo with high accuracy — great balance for recent Macs." : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Schnelles Large-v3-Turbo mit hoher Genauigkeit, gute Balance für aktuelle Macs." } }

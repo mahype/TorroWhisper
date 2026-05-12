@@ -156,12 +156,18 @@ final class AppModel: ObservableObject {
             hints.append(L("A single global key may collide with regular typing. Combinations stay safer.", locale: settings.effectiveLocale))
         }
         if hotkeyContainsFunctionKey(source) {
-            hints.append(L(
-                "If your keyboard maps the F-keys to brightness/volume by default, enable macOS Settings → Keyboard → 'Use F1, F2, etc. keys as standard function keys', or hold the fn key while pressing the shortcut.",
-                locale: settings.effectiveLocale
-            ))
+            hints.append(L("F-keys may need the fn modifier or a macOS keyboard setting.", locale: settings.effectiveLocale))
         }
-        return hints.isEmpty ? nil : hints.joined(separator: "\n\n")
+        return hints.isEmpty ? nil : hints.joined(separator: "\n")
+    }
+
+    var hotkeyRiskHintDetails: String? {
+        let source = isCapturingHotkey && !hotkeyCapturePreview.isEmpty ? hotkeyCapturePreview : settings.hotkey
+        guard hotkeyContainsFunctionKey(source) else { return nil }
+        return L(
+            "If your keyboard maps the F-keys to brightness/volume by default, enable macOS Settings → Keyboard → 'Use F1, F2, etc. keys as standard function keys', or hold the fn key while pressing the shortcut.",
+            locale: settings.effectiveLocale
+        )
     }
 
     var availableModes: [ProcessingMode] {

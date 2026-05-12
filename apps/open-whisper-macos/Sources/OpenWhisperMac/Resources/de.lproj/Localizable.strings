@@ -54,6 +54,7 @@
 "Endpoint" = "Endpoint";
 "Envelope" = "Welle";
 "Error" = "Fehler";
+"F-keys may need the fn modifier or a macOS keyboard setting." = "F-Tasten benötigen ggf. fn oder eine macOS-Tastatureinstellung.";
 "Fast Large-v3 Turbo with high accuracy — great balance for recent Macs." = "Schnelles Large-v3-Turbo mit hoher Genauigkeit, gute Balance für aktuelle Macs.";
 "Fetch models" = "Modelle abrufen";
 "Finish" = "Abschließen";
