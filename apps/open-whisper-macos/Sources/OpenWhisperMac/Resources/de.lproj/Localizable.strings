@@ -6,6 +6,8 @@
 "About Open Whisper" = "Über Open Whisper";
 "Active" = "Aktiv";
 "Add" = "Hinzufügen";
+"Add entry" = "Eintrag hinzufügen";
+"Apply dictionary in this mode" = "Wörterbuch in diesem Modus anwenden";
 "Add language model by URL" = "Sprachmodell per URL hinzufügen";
 "After adding, the file is fetched via the 'Download' button. Hugging Face 'resolve/main' links are recommended." = "Die Datei wird nach dem Hinzufügen über den 'Herunterladen'-Button geladen. Quellen wie Hugging Face 'resolve/main'-Links werden empfohlen.";
 "App language" = "App-Sprache";
@@ -36,10 +38,12 @@
 "Default (global)" = "Standard (global)";
 "Delete" = "Löschen";
 "Delete file" = "Datei löschen";
+"Delete entry" = "Eintrag löschen";
 "Delete post-processing" = "Nachbearbeitung löschen";
 "Details" = "Details";
 "Diagnostics" = "Diagnose";
 "Dictation stop" = "Diktat-Stopp";
+"Dictionary" = "Wörterbuch";
 "Display name" = "Anzeigename";
 "Done" = "Fertig";
 "Download" = "Herunterladen";
@@ -55,7 +59,9 @@
 "Finish" = "Abschließen";
 "Global hotkey" = "Globaler Hotkey";
 "Green" = "Grün";
+"Heard" = "Gehört";
 "Help" = "Hilfe";
+"If enabled, global word replacements are applied to the transcript before this mode runs." = "Wenn aktiv, werden globale Wort-Ersetzungen vor diesem Modus auf das Transkript angewendet.";
 "Hotkey" = "Hotkey";
 "Hotkey must not be empty." = "Hotkey darf nicht leer sein.";
 "Insert text automatically" = "Text automatisch einfügen";
@@ -74,6 +80,7 @@
 "Local model" = "Lokales Modell";
 "Manage language models" = "Sprachmodelle verwalten";
 "Manage language models…" = "Sprachmodelle verwalten…";
+"Match case" = "Groß-/Kleinschreibung beachten";
 "Maximum" = "Maximal";
 "Maximum accuracy. Large download and high RAM demand." = "Maximale Genauigkeit. Großer Download und hoher RAM-Bedarf.";
 "Medium" = "Mittel";
@@ -88,6 +95,7 @@
 "New post-processing" = "Neue Nachbearbeitung";
 "Next" = "Weiter";
 "No custom language models added yet." = "Noch keine eigenen Sprachmodelle hinzugefügt.";
+"No entries yet. Add a word that Whisper transcribes incorrectly and the replacement that should be used instead." = "Noch keine Einträge. Lege ein Wort an, das Whisper falsch transkribiert, und gib die gewünschte Ersetzung ein.";
 "No hotkey set" = "Noch kein Hotkey gesetzt";
 "No model list fetched yet. A running LM Studio server is required." = "Noch keine Modellliste abgerufen. Laufender LM-Studio-Server benötigt.";
 "No model list fetched yet. A running Ollama server is required." = "Noch keine Modellliste abgerufen. Laufender Ollama-Server benötigt.";
@@ -125,6 +133,8 @@
 "Refresh devices" = "Geräte aktualisieren";
 "Reload microphones" = "Mikrofone neu laden";
 "Remove" = "Entfernen";
+"Replacement" = "Ersetzung";
+"Replacements run on the raw transcript before any post-processing. Each replacement can be applied case-sensitively or only to whole words." = "Ersetzungen werden vor jeder Nachbearbeitung auf das rohe Transkript angewendet. Jede Ersetzung lässt sich auf Groß-/Kleinschreibung oder nur ganze Wörter einschränken.";
 "Report bugs or submit feature requests." = "Bugs melden oder Funktionswünsche einreichen.";
 "Restart onboarding" = "Onboarding erneut starten";
 "Restore clipboard after inserting" = "Clipboard wiederherstellen";
@@ -178,6 +188,8 @@
 "Welcome" = "Willkommen";
 "Whisper model" = "Whisper-Modell";
 "Whisper presets" = "Whisper-Presets";
+"Whole word only" = "Nur ganze Wörter";
+"Word replacements" = "Wort-Ersetzungen";
 "You can restart the setup assistant anytime to reconfigure microphone, hotkey, and language models." = "Du kannst den Einrichtungs-Assistenten jederzeit erneut starten, um Mikrofon, Hotkey und Sprachmodelle neu zu konfigurieren.";
 "approx." = "ca.";
 "custom, local" = "eigen, lokal";

@@ -60,6 +60,8 @@ struct SettingsView: View {
             recordingContent
         case .modes:
             modesContent
+        case .dictionary:
+            dictionaryContent
         case .languageModels:
             languageModelsContent
         case .startup:
@@ -217,6 +219,45 @@ struct SettingsView: View {
             }
         } header: {
             Text("Post-processing", bundle: .module)
+        }
+    }
+
+    @ViewBuilder
+    private var dictionaryContent: some View {
+        Section {
+            if model.settings.dictionary.isEmpty {
+                Text("No entries yet. Add a word that Whisper transcribes incorrectly and the replacement that should be used instead.", bundle: .module)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(model.settings.dictionary) { entry in
+                    DictionaryEntryRow(
+                        patternBinding: model.dictionaryBinding(entryID: entry.id, for: \.pattern),
+                        replacementBinding: model.dictionaryBinding(entryID: entry.id, for: \.replacement),
+                        caseSensitiveBinding: model.dictionaryBinding(entryID: entry.id, for: \.caseSensitive),
+                        wholeWordBinding: model.dictionaryBinding(entryID: entry.id, for: \.wholeWord),
+                        onDelete: { model.deleteDictionaryEntry(id: entry.id) }
+                    )
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    model.addDictionaryEntry()
+                } label: {
+                    Text("Add entry", bundle: .module)
+                }
+                Spacer()
+            }
+        } header: {
+            Text("Word replacements", bundle: .module)
+        } footer: {
+            Text("Replacements run on the raw transcript before any post-processing. Each replacement can be applied case-sensitively or only to whole words.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

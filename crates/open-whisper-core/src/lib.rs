@@ -469,6 +469,12 @@ pub struct ProcessingMode {
     pub prompt: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub post_processing_choice: Option<PostProcessingChoice>,
+    #[serde(default = "default_dictionary_enabled")]
+    pub dictionary_enabled: bool,
+}
+
+fn default_dictionary_enabled() -> bool {
+    true
 }
 
 impl ProcessingMode {
@@ -478,6 +484,7 @@ impl ProcessingMode {
             name: "Cleanup".to_owned(),
             prompt: "Fix punctuation, capitalization, and obvious recognition errors in the dictated text without changing its content. Return only the cleaned-up text.".to_owned(),
             post_processing_choice: None,
+            dictionary_enabled: true,
         }
     }
 }
@@ -485,6 +492,28 @@ impl ProcessingMode {
 impl Default for ProcessingMode {
     fn default() -> Self {
         Self::cleanup()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct DictionaryEntry {
+    pub id: String,
+    pub pattern: String,
+    pub replacement: String,
+    pub case_sensitive: bool,
+    pub whole_word: bool,
+}
+
+impl Default for DictionaryEntry {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            pattern: String::new(),
+            replacement: String::new(),
+            case_sensitive: false,
+            whole_word: true,
+        }
     }
 }
 
@@ -543,6 +572,7 @@ pub struct AppSettings {
     pub modes: Vec<ProcessingMode>,
     pub active_mode_id: String,
     pub ui_language: UiLanguage,
+    pub dictionary: Vec<DictionaryEntry>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -736,6 +766,7 @@ impl Default for AppSettings {
             modes: vec![ProcessingMode::cleanup()],
             active_mode_id: "cleanup".to_owned(),
             ui_language: UiLanguage::default(),
+            dictionary: Vec::new(),
         }
     }
 }
@@ -922,6 +953,7 @@ mod tests {
             name: "Entwickler".to_owned(),
             prompt: "Arbeite wie ein Entwickler.".to_owned(),
             post_processing_choice: None,
+            dictionary_enabled: true,
         });
         settings.active_mode_id = "dev".to_owned();
 
@@ -1009,6 +1041,7 @@ mod tests {
                     name: "Standard".to_owned(),
                     prompt: String::new(),
                     post_processing_choice: None,
+                    dictionary_enabled: true,
                 },
                 ProcessingMode::cleanup(),
             ],
@@ -1033,6 +1066,7 @@ mod tests {
                     name: "Standard".to_owned(),
                     prompt: String::new(),
                     post_processing_choice: None,
+                    dictionary_enabled: true,
                 },
                 ProcessingMode::cleanup(),
             ],
@@ -1100,6 +1134,7 @@ mod tests {
             name: "Email".to_owned(),
             prompt: "Formatiere als Email.".to_owned(),
             post_processing_choice: None,
+            dictionary_enabled: true,
         });
         settings.active_mode_id = "email".to_owned();
 

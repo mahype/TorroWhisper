@@ -1718,6 +1718,7 @@ dependencies = [
  "llama-cpp-2",
  "once_cell",
  "open-whisper-core",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

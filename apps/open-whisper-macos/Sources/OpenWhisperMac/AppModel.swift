@@ -222,6 +222,35 @@ final class AppModel: ObservableObject {
         )
     }
 
+    @discardableResult
+    func addDictionaryEntry() -> String {
+        let entry = DictionaryEntry()
+        settings.dictionary.append(entry)
+        requestAutoSave()
+        return entry.id
+    }
+
+    func deleteDictionaryEntry(id: String) {
+        settings.dictionary.removeAll { $0.id == id }
+        requestAutoSave()
+    }
+
+    func dictionaryBinding<Value>(entryID: String, for keyPath: WritableKeyPath<DictionaryEntry, Value>) -> Binding<Value> {
+        Binding(
+            get: {
+                self.settings.dictionary.first(where: { $0.id == entryID })?[keyPath: keyPath]
+                    ?? DictionaryEntry()[keyPath: keyPath]
+            },
+            set: { newValue in
+                guard let index = self.settings.dictionary.firstIndex(where: { $0.id == entryID }) else {
+                    return
+                }
+                self.settings.dictionary[index][keyPath: keyPath] = newValue
+                self.requestAutoSave()
+            }
+        )
+    }
+
     func modeChoiceBinding() -> Binding<PostProcessingChoice?> {
         Binding(
             get: {

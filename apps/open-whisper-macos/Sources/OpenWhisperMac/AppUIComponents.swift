@@ -4,6 +4,7 @@ import SwiftUI
 enum SettingsSection: String, CaseIterable, Identifiable {
     case recording
     case modes
+    case dictionary
     case languageModels = "language_models"
     case startup
     case updates
@@ -18,6 +19,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return L("Recording", locale: locale)
         case .modes:
             return L("Post-processing", locale: locale)
+        case .dictionary:
+            return L("Dictionary", locale: locale)
         case .languageModels:
             return L("Language models", locale: locale)
         case .startup:
@@ -37,6 +40,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return "mic.fill"
         case .modes:
             return "square.text.square"
+        case .dictionary:
+            return "character.book.closed.fill"
         case .languageModels:
             return "brain.head.profile"
         case .startup:
@@ -239,6 +244,16 @@ struct ModeEditorSheet: View {
                 } header: {
                     Text("Language model", bundle: .module)
                 }
+
+                Section {
+                    Toggle(isOn: model.modeBinding(for: \.dictionaryEnabled)) {
+                        Text("Apply dictionary in this mode", bundle: .module)
+                    }
+                } footer: {
+                    Text("If enabled, global word replacements are applied to the transcript before this mode runs.", bundle: .module)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
@@ -267,6 +282,70 @@ struct ModeEditorSheet: View {
             format: L("Uses global model: %@.", locale: locale),
             model.postProcessingChoiceLabel(global)
         )
+    }
+}
+
+struct DictionaryEntryRow: View {
+    @Binding var pattern: String
+    @Binding var replacement: String
+    @Binding var caseSensitive: Bool
+    @Binding var wholeWord: Bool
+    let onDelete: () -> Void
+    @Environment(\.locale) private var locale
+
+    init(
+        patternBinding: Binding<String>,
+        replacementBinding: Binding<String>,
+        caseSensitiveBinding: Binding<Bool>,
+        wholeWordBinding: Binding<Bool>,
+        onDelete: @escaping () -> Void
+    ) {
+        self._pattern = patternBinding
+        self._replacement = replacementBinding
+        self._caseSensitive = caseSensitiveBinding
+        self._wholeWord = wholeWordBinding
+        self.onDelete = onDelete
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField(L("Heard", locale: locale), text: $pattern)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: .infinity)
+
+            Image(systemName: "arrow.right")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextField(L("Replacement", locale: locale), text: $replacement)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: .infinity)
+
+            Toggle(isOn: $caseSensitive) {
+                Text("Aa")
+                    .font(.caption.weight(.semibold))
+                    .monospaced()
+            }
+            .toggleStyle(.button)
+            .controlSize(.small)
+            .help(L("Match case", locale: locale))
+
+            Toggle(isOn: $wholeWord) {
+                Text("W")
+                    .font(.caption.weight(.semibold))
+                    .monospaced()
+            }
+            .toggleStyle(.button)
+            .controlSize(.small)
+            .help(L("Whole word only", locale: locale))
+
+            Button(role: .destructive, action: onDelete) {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help(L("Delete entry", locale: locale))
+        }
+        .padding(.vertical, 2)
     }
 }
 

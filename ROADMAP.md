@@ -41,6 +41,8 @@ Chat-Shortcut → Audio-Aufnahme → Whisper-Transkription
 
 ## 2. Dictionary / Wort-Ersetzungen
 
+**Status:** Umgesetzt in v1. Globale Liste mit `Pattern → Replacement`, je Eintrag Toggles für *Case-sensitive* und *Nur ganze Wörter*. Anwendung pro Mode via Toggle `dictionary_enabled` an-/abschaltbar. Läuft vor dem LLM-Post-Processing. Regex-Support und Whisper-`initial_prompt`-Integration bleiben offen.
+
 ### Problem
 Whisper transkribiert bestimmte Wörter systematisch falsch. Beispiel: **"committe"** wird konsequent als **"komm bitte"** geschrieben. Solche Fehler wiederholen sich identisch und sind heute nur durch manuelle Nachkorrektur lösbar.
 

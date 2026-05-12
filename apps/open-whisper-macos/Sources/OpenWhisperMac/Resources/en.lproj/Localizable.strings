@@ -6,6 +6,8 @@
 "About Open Whisper" = "About Open Whisper";
 "Active" = "Active";
 "Add" = "Add";
+"Add entry" = "Add entry";
+"Apply dictionary in this mode" = "Apply dictionary in this mode";
 "Add language model by URL" = "Add language model by URL";
 "After adding, the file is fetched via the 'Download' button. Hugging Face 'resolve/main' links are recommended." = "After adding, the file is fetched via the 'Download' button. Hugging Face 'resolve/main' links are recommended.";
 "App language" = "App language";
@@ -36,10 +38,12 @@
 "Default (global)" = "Default (global)";
 "Delete" = "Delete";
 "Delete file" = "Delete file";
+"Delete entry" = "Delete entry";
 "Delete post-processing" = "Delete post-processing";
 "Details" = "Details";
 "Diagnostics" = "Diagnostics";
 "Dictation stop" = "Dictation stop";
+"Dictionary" = "Dictionary";
 "Display name" = "Display name";
 "Done" = "Done";
 "Download" = "Download";
@@ -55,7 +59,9 @@
 "Finish" = "Finish";
 "Global hotkey" = "Global hotkey";
 "Green" = "Green";
+"Heard" = "Heard";
 "Help" = "Help";
+"If enabled, global word replacements are applied to the transcript before this mode runs." = "If enabled, global word replacements are applied to the transcript before this mode runs.";
 "Hotkey" = "Hotkey";
 "Hotkey must not be empty." = "Hotkey must not be empty.";
 "Insert text automatically" = "Insert text automatically";
@@ -74,6 +80,7 @@
 "Local model" = "Local model";
 "Manage language models" = "Manage language models";
 "Manage language models…" = "Manage language models…";
+"Match case" = "Match case";
 "Maximum" = "Maximum";
 "Maximum accuracy. Large download and high RAM demand." = "Maximum accuracy. Large download and high RAM demand.";
 "Medium" = "Medium";
@@ -88,6 +95,7 @@
 "New post-processing" = "New post-processing";
 "Next" = "Next";
 "No custom language models added yet." = "No custom language models added yet.";
+"No entries yet. Add a word that Whisper transcribes incorrectly and the replacement that should be used instead." = "No entries yet. Add a word that Whisper transcribes incorrectly and the replacement that should be used instead.";
 "No hotkey set" = "No hotkey set";
 "No model list fetched yet. A running LM Studio server is required." = "No model list fetched yet. A running LM Studio server is required.";
 "No model list fetched yet. A running Ollama server is required." = "No model list fetched yet. A running Ollama server is required.";
@@ -125,6 +133,8 @@
 "Refresh devices" = "Refresh devices";
 "Reload microphones" = "Reload microphones";
 "Remove" = "Remove";
+"Replacement" = "Replacement";
+"Replacements run on the raw transcript before any post-processing. Each replacement can be applied case-sensitively or only to whole words." = "Replacements run on the raw transcript before any post-processing. Each replacement can be applied case-sensitively or only to whole words.";
 "Report bugs or submit feature requests." = "Report bugs or submit feature requests.";
 "Restart onboarding" = "Restart onboarding";
 "Restore clipboard after inserting" = "Restore clipboard after inserting";
@@ -178,6 +188,8 @@
 "Welcome" = "Welcome";
 "Whisper model" = "Whisper model";
 "Whisper presets" = "Whisper presets";
+"Whole word only" = "Whole word only";
+"Word replacements" = "Word replacements";
 "You can restart the setup assistant anytime to reconfigure microphone, hotkey, and language models." = "You can restart the setup assistant anytime to reconfigure microphone, hotkey, and language models.";
 "approx." = "approx.";
 "custom, local" = "custom, local";

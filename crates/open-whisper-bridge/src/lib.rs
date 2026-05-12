@@ -2,6 +2,7 @@
 mod autostart;
 #[allow(dead_code)]
 mod dictation;
+mod dictionary;
 #[allow(dead_code)]
 mod llm_model_manager;
 #[allow(dead_code)]
@@ -236,6 +237,11 @@ impl BridgeRuntime {
                         continue;
                     }
                     let mode = self.settings.active_mode().clone();
+                    let transcript = if mode.dictionary_enabled {
+                        dictionary::apply(&self.settings.dictionary, &transcript)
+                    } else {
+                        transcript
+                    };
                     if self.settings.active_mode_post_processing_enabled() {
                         let provider_label = self
                             .settings

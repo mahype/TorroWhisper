@@ -289,6 +289,7 @@ mod tests {
             name: "Entwickler".to_owned(),
             prompt: "Nutze Entwickler-Sprache.".to_owned(),
             post_processing_choice: None,
+            dictionary_enabled: true,
         });
         settings.active_mode_id = "dev".to_owned();
 
@@ -314,6 +315,7 @@ mod tests {
             post_processing_choice: Some(PostProcessingChoice::Ollama {
                 model_name: "llama3.1".to_owned(),
             }),
+            dictionary_enabled: true,
         });
         settings.active_mode_id = "email".to_owned();
 

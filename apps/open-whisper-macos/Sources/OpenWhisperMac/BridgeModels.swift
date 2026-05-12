@@ -529,12 +529,14 @@ struct ProcessingMode: Codable, Identifiable, Hashable {
     var name: String
     var prompt: String
     var postProcessingChoice: PostProcessingChoice?
+    var dictionaryEnabled: Bool
 
-    init(id: String, name: String, prompt: String, postProcessingChoice: PostProcessingChoice? = nil) {
+    init(id: String, name: String, prompt: String, postProcessingChoice: PostProcessingChoice? = nil, dictionaryEnabled: Bool = true) {
         self.id = id
         self.name = name
         self.prompt = prompt
         self.postProcessingChoice = postProcessingChoice
+        self.dictionaryEnabled = dictionaryEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -543,6 +545,7 @@ struct ProcessingMode: Codable, Identifiable, Hashable {
         self.name = try container.decode(String.self, forKey: .name)
         self.prompt = try container.decode(String.self, forKey: .prompt)
         self.postProcessingChoice = try container.decodeIfPresent(PostProcessingChoice.self, forKey: .postProcessingChoice)
+        self.dictionaryEnabled = try container.decodeIfPresent(Bool.self, forKey: .dictionaryEnabled) ?? true
     }
 
     static let cleanup = ProcessingMode(
@@ -550,6 +553,22 @@ struct ProcessingMode: Codable, Identifiable, Hashable {
         name: "Cleanup",
         prompt: "Fix punctuation, capitalization, and obvious recognition errors in the dictated text without changing its content. Return only the cleaned-up text."
     )
+}
+
+struct DictionaryEntry: Codable, Identifiable, Hashable {
+    var id: String
+    var pattern: String
+    var replacement: String
+    var caseSensitive: Bool
+    var wholeWord: Bool
+
+    init(id: String = UUID().uuidString, pattern: String = "", replacement: String = "", caseSensitive: Bool = false, wholeWord: Bool = true) {
+        self.id = id
+        self.pattern = pattern
+        self.replacement = replacement
+        self.caseSensitive = caseSensitive
+        self.wholeWord = wholeWord
+    }
 }
 
 struct TranscriptionLanguageOption: Identifiable, Hashable {
@@ -630,6 +649,7 @@ struct AppSettings: Codable, Equatable {
     var modes: [ProcessingMode]
     var activeModeId: String
     var uiLanguage: UiLanguage
+    var dictionary: [DictionaryEntry]
 
     static let `default` = AppSettings(
         onboardingCompleted: false,
@@ -664,7 +684,8 @@ struct AppSettings: Codable, Equatable {
         postProcessingEnabled: false,
         modes: [.cleanup],
         activeModeId: "cleanup",
-        uiLanguage: .system
+        uiLanguage: .system,
+        dictionary: []
     )
 }
 
