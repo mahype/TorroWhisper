@@ -6,6 +6,15 @@
     <description>Official update feed for Open Whisper.</description>
     <language>en</language>
     <item>
+      <title>Version 0.3.0</title>
+      <pubDate>Thu, 04 Jun 2026 11:23:45 +0000</pubDate>
+      <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+      <sparkle:version>0.3.0</sparkle:version>
+      <sparkle:releaseNotesLink>https://github.com/mahype/open-whisper/releases/tag/v0.3.0</sparkle:releaseNotesLink>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/mahype/open-whisper/releases/download/v0.3.0/OpenWhisper-0.3.0.dmg" sparkle:edSignature="eSpm/Lylmv0o+MtoCPa8/WoHGqYY50H6dEkfk+94ZqSg32FcSHxj82kDCNUueZJGF1uPBbRg4Kpqe6wHgrz4BA==" length="8592904" type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 0.2.1</title>
       <pubDate>Sun, 19 Apr 2026 16:16:45 +0000</pubDate>
       <sparkle:shortVersionString>0.2.1</sparkle:shortVersionString>
