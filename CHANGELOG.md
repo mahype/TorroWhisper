@@ -4,18 +4,29 @@ All notable changes to Open Whisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-06-04
+
 ### Added
+- **Dictation history** — every finished transcript is recorded in `history.json` next to the settings, with timestamp, mode, and a `was_cancelled` flag. Settings gains a *History* tab with an enable toggle, a configurable cap (10–1000, default 100), per-entry copy and delete buttons, and a *Clear all* action with confirmation. The tray menu gains a *Recent dictations* submenu showing the five newest entries (40-char preview, ⚠︎ marker on cancelled ones); clicking copies the full text to the clipboard without auto-pasting. Pressing Escape during dictation no longer drops the in-flight Whisper transcription — it lands in history (cancelled = true) and is simply not inserted, so accidental Escapes are recoverable ([`9ef9aff`](https://github.com/mahype/open-whisper/commit/9ef9aff)).
+- **User-defined dictionary** — global word replacements applied to the raw transcript before any post-processing, with per-entry case-sensitive and whole-word toggles. Modes can opt out individually so a mode that needs the raw transcript stays untouched. A new *Dictionary* tab manages entries ([`de7515c`](https://github.com/mahype/open-whisper/commit/de7515c)).
+- **Hotkey support for F13–F20, the numeric keypad, and media keys**, plus automatic re-registration when a keyboard is plugged in or out so the global hotkey survives device hotplugs ([`3ab9159`](https://github.com/mahype/open-whisper/commit/3ab9159)).
 - **Automatic microphone fallback on hotplug** — Open Whisper keeps a history of input devices you've actively picked. If the current mic disconnects (even mid-recording) the app seamlessly switches to the next-best mic from the history, falling back to the system default; it switches back automatically when the preferred mic returns. A short toast surfaces the change and can be turned off in Settings ([`655fdba`](https://github.com/mahype/open-whisper/commit/655fdba)).
 - **English and German UI** with automatic selection based on the macOS system language. Source language is English; a full German translation ships alongside. A new *UI language* picker lives in Settings → Start & behavior (System / English / Deutsch; requires app restart) ([`e2579a4`](https://github.com/mahype/open-whisper/commit/e2579a4)).
+- **Microphone switcher submenu** in the tray menu for quick switching without opening Settings ([`7b4f824`](https://github.com/mahype/open-whisper/commit/7b4f824)).
+- **Tray menu shows the active recording hotkey** next to the *Start/Stop dictation* entry so the shortcut is always visible ([`36b7e5e`](https://github.com/mahype/open-whisper/commit/36b7e5e)).
 
 ### Changed
 - Post-processing is now switched on and off via an "Off" entry at the top of the Modes list instead of a separate toggle ([`b1a1f40`](https://github.com/mahype/open-whisper/commit/b1a1f40)).
+- F-key hotkey warning is now condensed to a single line under the hotkey field, with the full macOS keyboard-settings explanation moved into a hover tooltip so it no longer gets truncated inside the Settings form ([`a515142`](https://github.com/mahype/open-whisper/commit/a515142)).
+- Dictionary settings (section header, *Add entry* button, footer hint) now resolve correctly to German, and the case-sensitive / whole-word toggles use the same localized `.help()` pattern as the rest of the codebase so their tooltips render reliably ([`f53223a`](https://github.com/mahype/open-whisper/commit/f53223a)).
 
 ### Fixed
+- Escape is now consumed system-wide while the dictation indicator is visible, so it cancels the dictation cleanly without leaking into the underlying app ([`59800b4`](https://github.com/mahype/open-whisper/commit/59800b4)).
 - Autostart: the registered `SMAppService` program path is refreshed on launch so Launch-at-Login keeps working after the app is moved or reinstalled into a different folder ([`c1d56d6`](https://github.com/mahype/open-whisper/commit/c1d56d6)).
 
 ### CI
 - Release workflow publishes a GitHub Release directly instead of creating a draft ([`e1d5966`](https://github.com/mahype/open-whisper/commit/e1d5966)).
+- Comprehensive verification pipeline added (Rust fmt/clippy, cargo-deny, CodeQL, SwiftLint) with CI documentation in [`docs/CI.md`](docs/CI.md) ([`4f43485`](https://github.com/mahype/open-whisper/commit/4f43485), [`543030e`](https://github.com/mahype/open-whisper/commit/543030e)).
 
 ## [0.2.1] — 2026-04-19
 
@@ -78,6 +89,7 @@ First public release. Everything below has landed since the project was initiali
 - CI runner bumped to `macos-15` for a newer Metal.framework ([`47caf7d`](https://github.com/mahype/open-whisper/commit/47caf7d)); Xcode 16 pinned on `macos-14` for Swift 6 ([`a1a2b63`](https://github.com/mahype/open-whisper/commit/a1a2b63)).
 - Legacy egui desktop app removed ([`82a3f6d`](https://github.com/mahype/open-whisper/commit/82a3f6d)).
 
-[Unreleased]: https://github.com/mahype/open-whisper/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/mahype/open-whisper/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mahype/open-whisper/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/mahype/open-whisper/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/mahype/open-whisper/releases/tag/v0.2.0

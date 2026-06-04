@@ -25,7 +25,7 @@ The **Git tag is the source of truth** for the version. Before tagging:
 
 ## Release tag format
 
-- Stable: `v0.2.0`, `v0.2.1`, `v1.0.0`
+- Stable: `v0.2.0`, `v0.2.1`, `v0.3.0`, `v1.0.0`
 - Release candidate: `v0.2.2-rc.1`
 - Any tag matching `v*` triggers [.github/workflows/release.yml](../.github/workflows/release.yml).
 
