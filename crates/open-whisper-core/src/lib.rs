@@ -519,6 +519,42 @@ impl Default for DictionaryEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
+pub struct HistoryEntry {
+    pub id: String,
+    pub text: String,
+    pub timestamp: i64,
+    pub mode_id: String,
+    pub mode_name: String,
+    pub was_cancelled: bool,
+}
+
+impl Default for HistoryEntry {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            text: String::new(),
+            timestamp: 0,
+            mode_id: String::new(),
+            mode_name: String::new(),
+            was_cancelled: false,
+        }
+    }
+}
+
+pub const HISTORY_MAX_ENTRIES_DEFAULT: u32 = 100;
+pub const HISTORY_MAX_ENTRIES_MIN: u32 = 10;
+pub const HISTORY_MAX_ENTRIES_LIMIT: u32 = 1000;
+
+fn default_history_enabled() -> bool {
+    true
+}
+
+fn default_history_max_entries() -> u32 {
+    HISTORY_MAX_ENTRIES_DEFAULT
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
 pub struct PreferredDevice {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -573,6 +609,10 @@ pub struct AppSettings {
     pub active_mode_id: String,
     pub ui_language: UiLanguage,
     pub dictionary: Vec<DictionaryEntry>,
+    #[serde(default = "default_history_enabled")]
+    pub history_enabled: bool,
+    #[serde(default = "default_history_max_entries")]
+    pub history_max_entries: u32,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -652,6 +692,10 @@ impl AppSettings {
                 mode.name = "New post-processing".to_owned();
             }
         }
+
+        self.history_max_entries = self
+            .history_max_entries
+            .clamp(HISTORY_MAX_ENTRIES_MIN, HISTORY_MAX_ENTRIES_LIMIT);
     }
 
     pub fn active_mode(&self) -> &ProcessingMode {
@@ -767,6 +811,8 @@ impl Default for AppSettings {
             active_mode_id: "cleanup".to_owned(),
             ui_language: UiLanguage::default(),
             dictionary: Vec::new(),
+            history_enabled: true,
+            history_max_entries: HISTORY_MAX_ENTRIES_DEFAULT,
         }
     }
 }
@@ -900,6 +946,7 @@ pub struct RuntimeStatusDto {
     pub active_input_device_name: String,
     pub last_mic_switch_message: String,
     pub mic_switch_event_count: u64,
+    pub history_revision: u64,
 }
 
 #[cfg(test)]

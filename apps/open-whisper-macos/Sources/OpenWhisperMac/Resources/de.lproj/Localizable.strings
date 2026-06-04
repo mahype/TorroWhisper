@@ -204,3 +204,17 @@
 "not loaded" = "nicht geladen";
 "unknown" = "unbekannt";
 "“System” follows your macOS language setting." = "„System“ folgt der macOS-Spracheinstellung.";
+"Cancelled" = "Abgebrochen";
+"Clear all" = "Alle löschen";
+"Clear history?" = "Historie löschen?";
+"Copy to clipboard" = "In Zwischenablage kopieren";
+"History" = "Historie";
+"History records the final transcript of each dictation, including ones cancelled with Escape. When the cap is reached, the oldest entry is dropped." = "Die Historie speichert das fertige Transkript jedes Diktats — auch solche, die mit Escape abgebrochen wurden. Wenn das Maximum erreicht ist, wird der älteste Eintrag entfernt.";
+"Maximum history entries" = "Maximale Anzahl Einträge";
+"No entries" = "Keine Einträge";
+"No history yet." = "Noch keine Einträge.";
+"Recent dictations" = "Letzte Diktate";
+"Record history" = "Historie aufzeichnen";
+"Settings" = "Einstellungen";
+"System default" = "Systemstandard";
+"This will permanently delete all entries." = "Alle Einträge werden unwiderruflich gelöscht.";

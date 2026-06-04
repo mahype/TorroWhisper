@@ -133,6 +133,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Abbrechen" } }
       }
     },
+    "Cancelled" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Abgebrochen" } }
+      }
+    },
     "Centered bars" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Zentrierte Balken" } }
@@ -158,9 +163,24 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Löschen" } }
       }
     },
+    "Clear all" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alle löschen" } }
+      }
+    },
+    "Clear history?" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Historie löschen?" } }
+      }
+    },
     "Color" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Farbe" } }
+      }
+    },
+    "Copy to clipboard" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "In Zwischenablage kopieren" } }
       }
     },
     "Current selection" : {
@@ -333,6 +353,16 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Hilfe" } }
       }
     },
+    "History" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Historie" } }
+      }
+    },
+    "History records the final transcript of each dictation, including ones cancelled with Escape. When the cap is reached, the oldest entry is dropped." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Historie speichert das fertige Transkript jedes Diktats — auch solche, die mit Escape abgebrochen wurden. Wenn das Maximum erreicht ist, wird der älteste Eintrag entfernt." } }
+      }
+    },
     "Hotkey" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Hotkey" } }
@@ -468,6 +498,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Maximal" } }
       }
     },
+    "Maximum history entries" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Maximale Anzahl Einträge" } }
+      }
+    },
     "Maximum accuracy. Large download and high RAM demand." : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Maximale Genauigkeit. Großer Download und hoher RAM-Bedarf." } }
@@ -538,9 +573,19 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Noch keine eigenen Sprachmodelle hinzugefügt." } }
       }
     },
+    "No entries" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Keine Einträge" } }
+      }
+    },
     "No entries yet. Add a word that Whisper transcribes incorrectly and the replacement that should be used instead." : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Noch keine Einträge. Lege ein Wort an, das Whisper falsch transkribiert, und gib die gewünschte Ersetzung ein." } }
+      }
+    },
+    "No history yet." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Noch keine Einträge." } }
       }
     },
     "No hotkey set" : {
@@ -688,6 +733,16 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Aufnehmen" } }
       }
     },
+    "Record history" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Historie aufzeichnen" } }
+      }
+    },
+    "Recent dictations" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Letzte Diktate" } }
+      }
+    },
     "Recording" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Aufnahme" } }
@@ -783,6 +838,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Einstellungen…" } }
       }
     },
+    "Settings" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Einstellungen" } }
+      }
+    },
     "Setup" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Einrichtung" } }
@@ -858,6 +918,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "System" } }
       }
     },
+    "System default" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Systemstandard" } }
+      }
+    },
     "System accent" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Systemfarbe" } }
@@ -891,6 +956,11 @@
     "This key is not currently supported as a global hotkey in the native macOS app." : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Diese Taste wird in der nativen macOS-App derzeit nicht als globaler Hotkey unterstützt." } }
+      }
+    },
+    "This will permanently delete all entries." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alle Einträge werden unwiderruflich gelöscht." } }
       }
     },
     "This profile uses: %@." : {

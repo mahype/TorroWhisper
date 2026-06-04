@@ -22,6 +22,8 @@ final class AppModel: ObservableObject {
     @Published var isCapturingHotkey = false
     @Published var hotkeyCapturePreview = ""
     @Published var hotkeyCaptureError: String?
+    @Published var history: [HistoryEntry] = []
+    private var lastSeenHistoryRevision: UInt64 = 0
 
     var onStateChanged: (() -> Void)?
     var onMicSwitched: ((MicSwitchNotification) -> Void)?
@@ -239,6 +241,44 @@ final class AppModel: ObservableObject {
     func deleteDictionaryEntry(id: String) {
         settings.dictionary.removeAll { $0.id == id }
         requestAutoSave()
+    }
+
+    func refreshHistory() {
+        do {
+            history = try bridge.loadHistory()
+            lastSeenHistoryRevision = runtime.historyRevision
+        } catch {
+            publish(error)
+        }
+    }
+
+    func deleteHistoryEntry(id: String) {
+        do {
+            _ = try bridge.deleteHistoryEntry(id: id)
+            history.removeAll { $0.id == id }
+            lastSeenHistoryRevision = lastSeenHistoryRevision &+ 1
+            onStateChanged?()
+        } catch {
+            publish(error)
+        }
+    }
+
+    func clearHistory() {
+        do {
+            _ = try bridge.clearHistory()
+            history.removeAll()
+            lastSeenHistoryRevision = lastSeenHistoryRevision &+ 1
+            onStateChanged?()
+        } catch {
+            publish(error)
+        }
+    }
+
+    func copyHistoryEntry(id: String) {
+        guard let entry = history.first(where: { $0.id == id }) else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(entry.text, forType: .string)
     }
 
     func dictionaryBinding<Value>(entryID: String, for keyPath: WritableKeyPath<DictionaryEntry, Value>) -> Binding<Value> {
@@ -502,6 +542,8 @@ final class AppModel: ObservableObject {
             diagnostics = try bridge.runPermissionDiagnostics()
             runtime = try bridge.getRuntimeStatus()
             lastSeenMicSwitchEventCount = runtime.micSwitchEventCount
+            history = (try? bridge.loadHistory()) ?? []
+            lastSeenHistoryRevision = runtime.historyRevision
             bridgeError = nil
             isCapturingHotkey = false
             hotkeyCapturePreview = ""
@@ -528,6 +570,10 @@ final class AppModel: ObservableObject {
                 customLlmStatusList = list
             }
             checkMicSwitchEvent()
+            if runtime.historyRevision != lastSeenHistoryRevision {
+                history = (try? bridge.loadHistory()) ?? []
+                lastSeenHistoryRevision = runtime.historyRevision
+            }
             bridgeError = nil
             onStateChanged?()
         } catch {

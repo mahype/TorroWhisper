@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var isManagingLanguageModels: Bool = false
     @State private var managerTab: LanguageModelsManagerTab = .transcription
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var isConfirmingHistoryClear: Bool = false
     @Environment(\.locale) private var locale
 
     var body: some View {
@@ -44,6 +45,21 @@ struct SettingsView: View {
                     isManagingLanguageModels = false
                 }
             }
+            .alert(
+                Text("Clear history?", bundle: .module),
+                isPresented: $isConfirmingHistoryClear
+            ) {
+                Button(role: .destructive) {
+                    model.clearHistory()
+                } label: {
+                    Text("Clear all", bundle: .module)
+                }
+                Button(role: .cancel) {} label: {
+                    Text("Cancel", bundle: .module)
+                }
+            } message: {
+                Text("This will permanently delete all entries.", bundle: .module)
+            }
         }
         .navigationSplitViewStyle(.balanced)
         .frame(width: 820, height: 720)
@@ -62,6 +78,8 @@ struct SettingsView: View {
             modesContent
         case .dictionary:
             dictionaryContent
+        case .history:
+            historyContent
         case .languageModels:
             languageModelsContent
         case .startup:
@@ -259,6 +277,65 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private var historyContent: some View {
+        Section {
+            Toggle(isOn: model.binding(for: \.historyEnabled)) {
+                Text("Record history", bundle: .module)
+            }
+            Stepper(
+                value: model.binding(for: \.historyMaxEntries),
+                in: historyMaxEntriesMin...historyMaxEntriesLimit,
+                step: 10
+            ) {
+                HStack {
+                    Text("Maximum history entries", bundle: .module)
+                    Spacer()
+                    Text("\(model.settings.historyMaxEntries)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+        } header: {
+            Text("Settings", bundle: .module)
+        } footer: {
+            Text("History records the final transcript of each dictation, including ones cancelled with Escape. When the cap is reached, the oldest entry is dropped.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        Section {
+            if model.history.isEmpty {
+                Text("No history yet.", bundle: .module)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(model.history) { entry in
+                    HistoryEntryRow(
+                        entry: entry,
+                        onDelete: { model.deleteHistoryEntry(id: entry.id) },
+                        onCopy: { model.copyHistoryEntry(id: entry.id) }
+                    )
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button(role: .destructive) {
+                    isConfirmingHistoryClear = true
+                } label: {
+                    Text("Clear all", bundle: .module)
+                }
+                .disabled(model.history.isEmpty)
+            }
+        } header: {
+            Text("Recent dictations", bundle: .module)
         }
     }
 

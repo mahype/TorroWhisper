@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var modeSwitchItem: NSMenuItem!
     private var modelSwitchItem: NSMenuItem!
     private var micSwitchItem: NSMenuItem!
+    private var recentHistoryItem: NSMenuItem!
     private var statusItemLine: NSMenuItem!
     private var quitItem: NSMenuItem!
     private var checkForUpdatesItem: NSMenuItem!
@@ -30,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let modeMenu = NSMenu()
     private let modelMenu = NSMenu()
     private let micMenu = NSMenu()
+    private let recentHistoryMenu = NSMenu()
     private var escapeHotKeyRef: EventHotKeyRef?
     private var escapeEventHandler: EventHandlerRef?
     private var escapeLocalMonitor: Any?
@@ -55,6 +57,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         modelSwitchItem.submenu = modelMenu
         micSwitchItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         micSwitchItem.submenu = micMenu
+        recentHistoryItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        recentHistoryItem.submenu = recentHistoryMenu
         statusItemLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         statusItemLine.isEnabled = false
         quitItem = NSMenuItem(title: "", action: #selector(quitApp), keyEquivalent: "q")
@@ -78,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             micSwitchItem,
             modeSwitchItem,
             modelSwitchItem,
+            recentHistoryItem,
             statusItemLine,
             .separator(),
             feedbackItem,
@@ -218,12 +223,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         modeSwitchItem.title = L("Post-processing", locale: locale)
         modelSwitchItem.title = L("Transcription model", locale: locale)
         micSwitchItem.title = L("Microphone", locale: locale)
+        recentHistoryItem.title = L("Recent dictations", locale: locale)
         quitItem.title = L("Quit", locale: locale)
         checkForUpdatesItem.title = L("Check for updates…", locale: locale)
         feedbackItem.title = L("Send feedback…", locale: locale)
         rebuildModeMenu()
         rebuildModelMenu()
         rebuildMicMenu()
+        rebuildRecentHistoryMenu()
         statusItemLine.title = model.bridgeError ?? runtime.lastStatus
         statusItem.button?.image = statusImage(recording: runtime.isRecording)
         statusItem.button?.toolTip = buildStatusTooltip(runtime: runtime)
@@ -514,6 +521,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             item.state = (name == activeName) ? .on : .off
             micMenu.addItem(item)
         }
+    }
+
+    private static let recentHistoryTrayPreviewLimit = 40
+    private static let recentHistoryTrayCount = 5
+
+    private func rebuildRecentHistoryMenu() {
+        recentHistoryMenu.removeAllItems()
+        let locale = currentLocale
+
+        let entries = Array(model.history.prefix(Self.recentHistoryTrayCount))
+        if entries.isEmpty {
+            let item = NSMenuItem(
+                title: L("No entries", locale: locale),
+                action: nil,
+                keyEquivalent: ""
+            )
+            item.isEnabled = false
+            recentHistoryMenu.addItem(item)
+            return
+        }
+
+        for entry in entries {
+            let preview = trayPreview(for: entry.text)
+            let title = entry.wasCancelled
+                ? "⚠︎ \(preview)"
+                : preview
+            let item = NSMenuItem(
+                title: title,
+                action: #selector(copyHistoryEntryFromTray(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = entry.id
+            recentHistoryMenu.addItem(item)
+        }
+    }
+
+    private func trayPreview(for text: String) -> String {
+        let collapsed = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        if collapsed.count <= Self.recentHistoryTrayPreviewLimit {
+            return collapsed
+        }
+        let cutoff = collapsed.index(
+            collapsed.startIndex,
+            offsetBy: Self.recentHistoryTrayPreviewLimit
+        )
+        return String(collapsed[..<cutoff]) + "…"
+    }
+
+    @objc private func copyHistoryEntryFromTray(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        model.copyHistoryEntry(id: id)
     }
 
     private func show(_ window: NSWindow) {

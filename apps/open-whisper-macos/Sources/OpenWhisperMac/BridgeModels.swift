@@ -571,6 +571,23 @@ struct DictionaryEntry: Codable, Identifiable, Hashable {
     }
 }
 
+struct HistoryEntry: Codable, Identifiable, Hashable {
+    var id: String
+    var text: String
+    var timestamp: Int64
+    var modeId: String
+    var modeName: String
+    var wasCancelled: Bool
+
+    var date: Date {
+        Date(timeIntervalSince1970: TimeInterval(timestamp))
+    }
+}
+
+let historyMaxEntriesMin: UInt32 = 10
+let historyMaxEntriesDefault: UInt32 = 100
+let historyMaxEntriesLimit: UInt32 = 1000
+
 struct TranscriptionLanguageOption: Identifiable, Hashable {
     let code: String
 
@@ -650,6 +667,8 @@ struct AppSettings: Codable, Equatable {
     var activeModeId: String
     var uiLanguage: UiLanguage
     var dictionary: [DictionaryEntry]
+    var historyEnabled: Bool
+    var historyMaxEntries: UInt32
 
     static let `default` = AppSettings(
         onboardingCompleted: false,
@@ -685,7 +704,9 @@ struct AppSettings: Codable, Equatable {
         modes: [.cleanup],
         activeModeId: "cleanup",
         uiLanguage: .system,
-        dictionary: []
+        dictionary: [],
+        historyEnabled: true,
+        historyMaxEntries: historyMaxEntriesDefault
     )
 }
 
@@ -797,6 +818,7 @@ struct RuntimeStatusDTO: Codable {
     var activeInputDeviceName: String
     var lastMicSwitchMessage: String
     var micSwitchEventCount: UInt64
+    var historyRevision: UInt64
 
     static let empty = RuntimeStatusDTO(
         isRecording: false,
@@ -817,7 +839,8 @@ struct RuntimeStatusDTO: Codable {
         blockedModelProgressBasisPoints: nil,
         activeInputDeviceName: "",
         lastMicSwitchMessage: "",
-        micSwitchEventCount: 0
+        micSwitchEventCount: 0,
+        historyRevision: 0
     )
 }
 

@@ -3,6 +3,7 @@ mod autostart;
 #[allow(dead_code)]
 mod dictation;
 mod dictionary;
+mod history_store;
 #[allow(dead_code)]
 mod llm_model_manager;
 #[allow(dead_code)]
@@ -32,9 +33,9 @@ use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey:
 use llm_model_manager::LlmModelDownloadManager;
 use model_manager::ModelDownloadManager;
 use open_whisper_core::{
-    AppSettings, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto, LlmModelStatusDto,
-    LlmPreset, ModelPreset, ModelStatusDto, RecordingLevelsDto, RemoteModelBackend, RemoteModelDto,
-    RuntimeStatusDto,
+    AppSettings, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto, HistoryEntry,
+    LlmModelStatusDto, LlmPreset, ModelPreset, ModelStatusDto, RecordingLevelsDto,
+    RemoteModelBackend, RemoteModelDto, RuntimeStatusDto,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -55,6 +56,8 @@ struct BridgeRuntime {
     last_status: String,
     last_transcript: String,
     cancelled: Arc<AtomicBool>,
+    history: Vec<HistoryEntry>,
+    history_revision: u64,
 }
 
 struct PendingPostProcessing {
@@ -128,6 +131,8 @@ impl BridgeRuntime {
             last_status,
             last_transcript: String::new(),
             cancelled: Arc::new(AtomicBool::new(false)),
+            history: history_store::load().unwrap_or_default(),
+            history_revision: 0,
         }
     }
 
@@ -146,46 +151,42 @@ impl BridgeRuntime {
             match rx.try_recv() {
                 Ok(Ok(processed_text)) => {
                     self.post_processing_rx = None;
-                    if self.cancelled.load(Ordering::Relaxed) {
-                        self.pending_post_processing = None;
-                    } else {
-                        let mode_name = self
-                            .pending_post_processing
-                            .as_ref()
-                            .map(|pending| pending.mode_name.clone())
-                            .unwrap_or_else(|| self.settings.active_mode_name().to_owned());
-                        self.pending_post_processing = None;
-                        self.finish_transcript(
-                            processed_text,
-                            &format!("Post-processing '{mode_name}' complete."),
-                        );
-                    }
+                    let was_cancelled = self.cancelled.load(Ordering::Relaxed);
+                    let mode_name = self
+                        .pending_post_processing
+                        .as_ref()
+                        .map(|pending| pending.mode_name.clone())
+                        .unwrap_or_else(|| self.settings.active_mode_name().to_owned());
+                    self.pending_post_processing = None;
+                    self.finish_transcript(
+                        processed_text,
+                        &format!("Post-processing '{mode_name}' complete."),
+                        was_cancelled,
+                    );
                 }
                 Ok(Err(err)) => {
                     self.post_processing_rx = None;
-                    if self.cancelled.load(Ordering::Relaxed) {
-                        self.pending_post_processing = None;
-                    } else if let Some(pending) = self.pending_post_processing.take() {
+                    let was_cancelled = self.cancelled.load(Ordering::Relaxed);
+                    if let Some(pending) = self.pending_post_processing.take() {
                         let fallback_status = format!(
                             "Post-processing '{}' via {} failed. Using raw transcript. {err}",
                             pending.mode_name, pending.provider_label
                         );
-                        self.finish_transcript(pending.raw_transcript, &fallback_status);
-                    } else {
+                        self.finish_transcript(pending.raw_transcript, &fallback_status, was_cancelled);
+                    } else if !was_cancelled {
                         self.last_status = err;
                     }
                 }
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     self.post_processing_rx = None;
-                    if self.cancelled.load(Ordering::Relaxed) {
-                        self.pending_post_processing = None;
-                    } else if let Some(pending) = self.pending_post_processing.take() {
+                    let was_cancelled = self.cancelled.load(Ordering::Relaxed);
+                    if let Some(pending) = self.pending_post_processing.take() {
                         let fallback_status = format!(
                             "Post-processing '{}' stopped unexpectedly. Using raw transcript.",
                             pending.mode_name
                         );
-                        self.finish_transcript(pending.raw_transcript, &fallback_status);
-                    } else {
+                        self.finish_transcript(pending.raw_transcript, &fallback_status, was_cancelled);
+                    } else if !was_cancelled {
                         self.last_status =
                             "Post-processing worker stopped unexpectedly.".to_owned();
                     }
@@ -233,16 +234,14 @@ impl BridgeRuntime {
                     }
                 }
                 DictationOutcome::TranscriptReady(transcript) => {
-                    if self.cancelled.load(Ordering::Relaxed) {
-                        continue;
-                    }
+                    let was_cancelled = self.cancelled.load(Ordering::Relaxed);
                     let mode = self.settings.active_mode().clone();
                     let transcript = if mode.dictionary_enabled {
                         dictionary::apply(&self.settings.dictionary, &transcript)
                     } else {
                         transcript
                     };
-                    if self.settings.active_mode_post_processing_enabled() {
+                    if !was_cancelled && self.settings.active_mode_post_processing_enabled() {
                         let provider_label = self
                             .settings
                             .active_post_processing_backend
@@ -271,7 +270,7 @@ impl BridgeRuntime {
                             "Whisper transcript ready. Post-processing '{mode_name}' running."
                         );
                     } else {
-                        self.finish_transcript(transcript, "Transcript ready.");
+                        self.finish_transcript(transcript, "Transcript ready.", was_cancelled);
                     }
                 }
             }
@@ -297,21 +296,44 @@ impl BridgeRuntime {
         self.cancelled.store(true, Ordering::Relaxed);
 
         let recording_cancelled = self.dictation.cancel_recording();
-        let _ = self.dictation.abandon_transcription();
-        self.post_processing_rx = None;
-        self.pending_post_processing = None;
         self.dictation.clear_blocked();
+
+        // If post-processing was running we have the raw Whisper transcript in
+        // pending_post_processing. Save it to history now and skip the PP result
+        // (Escape means: bail out fast, don't wait for slow LLM).
+        if was_post_processing
+            && let Some(pending) = self.pending_post_processing.take()
+        {
+            self.post_processing_rx = None;
+            self.finish_transcript(pending.raw_transcript, "Diktat abgebrochen.", true);
+        } else if was_transcribing {
+            // Whisper still running: let it finish so TranscriptReady arrives and
+            // record_history_entry can save it. Do NOT abandon_transcription.
+        }
 
         if !recording_cancelled {
             dictation::play_cancel_cue();
         }
 
-        self.last_status = "Diktat abgebrochen.".to_owned();
+        if !self.last_status.starts_with("Diktat abgebrochen") {
+            self.last_status = "Diktat abgebrochen.".to_owned();
+        }
         Ok(self.last_status.clone())
     }
 
-    fn finish_transcript(&mut self, transcript: String, ready_status: &str) {
+    fn finish_transcript(&mut self, transcript: String, ready_status: &str, was_cancelled: bool) {
         self.last_transcript = transcript.clone();
+        self.record_history_entry(&transcript, was_cancelled);
+
+        if was_cancelled {
+            self.last_status = if self.settings.history_enabled && !transcript.trim().is_empty() {
+                "Diktat abgebrochen — in Historie gespeichert.".to_owned()
+            } else {
+                "Diktat abgebrochen.".to_owned()
+            };
+            return;
+        }
+
         if self.settings.insert_text_automatically {
             match text_inserter::insert_text_into_active_app(&transcript, &self.settings) {
                 Ok(message) => {
@@ -334,6 +356,42 @@ impl BridgeRuntime {
         } else {
             self.last_status = ready_status.to_owned();
         }
+    }
+
+    fn record_history_entry(&mut self, transcript: &str, was_cancelled: bool) {
+        if !self.settings.history_enabled {
+            return;
+        }
+        if transcript.trim().is_empty() {
+            return;
+        }
+
+        let mode = self.settings.active_mode().clone();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| format!("h-{}", d.as_nanos()))
+            .unwrap_or_else(|_| format!("h-{}", self.history.len()));
+
+        let entry = HistoryEntry {
+            id,
+            text: transcript.to_owned(),
+            timestamp,
+            mode_id: mode.id,
+            mode_name: mode.name,
+            was_cancelled,
+        };
+
+        history_store::append(
+            &mut self.history,
+            entry,
+            self.settings.history_max_entries as usize,
+        );
+        self.history_revision = self.history_revision.wrapping_add(1);
+        let _ = history_store::save(&self.history);
     }
 
     fn load_settings(&mut self) -> AppSettings {
@@ -798,7 +856,31 @@ impl BridgeRuntime {
             active_input_device_name: self.dictation.active_input_device_name().to_owned(),
             last_mic_switch_message: self.dictation.last_mic_switch_message().to_owned(),
             mic_switch_event_count: self.dictation.mic_switch_event_count(),
+            history_revision: self.history_revision,
         }
+    }
+
+    fn load_history(&mut self) -> Vec<HistoryEntry> {
+        self.history.clone()
+    }
+
+    fn delete_history_entry(&mut self, id: &str) -> Result<String, String> {
+        if history_store::delete(&mut self.history, id) {
+            self.history_revision = self.history_revision.wrapping_add(1);
+            history_store::save(&self.history)
+                .map_err(|err| format!("History could not be saved: {err}"))?;
+            Ok(format!("History entry {id} deleted."))
+        } else {
+            Err(format!("History entry {id} not found."))
+        }
+    }
+
+    fn clear_history(&mut self) -> Result<String, String> {
+        history_store::clear(&mut self.history);
+        self.history_revision = self.history_revision.wrapping_add(1);
+        history_store::save(&self.history)
+            .map_err(|err| format!("History could not be saved: {err}"))?;
+        Ok("History cleared.".to_owned())
     }
 }
 
@@ -1215,6 +1297,31 @@ pub extern "C" fn ow_validate_hotkey(request_json: *const c_char) -> *mut c_char
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_reregister_hotkey() -> *mut c_char {
     response_from_result(with_runtime(BridgeRuntime::reregister_hotkey))
+}
+
+#[derive(Deserialize)]
+struct HistoryIdRequest {
+    id: String,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_load_history() -> *mut c_char {
+    response_ok(with_runtime_value(BridgeRuntime::load_history))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_delete_history_entry(request_json: *const c_char) -> *mut c_char {
+    let id = match parse_json_arg::<HistoryIdRequest>(request_json, "HistoryIdRequest") {
+        Ok(request) => request.id,
+        Err(err) => return response_from_result::<String>(Err(err)),
+    };
+
+    response_from_result(with_runtime(|runtime| runtime.delete_history_entry(&id)))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_clear_history() -> *mut c_char {
+    response_from_result(with_runtime(BridgeRuntime::clear_history))
 }
 
 /// Frees a C string returned by any `ow_*` function.

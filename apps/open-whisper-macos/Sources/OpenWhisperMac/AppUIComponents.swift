@@ -5,6 +5,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case recording
     case modes
     case dictionary
+    case history
     case languageModels = "language_models"
     case startup
     case updates
@@ -21,6 +22,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return L("Post-processing", locale: locale)
         case .dictionary:
             return L("Dictionary", locale: locale)
+        case .history:
+            return L("History", locale: locale)
         case .languageModels:
             return L("Language models", locale: locale)
         case .startup:
@@ -42,6 +45,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return "square.text.square"
         case .dictionary:
             return "character.book.closed.fill"
+        case .history:
+            return "clock.arrow.circlepath"
         case .languageModels:
             return "brain.head.profile"
         case .startup:
@@ -346,6 +351,72 @@ struct DictionaryEntryRow: View {
             .help(Text("Delete entry", bundle: .module))
         }
         .padding(.vertical, 2)
+    }
+}
+
+struct HistoryEntryRow: View {
+    let entry: HistoryEntry
+    let onDelete: () -> Void
+    let onCopy: () -> Void
+    @Environment(\.locale) private var locale
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(formattedTimestamp)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    if !entry.modeName.isEmpty {
+                        Text("·")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(entry.modeName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if entry.wasCancelled {
+                        Text(L("Cancelled", locale: locale))
+                            .font(.caption.weight(.semibold))
+                            .padding(.vertical, 1)
+                            .padding(.horizontal, 6)
+                            .background(Color.orange.opacity(0.18), in: Capsule())
+                            .foregroundStyle(.orange)
+                    }
+                    Spacer(minLength: 0)
+                }
+                Text(entry.text)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .lineLimit(4)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 6) {
+                Button(action: onCopy) {
+                    Image(systemName: "doc.on.doc")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help(Text("Copy to clipboard", bundle: .module))
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.borderless)
+                .help(Text("Delete entry", bundle: .module))
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var formattedTimestamp: String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: entry.date)
     }
 }
 

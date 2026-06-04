@@ -204,3 +204,17 @@
 "not loaded" = "not loaded";
 "unknown" = "unknown";
 "“System” follows your macOS language setting." = "“System” follows your macOS language setting.";
+"Cancelled" = "Cancelled";
+"Clear all" = "Clear all";
+"Clear history?" = "Clear history?";
+"Copy to clipboard" = "Copy to clipboard";
+"History" = "History";
+"History records the final transcript of each dictation, including ones cancelled with Escape. When the cap is reached, the oldest entry is dropped." = "History records the final transcript of each dictation, including ones cancelled with Escape. When the cap is reached, the oldest entry is dropped.";
+"Maximum history entries" = "Maximum history entries";
+"No entries" = "No entries";
+"No history yet." = "No history yet.";
+"Recent dictations" = "Recent dictations";
+"Record history" = "Record history";
+"Settings" = "Settings";
+"System default" = "System default";
+"This will permanently delete all entries." = "This will permanently delete all entries.";

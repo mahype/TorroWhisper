@@ -113,6 +113,18 @@ final class BridgeClient {
         try decodeResponse(from: ow_reregister_hotkey())
     }
 
+    func loadHistory() throws -> [HistoryEntry] {
+        try decodeResponse(from: ow_load_history())
+    }
+
+    func deleteHistoryEntry(id: String) throws -> String {
+        try encodeAndCall(["id": id], function: ow_delete_history_entry)
+    }
+
+    func clearHistory() throws -> String {
+        try decodeResponse(from: ow_clear_history())
+    }
+
     private func encodeAndCall<Input: Encodable, Output: Decodable>(
         _ input: Input,
         function: (UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
