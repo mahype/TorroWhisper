@@ -1,4 +1,7 @@
 "Changes take effect after restarting Open Whisper." = "Änderungen werden nach einem Neustart von Open Whisper wirksam.";
+"Downloaded" = "Heruntergeladen";
+"Required. Download the selected transcription model to continue." = "Erforderlich. Lade das ausgewählte Transkriptionsmodell herunter, um fortzufahren.";
+"Optional — only needed if you want post-processing. Post-processing runs your dictation through a language model to clean it up: fixing punctuation and capitalization and removing filler words. Download a model here if you want it, or skip and add one later in Settings." = "Optional – nur nötig, wenn du eine Nachbearbeitung möchtest. Die Nachbearbeitung schickt dein Diktat durch ein Sprachmodell, das es aufräumt: Zeichensetzung und Großschreibung korrigieren und Füllwörter entfernen. Lade hier ein Modell herunter, wenn du möchtest, oder überspringe es und füge später eines in den Einstellungen hinzu.";
 "Recording started." = "Aufnahme gestartet.";
 "Dictation finished." = "Diktat beendet.";
 "Recording not possible. The model is missing." = "Aufnahme nicht möglich. Das Modell fehlt.";

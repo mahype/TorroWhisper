@@ -24,21 +24,6 @@ struct OnboardingView: View {
         }
         .frame(width: 760, height: 520)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onChange(of: model.onboardingStep) {
-            if model.onboardingStep == 2 {
-                triggerModelDownloadsIfNeeded()
-            }
-        }
-        .onChange(of: model.settings.localModel) {
-            if model.onboardingStep == 2 {
-                triggerModelDownloadsIfNeeded()
-            }
-        }
-        .onChange(of: model.settings.localLlm) {
-            if model.onboardingStep == 2 {
-                triggerModelDownloadsIfNeeded()
-            }
-        }
     }
 
     private var stepTitle: String {
@@ -170,8 +155,14 @@ struct OnboardingView: View {
                         Text("Status", bundle: .module)
                     }
                 }
+
+                whisperDownloadControl
             } header: {
                 Text("Transcription", bundle: .module)
+            } footer: {
+                Text("Required. Download the selected transcription model to continue.", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
@@ -197,12 +188,12 @@ struct OnboardingView: View {
                         Text("Status", bundle: .module)
                     }
                 }
+
+                llmDownloadControl
             } header: {
                 Text("Post-processing", bundle: .module)
-            }
-
-            Section {
-                Text("Both models download now and must finish before you can continue. You can add or switch to other models later in Settings under 'Language models'.", bundle: .module)
+            } footer: {
+                Text("Optional — only needed if you want post-processing. Post-processing runs your dictation through a language model to clean it up: fixing punctuation and capitalization and removing filler words. Download a model here if you want it, or skip and add one later in Settings.", bundle: .module)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -299,7 +290,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(model.onboardingStep == 2 && !modelsReady)
+                .disabled(model.onboardingStep == 2 && !whisperReady)
             }
         }
         .padding(.horizontal, 20)
@@ -330,21 +321,53 @@ struct OnboardingView: View {
         model.llmStatusList.first { $0.displayLabel == model.settings.localLlm.displayName }
     }
 
-    private var modelsReady: Bool {
-        (currentWhisperStatus?.isDownloaded ?? false) && (currentLlmStatus?.isDownloaded ?? false)
+    /// Gating for the model step: only the transcription model is mandatory.
+    /// Post-processing stays optional, so it never blocks the wizard.
+    private var whisperReady: Bool {
+        currentWhisperStatus?.isDownloaded ?? false
     }
 
-    private func triggerModelDownloadsIfNeeded() {
-        let whisperDownloaded = currentWhisperStatus?.isDownloaded ?? false
-        let whisperDownloading = currentWhisperStatus?.isDownloading ?? false
-        if !whisperDownloaded && !whisperDownloading {
-            model.startModelDownload(preset: model.settings.localModel)
+    /// Manual download control for the transcription model. Nothing downloads
+    /// automatically — the user must click, and cannot continue until the
+    /// selected model is downloaded.
+    @ViewBuilder
+    private var whisperDownloadControl: some View {
+        let status = currentWhisperStatus
+        if status?.isDownloaded ?? false {
+            Label {
+                Text("Downloaded", bundle: .module)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            }
+        } else {
+            Button {
+                model.startModelDownload(preset: model.settings.localModel)
+            } label: {
+                Text((status?.isDownloading ?? false) ? "Loading…" : "Download", bundle: .module)
+            }
+            .disabled(status?.isDownloading ?? false)
         }
+    }
 
-        let llmDownloaded = currentLlmStatus?.isDownloaded ?? false
-        let llmDownloading = currentLlmStatus?.isDownloading ?? false
-        if !llmDownloaded && !llmDownloading {
-            model.startLlmDownload(preset: model.settings.localLlm)
+    /// Manual, optional download control for the post-processing model.
+    @ViewBuilder
+    private var llmDownloadControl: some View {
+        let status = currentLlmStatus
+        if status?.isDownloaded ?? false {
+            Label {
+                Text("Downloaded", bundle: .module)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            }
+        } else {
+            Button {
+                model.startLlmDownload(preset: model.settings.localLlm)
+            } label: {
+                Text((status?.isDownloading ?? false) ? "Loading…" : "Download", bundle: .module)
+            }
+            .disabled(status?.isDownloading ?? false)
         }
     }
 }

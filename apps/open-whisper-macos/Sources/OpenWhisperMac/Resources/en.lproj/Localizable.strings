@@ -1,4 +1,7 @@
 "Changes take effect after restarting Open Whisper." = "Changes take effect after restarting Open Whisper.";
+"Downloaded" = "Downloaded";
+"Required. Download the selected transcription model to continue." = "Required. Download the selected transcription model to continue.";
+"Optional — only needed if you want post-processing. Post-processing runs your dictation through a language model to clean it up: fixing punctuation and capitalization and removing filler words. Download a model here if you want it, or skip and add one later in Settings." = "Optional — only needed if you want post-processing. Post-processing runs your dictation through a language model to clean it up: fixing punctuation and capitalization and removing filler words. Download a model here if you want it, or skip and add one later in Settings.";
 "+ Choose file…" = "+ Choose file…";
 "+ Load from URL" = "+ Load from URL";
 "A single global key may collide with regular typing. Combinations stay safer." = "A single global key may collide with regular typing. Combinations stay safer.";
