@@ -1,4 +1,6 @@
 import AppKit
+import ApplicationServices
+import AVFoundation
 import Foundation
 import SwiftUI
 
@@ -996,6 +998,122 @@ final class AppModel: ObservableObject {
             NSWorkspace.shared.open(URL(fileURLWithPath: candidate))
             return
         }
+    }
+
+    /// Current macOS authorization status for the microphone.
+    var microphoneAuthorizationStatus: AVAuthorizationStatus {
+        AVCaptureDevice.authorizationStatus(for: .audio)
+    }
+
+    /// Human-readable summary of the current microphone permission, localized.
+    var microphonePermissionSummary: String {
+        let locale = settings.effectiveLocale
+        switch microphoneAuthorizationStatus {
+        case .authorized:
+            return L("Microphone access is granted.", locale: locale)
+        case .denied:
+            return L("Microphone access is denied. Enable it in System Settings.", locale: locale)
+        case .restricted:
+            return L("Microphone access is restricted by system policy.", locale: locale)
+        case .notDetermined:
+            return L("Microphone access has not been requested yet.", locale: locale)
+        @unknown default:
+            return L("Microphone access status is unknown.", locale: locale)
+        }
+    }
+
+    /// Checks the microphone permission and routes the user to the right place to fix it.
+    ///
+    /// - `.notDetermined`: triggers the native permission prompt.
+    /// - `.denied` / `.restricted`: opens the Microphone privacy pane directly.
+    /// - `.authorized`: just refreshes the published status so the UI updates.
+    func checkAndRequestMicrophoneAccess() {
+        switch microphoneAuthorizationStatus {
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] _ in
+                Task { @MainActor in
+                    self?.onStateChanged?()
+                    self?.objectWillChange.send()
+                }
+            }
+        case .denied, .restricted:
+            openMicrophonePrivacySettings()
+        case .authorized:
+            objectWillChange.send()
+        @unknown default:
+            openMicrophonePrivacySettings()
+        }
+    }
+
+    /// Opens the Microphone pane in System Settings (deep link), falling back to the app.
+    func openMicrophonePrivacySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"),
+           NSWorkspace.shared.open(url) {
+            return
+        }
+        openSystemSettings()
+    }
+
+    /// Whether the app is currently trusted for Accessibility (needed to insert text
+    /// into other apps via simulated keystrokes).
+    var accessibilityTrusted: Bool {
+        AXIsProcessTrusted()
+    }
+
+    /// Human-readable summary of the current Accessibility permission, localized.
+    var accessibilityPermissionSummary: String {
+        let locale = settings.effectiveLocale
+        return accessibilityTrusted
+            ? L("Accessibility access is granted.", locale: locale)
+            : L("Accessibility access is missing. Enable Open Whisper in System Settings.", locale: locale)
+    }
+
+    /// Checks the Accessibility permission and routes the user to fix it if needed.
+    ///
+    /// When not trusted, triggers the native "add to Accessibility" prompt and also
+    /// opens the Accessibility privacy pane directly.
+    func checkAndRequestAccessibilityAccess() {
+        if accessibilityTrusted {
+            objectWillChange.send()
+            return
+        }
+        // Key value of `kAXTrustedCheckOptionPrompt`; referenced as a literal because the
+        // global is not concurrency-safe under strict concurrency checking.
+        let promptKey = "AXTrustedCheckOptionPrompt"
+        _ = AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
+        openAccessibilityPrivacySettings()
+    }
+
+    /// Opens the Accessibility pane in System Settings (deep link), falling back to the app.
+    func openAccessibilityPrivacySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"),
+           NSWorkspace.shared.open(url) {
+            return
+        }
+        openSystemSettings()
+    }
+
+    /// Removes the app's stale Accessibility TCC entry via `tccutil reset`, then opens
+    /// the Accessibility pane so the user can re-add the app cleanly.
+    ///
+    /// A stale entry (left over from an older build/path) can list the app as enabled
+    /// while macOS no longer honors it; removing it forces a fresh, working grant.
+    func resetAccessibilityPermission() {
+        guard let bundleID = Bundle.main.bundleIdentifier else {
+            openAccessibilityPrivacySettings()
+            return
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        process.arguments = ["reset", "Accessibility", bundleID]
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            publish(error)
+        }
+        objectWillChange.send()
+        openAccessibilityPrivacySettings()
     }
 
     private func startPolling() {

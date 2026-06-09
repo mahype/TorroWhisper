@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var managerTab: LanguageModelsManagerTab = .transcription
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isConfirmingHistoryClear: Bool = false
+    @State private var isConfirmingAccessibilityReset: Bool = false
     @Environment(\.locale) private var locale
 
     var body: some View {
@@ -59,6 +60,21 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("This will permanently delete all entries.", bundle: .module)
+            }
+            .alert(
+                Text("Reset accessibility permission?", bundle: .module),
+                isPresented: $isConfirmingAccessibilityReset
+            ) {
+                Button(role: .destructive) {
+                    model.resetAccessibilityPermission()
+                } label: {
+                    Text("Reset and reopen settings", bundle: .module)
+                }
+                Button(role: .cancel) {} label: {
+                    Text("Cancel", bundle: .module)
+                }
+            } message: {
+                Text("This removes Open Whisper from the Accessibility list so you can add it again. You will need to re-grant access afterwards.", bundle: .module)
             }
         }
         .navigationSplitViewStyle(.balanced)
@@ -534,6 +550,41 @@ struct SettingsView: View {
             .disabled(!canOpenReleaseNotes)
         } header: {
             Text("About Open Whisper", bundle: .module)
+        }
+
+        Section {
+            Text(model.microphonePermissionSummary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Button {
+                model.checkAndRequestMicrophoneAccess()
+            } label: {
+                Text("Check microphone access", bundle: .module)
+            }
+        } header: {
+            Text("Microphone permission", bundle: .module)
+        }
+
+        Section {
+            Text(model.accessibilityPermissionSummary)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Button {
+                model.checkAndRequestAccessibilityAccess()
+            } label: {
+                Text("Check accessibility access", bundle: .module)
+            }
+            Button(role: .destructive) {
+                isConfirmingAccessibilityReset = true
+            } label: {
+                Text("Reset accessibility permission", bundle: .module)
+            }
+        } header: {
+            Text("Accessibility permission", bundle: .module)
+        } footer: {
+            Text("If text insertion stops working even though Open Whisper is listed under Accessibility, reset the permission and add the app again.", bundle: .module)
         }
 
         Section {

@@ -1,6 +1,86 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Accessibility permission" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Berechtigung" } }
+      }
+    },
+    "Check accessibility access" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Zugriff prüfen" } }
+      }
+    },
+    "Reset accessibility permission" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Berechtigung zurücksetzen" } }
+      }
+    },
+    "Reset accessibility permission?" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Berechtigung zurücksetzen?" } }
+      }
+    },
+    "Reset and reopen settings" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zurücksetzen und Einstellungen öffnen" } }
+      }
+    },
+    "Accessibility access is granted." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Zugriff ist erteilt." } }
+      }
+    },
+    "Accessibility access is missing. Enable Open Whisper in System Settings." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Zugriff fehlt. Aktiviere Open Whisper in den Systemeinstellungen." } }
+      }
+    },
+    "If text insertion stops working even though Open Whisper is listed under Accessibility, reset the permission and add the app again." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Wenn das Einfügen von Text nicht mehr funktioniert, obwohl Open Whisper unter Bedienungshilfen gelistet ist, setze die Berechtigung zurück und füge die App erneut hinzu." } }
+      }
+    },
+    "This removes Open Whisper from the Accessibility list so you can add it again. You will need to re-grant access afterwards." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dadurch wird Open Whisper aus der Bedienungshilfen-Liste entfernt, damit du es erneut hinzufügen kannst. Du musst den Zugriff danach neu erteilen." } }
+      }
+    },
+    "Microphone permission" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mikrofonberechtigung" } }
+      }
+    },
+    "Check microphone access" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mikrofonzugriff prüfen" } }
+      }
+    },
+    "Microphone access is granted." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mikrofonzugriff ist erteilt." } }
+      }
+    },
+    "Microphone access is denied. Enable it in System Settings." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mikrofonzugriff ist verweigert. Aktiviere ihn in den Systemeinstellungen." } }
+      }
+    },
+    "Microphone access is restricted by system policy." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mikrofonzugriff ist durch Systemrichtlinien eingeschränkt." } }
+      }
+    },
+    "Microphone access has not been requested yet." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mikrofonzugriff wurde noch nicht angefragt." } }
+      }
+    },
+    "Microphone access status is unknown." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mikrofonzugriff-Status ist unbekannt." } }
+      }
+    },
     "Recording started." : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Aufnahme gestartet." } }
