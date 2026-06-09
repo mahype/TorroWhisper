@@ -652,7 +652,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func statusImage(recording: Bool) -> NSImage? {
-        let symbolName = recording ? "mic.circle.fill" : "waveform.circle"
+        let symbolName = recording ? "megaphone.fill" : "megaphone"
         let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Open Whisper")
         image?.isTemplate = true
         return image
