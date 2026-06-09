@@ -71,29 +71,36 @@ struct ModeListTile: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
-                .font(.body)
-                .foregroundStyle(isActive ? Color.accentColor : Color.secondary.opacity(0.7))
-                .accessibilityHidden(true)
+            Button(action: onActivate) {
+                HStack(spacing: 10) {
+                    Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
+                        .font(.body)
+                        .foregroundStyle(isActive ? Color.accentColor : Color.secondary.opacity(0.7))
+                        .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(mode.name)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
-                if mode.prompt.isEmpty {
-                    Text("No prompt set", bundle: .module)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                } else {
-                    Text(mode.prompt)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(mode.name)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.primary)
+                        if mode.prompt.isEmpty {
+                            Text("No prompt set", bundle: .module)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        } else {
+                            Text(mode.prompt)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer(minLength: 8)
                 }
+                .contentShape(Rectangle())
             }
-
-            Spacer(minLength: 8)
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isActive ? [.isSelected] : [])
 
             Button(action: onEdit) {
                 Image(systemName: "pencil")
@@ -101,6 +108,7 @@ struct ModeListTile: View {
             }
             .buttonStyle(.borderless)
             .help(Text("Edit post-processing", bundle: .module))
+            .accessibilityLabel(Text("Edit post-processing", bundle: .module))
 
             Button(action: onDelete) {
                 Image(systemName: "trash")
@@ -109,9 +117,8 @@ struct ModeListTile: View {
             .buttonStyle(.borderless)
             .disabled(!canDelete)
             .help(Text(canDelete ? "Delete post-processing" : "At least one post-processing must remain", bundle: .module))
+            .accessibilityLabel(Text("Delete post-processing", bundle: .module))
         }
-        .contentShape(Rectangle())
-        .onTapGesture { onActivate() }
         .onHover { hovering in
             if hovering {
                 NSCursor.pointingHand.push()
@@ -127,26 +134,29 @@ struct PostProcessingOffTile: View {
     let onActivate: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
-                .font(.body)
-                .foregroundStyle(isActive ? Color.accentColor : Color.secondary.opacity(0.7))
-                .accessibilityHidden(true)
+        Button(action: onActivate) {
+            HStack(spacing: 10) {
+                Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
+                    .font(.body)
+                    .foregroundStyle(isActive ? Color.accentColor : Color.secondary.opacity(0.7))
+                    .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Off", bundle: .module)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
-                Text("Transcription is used as-is.", bundle: .module)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Off", bundle: .module)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+                    Text("Transcription is used as-is.", bundle: .module)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
             }
-
-            Spacer(minLength: 8)
+            .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
-        .onTapGesture { onActivate() }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
         .onHover { hovering in
             if hovering {
                 NSCursor.pointingHand.push()
@@ -168,6 +178,7 @@ struct ModelPresetTile: View {
             HStack(spacing: 10) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.7))
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(preset.displayName)
@@ -189,6 +200,7 @@ struct ModelPresetTile: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 
@@ -317,14 +329,17 @@ struct DictionaryEntryRow: View {
             TextField(L("Heard", locale: locale), text: $pattern)
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: .infinity)
+                .accessibilityLabel(Text("Heard", bundle: .module))
 
             Image(systemName: "arrow.right")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             TextField(L("Replacement", locale: locale), text: $replacement)
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: .infinity)
+                .accessibilityLabel(Text("Replacement", bundle: .module))
 
             Toggle(isOn: $caseSensitive) {
                 Text("Aa")
@@ -334,6 +349,7 @@ struct DictionaryEntryRow: View {
             .toggleStyle(.button)
             .controlSize(.small)
             .help(Text("Match case", bundle: .module))
+            .accessibilityLabel(Text("Match case", bundle: .module))
 
             Toggle(isOn: $wholeWord) {
                 Text("W")
@@ -343,12 +359,14 @@ struct DictionaryEntryRow: View {
             .toggleStyle(.button)
             .controlSize(.small)
             .help(Text("Whole word only", bundle: .module))
+            .accessibilityLabel(Text("Whole word only", bundle: .module))
 
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
             .help(Text("Delete entry", bundle: .module))
+            .accessibilityLabel(Text("Delete entry", bundle: .module))
         }
         .padding(.vertical, 2)
     }
@@ -392,6 +410,8 @@ struct HistoryEntryRow: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityText)
 
             VStack(spacing: 6) {
                 Button(action: onCopy) {
@@ -400,15 +420,29 @@ struct HistoryEntryRow: View {
                 }
                 .buttonStyle(.borderless)
                 .help(Text("Copy to clipboard", bundle: .module))
+                .accessibilityLabel(Text("Copy to clipboard", bundle: .module))
 
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
                 }
                 .buttonStyle(.borderless)
                 .help(Text("Delete entry", bundle: .module))
+                .accessibilityLabel(Text("Delete entry", bundle: .module))
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private var accessibilityText: String {
+        var parts: [String] = [formattedTimestamp]
+        if !entry.modeName.isEmpty {
+            parts.append(entry.modeName)
+        }
+        if entry.wasCancelled {
+            parts.append(L("Cancelled", locale: locale))
+        }
+        parts.append(entry.text)
+        return parts.joined(separator: ", ")
     }
 
     private var formattedTimestamp: String {
@@ -521,6 +555,16 @@ struct StepRail: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    String(
+                        format: L("Step %d of %d: %@", locale: locale),
+                        index + 1,
+                        steps.count,
+                        title
+                    )
+                )
+                .accessibilityAddTraits(index == currentStep ? [.isSelected] : [])
             }
 
             Spacer()

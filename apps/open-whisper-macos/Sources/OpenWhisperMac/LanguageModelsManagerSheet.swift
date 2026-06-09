@@ -296,6 +296,8 @@ struct LanguageModelsManagerSheet: View {
 
             if isDownloading, let basisPoints = status?.progressBasisPoints {
                 ProgressView(value: Double(basisPoints) / 10_000.0)
+                    .accessibilityLabel(String(format: L("Downloading %@", locale: locale), entry.name))
+                    .accessibilityValue("\(basisPoints / 100)%")
             }
         }
         .padding(.vertical, 2)
@@ -392,6 +394,8 @@ struct LanguageModelsManagerSheet: View {
 
             if let status, status.isDownloading, let basisPoints = status.progressBasisPoints {
                 ProgressView(value: Double(basisPoints) / 10_000.0)
+                    .accessibilityLabel(String(format: L("Downloading %@", locale: locale), preset.displayName))
+                    .accessibilityValue("\(basisPoints / 100)%")
             }
 
             HStack(spacing: 10) {
@@ -455,6 +459,8 @@ struct LanguageModelsManagerSheet: View {
 
             if let status, status.isDownloading, let basisPoints = status.progressBasisPoints {
                 ProgressView(value: Double(basisPoints) / 10_000.0)
+                    .accessibilityLabel(String(format: L("Downloading %@", locale: locale), preset.displayName))
+                    .accessibilityValue("\(basisPoints / 100)%")
             }
 
             HStack(spacing: 10) {

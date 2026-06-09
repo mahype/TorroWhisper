@@ -157,6 +157,8 @@ struct RecordingIndicatorView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     ProgressView(value: progress)
+                        .accessibilityLabel(String(format: L("Model loading: %@", locale: locale), label))
+                        .accessibilityValue("\(percent)%")
                 } else if isDownloading {
                     Text(String(format: L("Model loading: %@", locale: locale), label))
                         .font(.caption)

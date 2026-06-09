@@ -218,3 +218,8 @@
 "Settings" = "Settings";
 "System default" = "System default";
 "This will permanently delete all entries." = "This will permanently delete all entries.";
+"Recording started." = "Recording started.";
+"Dictation finished." = "Dictation finished.";
+"Recording not possible. The model is missing." = "Recording not possible. The model is missing.";
+"Step %d of %d: %@" = "Step %d of %d: %@";
+"Downloading %@" = "Downloading %@";

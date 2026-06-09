@@ -1,6 +1,31 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Recording started." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Aufnahme gestartet." } }
+      }
+    },
+    "Dictation finished." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Diktat beendet." } }
+      }
+    },
+    "Recording not possible. The model is missing." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Aufnahme nicht möglich. Das Modell fehlt." } }
+      }
+    },
+    "Step %d of %d: %@" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Schritt %d von %d: %@" } }
+      }
+    },
+    "Downloading %@" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ wird heruntergeladen" } }
+      }
+    },
     "“System” follows your macOS language setting." : {
       "localizations" : {
         "de" : {

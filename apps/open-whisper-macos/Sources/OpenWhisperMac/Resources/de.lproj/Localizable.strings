@@ -1,4 +1,9 @@
 "Changes take effect after restarting Open Whisper." = "Änderungen werden nach einem Neustart von Open Whisper wirksam.";
+"Recording started." = "Aufnahme gestartet.";
+"Dictation finished." = "Diktat beendet.";
+"Recording not possible. The model is missing." = "Aufnahme nicht möglich. Das Modell fehlt.";
+"Step %d of %d: %@" = "Schritt %d von %d: %@";
+"Downloading %@" = "%@ wird heruntergeladen";
 "+ Choose file…" = "+ Datei auswählen…";
 "+ Load from URL" = "+ Von URL laden";
 "A single global key may collide with regular typing. Combinations stay safer." = "Eine einzelne globale Taste kann mit normaler Texteingabe kollidieren. Kombinationen bleiben sicherer.";

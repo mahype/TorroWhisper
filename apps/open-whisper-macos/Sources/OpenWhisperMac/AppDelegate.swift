@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var recordingIndicatorWindow: NSWindow?
     private var micSwitchToastWindow: NSPanel?
     private var micSwitchToastDismissTask: Task<Void, Never>?
+    private var lastAnnouncedPhaseKey: String?
     private let audioDeviceMonitor = AudioDeviceMonitor()
     private let keyboardHardwareMonitor = KeyboardHardwareMonitor()
     private let recordingLevelFeed = RecordingLevelFeed()
@@ -236,6 +237,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         statusItem.button?.toolTip = buildStatusTooltip(runtime: runtime)
         updateRecordingIndicatorVisibility()
         refreshWindowTitles()
+        announceRuntimeTransition()
+    }
+
+    /// Speaks dictation phase changes to VoiceOver. The floating indicator panel
+    /// is not in the accessibility tree, so screen-reader users would otherwise
+    /// get no feedback that recording started, transcription finished, etc.
+    private func announceRuntimeTransition() {
+        let runtime = model.runtime
+        let locale = currentLocale
+        let key: String
+        var announcement: String?
+
+        if runtime.dictationBlockedByMissingModel {
+            key = "blocked"
+            announcement = L("Recording not possible. The model is missing.", locale: locale)
+        } else if runtime.isRecording {
+            key = "recording"
+            announcement = L("Recording started.", locale: locale)
+        } else if runtime.isTranscribing {
+            key = "transcribing"
+            announcement = L("Transcribing…", locale: locale)
+        } else if runtime.isPostProcessing {
+            key = "postProcessing"
+            announcement = L("Post-processing…", locale: locale)
+        } else {
+            key = "idle"
+            if let last = lastAnnouncedPhaseKey, last != "idle", last != "blocked" {
+                let status = runtime.lastStatus.trimmingCharacters(in: .whitespaces)
+                announcement = status.isEmpty ? L("Dictation finished.", locale: locale) : status
+            }
+        }
+
+        guard key != lastAnnouncedPhaseKey else { return }
+        lastAnnouncedPhaseKey = key
+        if let announcement, !announcement.isEmpty {
+            postAccessibilityAnnouncement(announcement)
+        }
+    }
+
+    private func postAccessibilityAnnouncement(
+        _ message: String,
+        priority: NSAccessibilityPriorityLevel = .high
+    ) {
+        NSAccessibility.post(
+            element: NSApp as Any,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: message,
+                .priority: priority.rawValue,
+            ]
+        )
     }
 
     private func buildStatusTooltip(runtime: RuntimeStatusDTO) -> String {
@@ -254,6 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             hosting.rootView = MicSwitchToastView(message: message)
         }
         micSwitchToastWindow = window
+        postAccessibilityAnnouncement(message)
         positionMicSwitchToastWindow(window)
         window.alphaValue = 0
         window.orderFrontRegardless()

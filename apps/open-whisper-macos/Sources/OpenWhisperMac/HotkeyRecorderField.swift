@@ -71,21 +71,35 @@ struct HotkeyRecorderField: View {
                 Text(errorText)
                     .font(.caption)
                     .foregroundStyle(.red)
+                    .accessibilityLabel("\(L("Error", locale: locale)): \(errorText)")
             } else if let warningText, !warningText.isEmpty {
                 HStack(alignment: .top, spacing: 4) {
                     Text(warningText)
                         .font(.caption)
                         .foregroundStyle(.orange)
                         .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel("\(L("Warning", locale: locale)): \(warningText)")
                     if let warningDetails, !warningDetails.isEmpty {
                         Image(systemName: "info.circle")
                             .font(.caption)
                             .foregroundStyle(.orange)
                             .help(Text(warningDetails))
+                            .accessibilityLabel(Text(warningDetails))
                     }
                     Spacer(minLength: 0)
                 }
             }
+        }
+        .onChange(of: errorText) { newValue in
+            guard let newValue, !newValue.isEmpty else { return }
+            NSAccessibility.post(
+                element: NSApp as Any,
+                notification: .announcementRequested,
+                userInfo: [
+                    .announcement: "\(L("Error", locale: locale)): \(newValue)",
+                    .priority: NSAccessibilityPriorityLevel.high.rawValue,
+                ]
+            )
         }
     }
 
