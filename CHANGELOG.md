@@ -4,6 +4,11 @@ All notable changes to Open Whisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-06-09
+
+### Fixed
+- **Released `.app` now launches on machines other than the build host.** Two release-only bugs left the app crashing at its first localized-string lookup — no menu bar icon, no onboarding wizard (the microphone prompt still appeared, fired earlier from the Rust bridge). First, declaring the localizations as SwiftPM `resources:` synthesized a `Bundle.module` accessor that only resolved the `.app` root (which codesign forbids content in) and the absolute build-machine path (absent on users' machines); the 0.3.1 `Contents/Resources` copy only ever worked because that build path still existed on the build host. The localizations now ship in `Contents/Resources/<lang>.lproj` and resolve through `Bundle.main`. Second, the universal-build guard matched the literal `Xcode.app`, which fails against the CI runner's versioned `Xcode_16.2.app` path, so every release was silently built arm64-only and could not launch on Intel Macs; the build now detects full Xcode by path suffix and hard-fails if a requested universal binary is not fat ([`920321b`](https://github.com/mahype/open-whisper/commit/920321b)).
+
 ## [0.3.1] — 2026-06-09
 
 ### Added
