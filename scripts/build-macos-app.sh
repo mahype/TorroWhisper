@@ -39,7 +39,14 @@ rm -f target/debug/libopen_whisper_bridge.a
 # --- Detect whether we can build universal (requires full Xcode for xcbuild) --
 
 xcode_dev_path="$(xcode-select -p 2>/dev/null || true)"
-if [[ "$xcode_dev_path" == *"Xcode.app"* ]]; then
+# A full Xcode developer dir ends in `.app/Contents/Developer` (e.g.
+# /Applications/Xcode.app/... OR the versioned /Applications/Xcode_16.2.app/...
+# that GitHub-hosted runners use). Command Line Tools live at
+# /Library/Developer/CommandLineTools and cannot build universal binaries.
+# The previous `*"Xcode.app"*` substring match silently failed on the runner's
+# versioned path, so every CI release shipped an arm64-ONLY binary that would
+# not launch on Intel Macs. Match the `.app/Contents/Developer` suffix instead.
+if [[ "$xcode_dev_path" == *.app/Contents/Developer ]]; then
     build_universal=true
 else
     build_universal=false
@@ -104,6 +111,19 @@ if [[ ! -f "$swift_build_bin" ]]; then
 fi
 lipo -info "$swift_build_bin" || true
 
+# Fail loudly if a universal build was requested but the binary is not fat.
+# This is the backstop for the bug where a misdetected toolchain shipped an
+# arm64-only release that could not launch on Intel Macs.
+if $build_universal; then
+    archs="$(lipo -archs "$swift_build_bin" 2>/dev/null || true)"
+    if [[ "$archs" != *arm64* || "$archs" != *x86_64* ]]; then
+        echo "error: universal build requested but binary archs are '$archs'" >&2
+        echo "       expected both arm64 and x86_64" >&2
+        exit 1
+    fi
+    echo "==> Verified universal binary: $archs"
+fi
+
 # --- Assemble .app bundle -----------------------------------------------------
 
 app="dist/Open Whisper.app"
@@ -114,32 +134,37 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$swift_build_bin" "$app/Contents/MacOS/OpenWhisperMac"
 cp apps/open-whisper-macos/Resources/Info.plist "$app/Contents/Info.plist"
 
-# --- Copy the SwiftPM resource bundle ----------------------------------------
-# The OpenWhisperMac target declares `resources: [.process("Resources")]`, so
-# SwiftPM emits `OpenWhisperMac_OpenWhisperMac.bundle` next to the executable and
-# generates the `Bundle.module` accessor. That accessor calls `fatalError()` if
-# the bundle is missing — and ALL in-app localized strings (L(), Text(_,
-# bundle: .module)) go through it. Without this copy the app crashes the moment
-# `applicationDidFinishLaunching` calls refreshMenuState(), so the menu-bar icon
-# and onboarding wizard never appear (the mic prompt still fires earlier, from
-# the Rust bridge during AppModel init). It must live at Contents/Resources so
-# `Bundle.main.resourceURL` resolves it.
-resource_bundle_src="$(dirname "$swift_build_bin")/OpenWhisperMac_OpenWhisperMac.bundle"
-if [[ ! -d "$resource_bundle_src" ]]; then
-    echo "error: SwiftPM resource bundle not found at $resource_bundle_src" >&2
-    exit 1
-fi
-echo "==> Copying SwiftPM resource bundle (Bundle.module)"
-cp -R "$resource_bundle_src" "$app/Contents/Resources/"
-
 if [[ -f apps/open-whisper-macos/Resources/AppIcon.icns ]]; then
     cp apps/open-whisper-macos/Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 fi
 
+# --- Copy in-app localization tables (Bundle.module) --------------------------
+# The OpenWhisperMac target does NOT declare `resources:` in Package.swift —
+# SwiftPM's generated Bundle.module accessor for an executable target points at
+# the .app ROOT (uncodesignable) and the build-machine path (absent on user
+# machines), so it crashed every shipped release at the first localized-string
+# lookup. Instead, Bundle.module is defined as Bundle.main (Bundle+module.swift)
+# and we ship the Localizable.strings tables in Contents/Resources/<lang>.lproj
+# where the main bundle resolves them. Keep these in sync with the .xcstrings
+# editing source.
+echo "==> Copying in-app localization tables into Contents/Resources"
+copied_localizable=false
+for lproj_dir in apps/open-whisper-macos/Sources/OpenWhisperMac/Resources/*.lproj; do
+    if [[ -f "$lproj_dir/Localizable.strings" ]]; then
+        lang_name="$(basename "$lproj_dir")"
+        mkdir -p "$app/Contents/Resources/$lang_name"
+        cp "$lproj_dir/Localizable.strings" "$app/Contents/Resources/$lang_name/Localizable.strings"
+        copied_localizable=true
+    fi
+done
+if ! $copied_localizable; then
+    echo "error: no Localizable.strings found under Sources/OpenWhisperMac/Resources/*.lproj" >&2
+    exit 1
+fi
+
 # --- Copy InfoPlist localizations into main bundle ---------------------------
 # These are looked up by macOS for permission dialogs (NSMicrophoneUsageDescription,
-# etc.) and must live at Contents/Resources/{lang}.lproj/InfoPlist.strings —
-# SPM's module bundle cannot satisfy that lookup path.
+# etc.) and must live at Contents/Resources/{lang}.lproj/InfoPlist.strings.
 for lproj_dir in apps/open-whisper-macos/Resources/Localizations/*.lproj; do
     if [[ -d "$lproj_dir" ]]; then
         lang_name="$(basename "$lproj_dir")"
