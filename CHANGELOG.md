@@ -4,6 +4,19 @@ All notable changes to Open Whisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-06-09
+
+### Added
+- **Microphone and accessibility permission controls in Settings** — a new section shows the current authorization status for both permissions and offers one-click actions to fix them: requesting microphone access (or deep-linking to the Microphone privacy pane when denied), triggering the native Accessibility prompt, and a *Reset accessibility permission* action that runs `tccutil reset Accessibility` to clear a stale TCC entry and reopens the pane so the app can be re-added cleanly ([`1b91220`](https://github.com/mahype/open-whisper/commit/1b91220)).
+- **VoiceOver announcements and accessible controls** — dictation state changes are announced to VoiceOver, and tray/settings controls expose proper accessibility labels ([`969f617`](https://github.com/mahype/open-whisper/commit/969f617)).
+
+### Changed
+- **Menu bar icon is now a megaphone** (`megaphone` when idle, `megaphone.fill` while recording) instead of the waveform/mic glyphs, keeping the empty-to-filled transition as the recording cue ([`f518264`](https://github.com/mahype/open-whisper/commit/f518264)).
+- **Onboarding blocks until both models finish downloading** — the whisper and llm models start downloading as soon as the model step is shown, and *Next* stays disabled until both report downloaded, instead of starting the download on click and letting the user advance immediately ([`be4dc87`](https://github.com/mahype/open-whisper/commit/be4dc87)).
+
+### Fixed
+- **Release `.app` bundles the SwiftPM resource bundle** so `Bundle.module` resolves at runtime; without it the app crashed on launch (missing localized strings) the moment the menu bar state refreshed ([`68dcffd`](https://github.com/mahype/open-whisper/commit/68dcffd)).
+
 ## [0.3.0] — 2026-06-04
 
 ### Added
