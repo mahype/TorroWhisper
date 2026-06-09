@@ -114,6 +114,24 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$swift_build_bin" "$app/Contents/MacOS/OpenWhisperMac"
 cp apps/open-whisper-macos/Resources/Info.plist "$app/Contents/Info.plist"
 
+# --- Copy the SwiftPM resource bundle ----------------------------------------
+# The OpenWhisperMac target declares `resources: [.process("Resources")]`, so
+# SwiftPM emits `OpenWhisperMac_OpenWhisperMac.bundle` next to the executable and
+# generates the `Bundle.module` accessor. That accessor calls `fatalError()` if
+# the bundle is missing — and ALL in-app localized strings (L(), Text(_,
+# bundle: .module)) go through it. Without this copy the app crashes the moment
+# `applicationDidFinishLaunching` calls refreshMenuState(), so the menu-bar icon
+# and onboarding wizard never appear (the mic prompt still fires earlier, from
+# the Rust bridge during AppModel init). It must live at Contents/Resources so
+# `Bundle.main.resourceURL` resolves it.
+resource_bundle_src="$(dirname "$swift_build_bin")/OpenWhisperMac_OpenWhisperMac.bundle"
+if [[ ! -d "$resource_bundle_src" ]]; then
+    echo "error: SwiftPM resource bundle not found at $resource_bundle_src" >&2
+    exit 1
+fi
+echo "==> Copying SwiftPM resource bundle (Bundle.module)"
+cp -R "$resource_bundle_src" "$app/Contents/Resources/"
+
 if [[ -f apps/open-whisper-macos/Resources/AppIcon.icns ]]; then
     cp apps/open-whisper-macos/Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 fi
