@@ -4,6 +4,11 @@ All notable changes to Open Whisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-06-09
+
+### Changed
+- **Onboarding no longer auto-downloads language models.** Both models on the model step now have an explicit Download button and nothing downloads on its own. The transcription (Whisper) model is required — *Next* stays disabled until the selected model is downloaded, so a speech model must be fetched before continuing, and switching the preset re-arms the requirement. The post-processing (LLM) model is optional and never blocks the wizard; a footer explains what post-processing does (cleans up the transcript — punctuation, capitalization, filler-word removal) and that a model is only needed if you want it and can be added later in Settings ([`68d1954`](https://github.com/mahype/open-whisper/commit/68d1954)).
+
 ## [0.3.2] — 2026-06-09
 
 ### Fixed
