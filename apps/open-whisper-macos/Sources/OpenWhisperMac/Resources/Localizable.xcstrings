@@ -223,9 +223,9 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Blau" } }
       }
     },
-    "Both models start downloading in the background when you click 'Next'. You can change or manage them later in Settings under 'Language models'." : {
+    "Both models download now and must finish before you can continue. You can add or switch to other models later in Settings under 'Language models'." : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Beide Modelle starten den Download im Hintergrund, sobald du auf 'Weiter' klickst. Du kannst sie später in den Einstellungen unter 'Sprachmodelle' ändern oder verwalten." } }
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Beide Modelle werden jetzt heruntergeladen und müssen fertig sein, bevor du fortfahren kannst. Du kannst später in den Einstellungen unter 'Sprachmodelle' weitere Modelle hinzufügen oder wechseln." } }
       }
     },
     "Bundle" : {

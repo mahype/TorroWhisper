@@ -21,7 +21,7 @@
 "Back" = "Back";
 "Behavior" = "Behavior";
 "Blue" = "Blue";
-"Both models start downloading in the background when you click 'Next'. You can change or manage them later in Settings under 'Language models'." = "Both models start downloading in the background when you click 'Next'. You can change or manage them later in Settings under 'Language models'.";
+"Both models download now and must finish before you can continue. You can add or switch to other models later in Settings under 'Language models'." = "Both models download now and must finish before you can continue. You can add or switch to other models later in Settings under 'Language models'.";
 "Bundle" = "Bundle";
 "Cancel" = "Cancel";
 "Centered bars" = "Centered bars";

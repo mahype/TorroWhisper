@@ -24,6 +24,21 @@ struct OnboardingView: View {
         }
         .frame(width: 760, height: 520)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onChange(of: model.onboardingStep) {
+            if model.onboardingStep == 2 {
+                triggerModelDownloadsIfNeeded()
+            }
+        }
+        .onChange(of: model.settings.localModel) {
+            if model.onboardingStep == 2 {
+                triggerModelDownloadsIfNeeded()
+            }
+        }
+        .onChange(of: model.settings.localLlm) {
+            if model.onboardingStep == 2 {
+                triggerModelDownloadsIfNeeded()
+            }
+        }
     }
 
     private var stepTitle: String {
@@ -187,7 +202,7 @@ struct OnboardingView: View {
             }
 
             Section {
-                Text("Both models start downloading in the background when you click 'Next'. You can change or manage them later in Settings under 'Language models'.", bundle: .module)
+                Text("Both models download now and must finish before you can continue. You can add or switch to other models later in Settings under 'Language models'.", bundle: .module)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -278,16 +293,13 @@ struct OnboardingView: View {
                 .keyboardShortcut(.defaultAction)
             } else {
                 Button {
-                    let current = model.onboardingStep
-                    if current == 2 {
-                        triggerModelDownloadsIfNeeded()
-                    }
-                    model.onboardingStep = min(4, current + 1)
+                    model.onboardingStep = min(4, model.onboardingStep + 1)
                 } label: {
                     Text("Next", bundle: .module)
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
+                .disabled(model.onboardingStep == 2 && !modelsReady)
             }
         }
         .padding(.horizontal, 20)
@@ -316,6 +328,10 @@ struct OnboardingView: View {
 
     private var currentLlmStatus: LlmModelStatusDTO? {
         model.llmStatusList.first { $0.displayLabel == model.settings.localLlm.displayName }
+    }
+
+    private var modelsReady: Bool {
+        (currentWhisperStatus?.isDownloaded ?? false) && (currentLlmStatus?.isDownloaded ?? false)
     }
 
     private func triggerModelDownloadsIfNeeded() {
