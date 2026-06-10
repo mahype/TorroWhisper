@@ -8,6 +8,14 @@
 "Cancelling — saving to history…" = "Cancelling — saving to history…";
 "Large view (easier to read)" = "Large view (easier to read)";
 "High contrast" = "High contrast";
+"Save to disk" = "Save to disk";
+"Save audio recording as MP3" = "Save audio recording as MP3";
+"Save transcript as text file" = "Save transcript as text file";
+"Folder" = "Folder";
+"No folder selected" = "No folder selected";
+"Choose folder…" = "Choose folder…";
+"Choose" = "Choose";
+"Saves each completed dictation into the chosen folder: the recording as MP3 and/or the transcript as a .txt, with matching timestamped names. A folder must be selected; cancelled dictations are not saved." = "Saves each completed dictation into the chosen folder: the recording as MP3 and/or the transcript as a .txt, with matching timestamped names. A folder must be selected; cancelled dictations are not saved.";
 "Permissions" = "Permissions";
 "Microphone access granted." = "Microphone access granted.";
 "Accessibility access granted." = "Accessibility access granted.";

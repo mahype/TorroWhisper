@@ -10,6 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::audio_export;
 use crate::model_manager::{default_model_path, resolve_model_path};
 use cpal::{
     Device, FromSample, I24, Sample, SampleFormat, SizedSample, Stream, SupportedStreamConfig, U24,
@@ -31,6 +32,10 @@ pub enum DictationOutcome {
     /// not start, transcription errored, worker thread died). Unlike
     /// `Status`, this feeds the error indicator in the UI.
     Error(String),
+    /// The recording is being saved to disk under this base name; the runtime
+    /// should write the transcript under the same base name once it is ready,
+    /// so audio and text files stay paired.
+    PendingTranscriptSave(String),
 }
 
 pub struct DictationController {
@@ -315,6 +320,23 @@ impl DictationController {
             )]);
         }
 
+        // Optional on-disk save (never for cancelled dictations). The MP3 is
+        // encoded off-thread from a clone of the samples; the matching base name
+        // is handed to the runtime so the transcript file is written alongside.
+        let mut outcomes: Vec<DictationOutcome> = Vec::new();
+        if !matches!(cue, RecordingCue::Cancel) && audio_export::saving_enabled(settings) {
+            let base = audio_export::base_name(now_unix_secs());
+            if let Some(mp3_path) = audio_export::audio_destination(settings, &base) {
+                let samples = audio.samples.clone();
+                let rate = audio.sample_rate;
+                thread::spawn(move || match audio_export::write_mp3(&samples, rate, &mp3_path) {
+                    Ok(()) => log::info!(target: "dictation", "saved recording to {}", mp3_path.display()),
+                    Err(err) => log::warn!(target: "dictation", "MP3 export failed: {err}"),
+                });
+            }
+            outcomes.push(DictationOutcome::PendingTranscriptSave(base));
+        }
+
         let context = self.ensure_whisper_context(settings)?;
         let language = normalized_language(&settings.transcription_language);
         let app_settings = settings.clone();
@@ -351,9 +373,10 @@ impl DictationController {
 
         self.transcription_rx = Some(rx);
 
-        Ok(vec![DictationOutcome::Status(format!(
+        outcomes.push(DictationOutcome::Status(format!(
             "Recording stopped ({reason}). Local transcription in progress."
-        ))])
+        )));
+        Ok(outcomes)
     }
 
     pub fn cancel_recording(&mut self) -> bool {
@@ -1066,6 +1089,13 @@ pub enum RecordingCue {
     Start,
     Stop,
     Cancel,
+}
+
+fn now_unix_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 fn play_recording_cue(cue: RecordingCue) {

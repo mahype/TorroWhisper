@@ -653,6 +653,9 @@ struct AppSettings: Codable, Equatable {
     var waveformColor: WaveformColor
     var largeRecordingIndicator: Bool
     var highContrastRecordingIndicator: Bool
+    var saveAudioRecordings: Bool
+    var saveTranscripts: Bool
+    var saveDirectory: String
     var localModel: ModelPreset
     var localModelPath: String
     var localLlm: LlmPreset
@@ -693,6 +696,9 @@ struct AppSettings: Codable, Equatable {
         waveformColor: .accent,
         largeRecordingIndicator: false,
         highContrastRecordingIndicator: false,
+        saveAudioRecordings: false,
+        saveTranscripts: false,
+        saveDirectory: "",
         localModel: .standard,
         localModelPath: "",
         localLlm: .medium,

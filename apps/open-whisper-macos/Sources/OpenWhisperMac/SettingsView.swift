@@ -335,6 +335,37 @@ struct SettingsView: View {
         }
 
         Section {
+            Toggle(isOn: model.binding(for: \.saveAudioRecordings)) {
+                Text("Save audio recording as MP3", bundle: .module)
+            }
+            Toggle(isOn: model.binding(for: \.saveTranscripts)) {
+                Text("Save transcript as text file", bundle: .module)
+            }
+            LabeledContent {
+                Text(model.settings.saveDirectory.isEmpty
+                     ? L("No folder selected", locale: locale)
+                     : model.settings.saveDirectory)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } label: {
+                Text("Folder", bundle: .module)
+            }
+            Button {
+                model.chooseSaveDirectory()
+            } label: {
+                Text("Choose folder…", bundle: .module)
+            }
+        } header: {
+            Text("Save to disk", bundle: .module)
+        } footer: {
+            Text("Saves each completed dictation into the chosen folder: the recording as MP3 and/or the transcript as a .txt, with matching timestamped names. A folder must be selected; cancelled dictations are not saved.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        Section {
             if model.history.isEmpty {
                 Text("No history yet.", bundle: .module)
                     .font(.callout)

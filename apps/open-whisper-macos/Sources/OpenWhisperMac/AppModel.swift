@@ -1080,6 +1080,21 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Folder picker for the "save to disk" destination (recordings/transcripts).
+    func chooseSaveDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = L("Choose", locale: settings.effectiveLocale)
+        if !settings.saveDirectory.isEmpty {
+            panel.directoryURL = URL(fileURLWithPath: settings.saveDirectory)
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        settings.saveDirectory = url.path
+        requestAutoSave()
+    }
+
     /// Current macOS authorization status for the microphone.
     var microphoneAuthorizationStatus: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .audio)

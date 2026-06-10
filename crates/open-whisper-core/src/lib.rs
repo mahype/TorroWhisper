@@ -598,6 +598,12 @@ pub struct AppSettings {
     /// Higher-contrast recording bubble (stronger background, bolder text,
     /// more saturated waveform/dot colors). Independent of the large toggle.
     pub high_contrast_recording_indicator: bool,
+    /// Save each (non-cancelled) dictation's audio as an MP3 into `save_directory`.
+    pub save_audio_recordings: bool,
+    /// Save each (non-cancelled) dictation's transcript as a .txt into `save_directory`.
+    pub save_transcripts: bool,
+    /// Destination folder for saved recordings/transcripts. Empty = unset.
+    pub save_directory: String,
     pub local_model: ModelPreset,
     pub local_model_path: String,
     pub local_llm: LlmPreset,
@@ -802,6 +808,9 @@ impl Default for AppSettings {
             waveform_color: WaveformColor::default(),
             large_recording_indicator: false,
             high_contrast_recording_indicator: false,
+            save_audio_recordings: false,
+            save_transcripts: false,
+            save_directory: String::new(),
             local_model: ModelPreset::default(),
             local_model_path: String::new(),
             local_llm: LlmPreset::default(),

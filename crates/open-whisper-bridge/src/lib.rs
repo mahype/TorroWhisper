@@ -1,4 +1,6 @@
 #[allow(dead_code)]
+mod audio_export;
+#[allow(dead_code)]
 mod autostart;
 #[allow(dead_code)]
 mod dictation;
@@ -61,6 +63,10 @@ struct BridgeRuntime {
     cancelled: Arc<AtomicBool>,
     history: Vec<HistoryEntry>,
     history_revision: u64,
+    /// Base name (e.g. "dictation-1781020800") under which the in-flight
+    /// dictation's audio is being saved; the transcript file is written under
+    /// the same name once ready. Set from DictationOutcome::PendingTranscriptSave.
+    pending_transcript_save: Option<String>,
 }
 
 struct PendingPostProcessing {
@@ -139,6 +145,7 @@ impl BridgeRuntime {
             cancelled: Arc::new(AtomicBool::new(false)),
             history: history_store::load().unwrap_or_default(),
             history_revision: 0,
+            pending_transcript_save: None,
         }
     }
 
@@ -245,6 +252,9 @@ impl BridgeRuntime {
                 }
                 DictationOutcome::Error(message) => {
                     self.report_dictation_error(message);
+                }
+                DictationOutcome::PendingTranscriptSave(base) => {
+                    self.pending_transcript_save = Some(base);
                 }
                 DictationOutcome::TranscriptReady(transcript) => {
                     let was_cancelled = self.cancelled.load(Ordering::Relaxed);
@@ -367,6 +377,17 @@ impl BridgeRuntime {
     fn finish_transcript(&mut self, transcript: String, ready_status: &str, was_cancelled: bool) {
         self.last_transcript = transcript.clone();
         self.record_history_entry(&transcript, was_cancelled);
+
+        // Save the transcript next to its MP3 (same base name) for completed
+        // dictations only. Cancelled ones never carry a pending save, but clear
+        // it defensively so it can't leak into the next dictation.
+        if let Some(base) = self.pending_transcript_save.take() {
+            if !was_cancelled && !transcript.trim().is_empty() {
+                if let Err(err) = audio_export::write_transcript(&self.settings, &base, &transcript) {
+                    log::warn!(target: "bridge", "transcript export failed: {err}");
+                }
+            }
+        }
 
         if was_cancelled {
             self.last_status = if self.settings.history_enabled && !transcript.trim().is_empty() {

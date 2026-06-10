@@ -8,6 +8,14 @@
 "Cancelling — saving to history…" = "Wird abgebrochen – in Historie gespeichert…";
 "Large view (easier to read)" = "Große Ansicht (besser lesbar)";
 "High contrast" = "Hoher Kontrast";
+"Save to disk" = "Auf Festplatte speichern";
+"Save audio recording as MP3" = "Aufnahme als MP3 speichern";
+"Save transcript as text file" = "Transkript als Textdatei speichern";
+"Folder" = "Ordner";
+"No folder selected" = "Kein Ordner ausgewählt";
+"Choose folder…" = "Ordner auswählen…";
+"Choose" = "Auswählen";
+"Saves each completed dictation into the chosen folder: the recording as MP3 and/or the transcript as a .txt, with matching timestamped names. A folder must be selected; cancelled dictations are not saved." = "Speichert jedes abgeschlossene Diktat in den gewählten Ordner: die Aufnahme als MP3 und/oder das Transkript als .txt, mit zusammengehörigen Zeitstempel-Namen. Es muss ein Ordner ausgewählt sein; abgebrochene Diktate werden nicht gespeichert.";
 "Permissions" = "Berechtigungen";
 "Microphone access granted." = "Mikrofon-Zugriff erteilt.";
 "Accessibility access granted." = "Bedienungshilfen-Zugriff erteilt.";
