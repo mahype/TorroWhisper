@@ -425,9 +425,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let modeName: String? = model.settings.postProcessingEnabled ? model.activeModeName : nil
         let stopHotkeyHint: String = {
             guard phase == .recording else { return "" }
-            let stop = String(format: L("Stop: %@", locale: currentLocale), model.hotkeyDisplayText)
+            // Compact symbol form (⌥⇧S) instead of "Option+Shift+S" to keep the
+            // hint short across languages.
+            let shortcut = hotkeyDisplayString(model.settings.hotkey)
+                .replacingOccurrences(of: " ", with: "")
+            let stop = String(format: L("Stop: %@", locale: currentLocale), shortcut)
             let cancel = L("Cancel: Esc", locale: currentLocale)
-            return "\(stop)   ·   \(cancel)"
+            return "\(stop) · \(cancel)"
         }()
         let onStop: () -> Void = { [weak self] in self?.model.toggleDictation() }
         let window = recordingIndicatorWindow ?? makeRecordingIndicatorWindow(phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, onStop: onStop)

@@ -82,7 +82,11 @@ struct RecordingIndicatorView: View {
     @ViewBuilder
     private var content: some View {
         switch phase {
-        case .recording:
+        case .recording, .transcribing, .postProcessing:
+            // Identical layout across every active phase so the box never jumps:
+            // the dark waveform area stays up top (flat while not recording) and
+            // the status line stays put — only the leading icon (stop button vs.
+            // phase dot) and the hint text swap out.
             VStack(spacing: 8) {
                 waveform
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -92,9 +96,6 @@ struct RecordingIndicatorView: View {
                     )
                 infoRow
             }
-        case .transcribing, .postProcessing:
-            infoRow
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         case let .modelNotReady(label, progress, isDownloading):
             modelNotReadyRow(label: label, progress: progress, isDownloading: isDownloading)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -107,7 +108,6 @@ struct RecordingIndicatorView: View {
     /// ⌃⇧Space" / "Transcription in progress…"), so every phase looks alike.
     private var infoRow: some View {
         HStack(spacing: 9) {
-            Spacer(minLength: 0)
             leadingControl
             VStack(alignment: .leading, spacing: 1) {
                 if !modelName.isEmpty {
@@ -136,6 +136,10 @@ struct RecordingIndicatorView: View {
         }
     }
 
+    /// Fixed footprint shared by the stop button and the phase dot so the
+    /// status text never shifts horizontally when the phase changes.
+    private static let leadingControlSize: CGFloat = 24
+
     @ViewBuilder
     private var leadingControl: some View {
         if phase == .recording, let onStop {
@@ -143,7 +147,7 @@ struct RecordingIndicatorView: View {
                 Image(systemName: "stop.fill")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.red)
-                    .padding(6)
+                    .frame(width: Self.leadingControlSize, height: Self.leadingControlSize)
                     .background(Color.red.opacity(0.14), in: Circle())
             }
             .buttonStyle(.plain)
@@ -151,6 +155,8 @@ struct RecordingIndicatorView: View {
             .accessibilityLabel(L("Stop dictation", locale: locale))
         } else {
             statusDot
+                .frame(width: Self.leadingControlSize, height: Self.leadingControlSize)
+                .background(statusDotColor.opacity(0.15), in: Circle())
         }
     }
 
