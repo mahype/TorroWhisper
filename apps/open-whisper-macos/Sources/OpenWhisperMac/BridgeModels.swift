@@ -809,6 +809,8 @@ struct RuntimeStatusDTO: Codable {
     var isCancelling: Bool
     var lastStatus: String
     var lastTranscript: String
+    var lastDictationError: String
+    var dictationErrorCount: UInt64
     var dictationTriggerCount: UInt64
     var hotkeyRegistered: Bool
     var hotkeyText: String
@@ -832,6 +834,8 @@ struct RuntimeStatusDTO: Codable {
         isCancelling: false,
         lastStatus: "Open Whisper wird gestartet.",
         lastTranscript: "",
+        lastDictationError: "",
+        dictationErrorCount: 0,
         dictationTriggerCount: 0,
         hotkeyRegistered: false,
         hotkeyText: "Ctrl+Shift+Space",

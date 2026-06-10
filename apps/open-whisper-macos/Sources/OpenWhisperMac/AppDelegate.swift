@@ -46,6 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        BridgeClient().logMessage(
+            level: "info",
+            message: "app launched (version \(appVersion), macOS \(ProcessInfo.processInfo.operatingSystemVersionString))"
+        )
+
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.toolTip = "Open Whisper"
@@ -401,6 +407,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             if runtime.isRecording { return .recording }
             if runtime.isTranscribing { return .transcribing }
             if runtime.isPostProcessing { return .postProcessing }
+            if let errorMessage = model.currentDictationErrorMessage {
+                return .error(message: errorMessage)
+            }
             return nil
         }()
 
@@ -427,7 +436,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 return model.selectedModelDisplayName
             case .postProcessing:
                 return model.selectedPostProcessingDisplayName
-            case .modelNotReady:
+            case .modelNotReady, .error:
                 return nil
             }
         }()

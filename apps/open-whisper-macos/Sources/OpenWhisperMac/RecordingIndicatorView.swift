@@ -5,6 +5,10 @@ enum IndicatorPhase: Equatable {
     case transcribing
     case postProcessing
     case modelNotReady(label: String, progress: Double?, isDownloading: Bool)
+    /// Shown for a few seconds after a dictation failure (transcription
+    /// error, worker crash, insertion failure) so the bubble doesn't just
+    /// vanish without explanation.
+    case error(message: String)
 }
 
 @MainActor
@@ -144,6 +148,28 @@ struct RecordingIndicatorView: View {
         case let .modelNotReady(label, progress, isDownloading):
             modelNotReadyRow(label: label, progress: progress, isDownloading: isDownloading)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case let .error(message):
+            errorRow(message: message)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private func errorRow(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10 * scale) {
+            statusDot
+                .padding(.top, 4 * scale)
+            VStack(alignment: .leading, spacing: 4 * scale) {
+                Text(L("Dictation failed", locale: locale))
+                    .font(scaledFont(13, weight: .medium))
+                    .foregroundStyle(.primary)
+                Text(message)
+                    .font(scaledFont(10))
+                    .foregroundStyle(highContrast ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                    .lineLimit(3)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -213,7 +239,7 @@ struct RecordingIndicatorView: View {
             return isCancelling
                 ? L("Cancelling — saving to history…", locale: locale)
                 : L("Post-processing in progress", locale: locale)
-        case .modelNotReady:
+        case .modelNotReady, .error:
             return ""
         }
     }
@@ -247,13 +273,14 @@ struct RecordingIndicatorView: View {
         case .transcribing: return .yellow
         case .postProcessing: return .yellow
         case .modelNotReady: return .orange
+        case .error: return .red
         }
     }
 
     private var isBlinkPhase: Bool {
         switch phase {
         case .transcribing, .postProcessing: return true
-        case .recording, .modelNotReady: return false
+        case .recording, .modelNotReady, .error: return false
         }
     }
 

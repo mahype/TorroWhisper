@@ -37,6 +37,22 @@ final class AppModel: ObservableObject {
     private var pendingAutoSaveTask: Task<Void, Never>?
     private static let autoSaveDebounceNanoseconds: UInt64 = 500_000_000
     private var lastSeenMicSwitchEventCount: UInt64 = 0
+    private var lastSeenDictationErrorCount: UInt64 = 0
+    private var dictationErrorOccurredAt: Date?
+    /// How long the red error bubble stays visible after a dictation failure.
+    private static let dictationErrorDisplaySeconds: TimeInterval = 6
+
+    /// Message of a recent dictation failure while it should still be shown
+    /// in the recording bubble; nil once the display window has elapsed.
+    var currentDictationErrorMessage: String? {
+        guard let dictationErrorOccurredAt,
+              Date().timeIntervalSince(dictationErrorOccurredAt) < Self.dictationErrorDisplaySeconds,
+              !runtime.lastDictationError.isEmpty
+        else {
+            return nil
+        }
+        return runtime.lastDictationError
+    }
 
     init() {
         reloadAll()
@@ -555,6 +571,7 @@ final class AppModel: ObservableObject {
             diagnostics = try bridge.runPermissionDiagnostics()
             runtime = try bridge.getRuntimeStatus()
             lastSeenMicSwitchEventCount = runtime.micSwitchEventCount
+            lastSeenDictationErrorCount = runtime.dictationErrorCount
             history = (try? bridge.loadHistory()) ?? []
             lastSeenHistoryRevision = runtime.historyRevision
             bridgeError = nil
@@ -583,6 +600,7 @@ final class AppModel: ObservableObject {
                 customLlmStatusList = list
             }
             checkMicSwitchEvent()
+            checkDictationErrorEvent()
             if runtime.historyRevision != lastSeenHistoryRevision {
                 history = (try? bridge.loadHistory()) ?? []
                 lastSeenHistoryRevision = runtime.historyRevision
@@ -592,6 +610,12 @@ final class AppModel: ObservableObject {
         } catch {
             publish(error)
         }
+    }
+
+    private func checkDictationErrorEvent() {
+        guard runtime.dictationErrorCount != lastSeenDictationErrorCount else { return }
+        lastSeenDictationErrorCount = runtime.dictationErrorCount
+        dictationErrorOccurredAt = Date()
     }
 
     private func checkMicSwitchEvent() {

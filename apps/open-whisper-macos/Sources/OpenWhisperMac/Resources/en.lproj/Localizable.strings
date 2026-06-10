@@ -265,3 +265,9 @@
 "Reset accessibility permission?" = "Reset accessibility permission?";
 "Reset and reopen settings" = "Reset and reopen settings";
 "This removes Open Whisper from the Accessibility list so you can add it again. You will need to re-grant access afterwards." = "This removes Open Whisper from the Accessibility list so you can add it again. You will need to re-grant access afterwards.";
+
+"Dictation failed" = "Dictation failed";
+"Diagnostics" = "Diagnostics";
+"Open Whisper writes events and errors to a log file. Attach it when reporting problems." = "Open Whisper writes events and errors to a log file. Attach it when reporting problems.";
+"Show log file in Finder" = "Show log file in Finder";
+"Copy recent log to clipboard" = "Copy recent log to clipboard";

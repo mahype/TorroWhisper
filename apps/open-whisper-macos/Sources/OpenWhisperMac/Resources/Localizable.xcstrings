@@ -6,6 +6,31 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Berechtigung" } }
       }
     },
+    "Dictation failed" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Diktat fehlgeschlagen" } }
+      }
+    },
+    "Diagnostics" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Diagnose" } }
+      }
+    },
+    "Open Whisper writes events and errors to a log file. Attach it when reporting problems." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Open Whisper schreibt Ereignisse und Fehler in eine Logdatei. Bei Problemberichten bitte anhängen." } }
+      }
+    },
+    "Show log file in Finder" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Logdatei im Finder anzeigen" } }
+      }
+    },
+    "Copy recent log to clipboard" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Letzte Log-Einträge kopieren" } }
+      }
+    },
     "Check accessibility access" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Zugriff prüfen" } }

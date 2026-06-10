@@ -125,6 +125,17 @@ final class BridgeClient {
         try decodeResponse(from: ow_clear_history())
     }
 
+    func getLogPath() throws -> String {
+        try decodeResponse(from: ow_get_log_path())
+    }
+
+    /// Writes a line into the shared bridge log file. Levels: "error",
+    /// "warn", "debug"; anything else logs at info.
+    func logMessage(level: String, message: String) {
+        let payload: [String: String] = ["level": level, "message": message]
+        let _: String? = try? encodeAndCall(payload, function: ow_log_message)
+    }
+
     private func encodeAndCall<Input: Encodable, Output: Decodable>(
         _ input: Input,
         function: (UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?

@@ -606,6 +606,48 @@ struct SettingsView: View {
         } header: {
             Text("Setup", bundle: .module)
         }
+
+        Section {
+            Text("Open Whisper writes events and errors to a log file. Attach it when reporting problems.", bundle: .module)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Button {
+                revealLogFileInFinder()
+            } label: {
+                Text("Show log file in Finder", bundle: .module)
+            }
+            Button {
+                copyRecentLogToClipboard()
+            } label: {
+                Text("Copy recent log to clipboard", bundle: .module)
+            }
+        } header: {
+            Text("Diagnostics", bundle: .module)
+        }
+    }
+
+    private func revealLogFileInFinder() {
+        guard let path = try? BridgeClient().getLogPath() else { return }
+        let url = URL(fileURLWithPath: path)
+        if FileManager.default.fileExists(atPath: path) {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting([url.deletingLastPathComponent()])
+        }
+    }
+
+    /// Copies the last 500 log lines so they can be pasted into a bug report.
+    private func copyRecentLogToClipboard() {
+        guard let path = try? BridgeClient().getLogPath(),
+              let content = try? String(contentsOfFile: path, encoding: .utf8)
+        else { return }
+        let tail = content
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .suffix(500)
+            .joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(tail, forType: .string)
     }
 
     private var appVersionString: String {

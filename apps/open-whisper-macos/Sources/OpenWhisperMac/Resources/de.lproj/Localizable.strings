@@ -265,3 +265,9 @@
 "Reset accessibility permission?" = "Bedienungshilfen-Berechtigung zurücksetzen?";
 "Reset and reopen settings" = "Zurücksetzen und Einstellungen öffnen";
 "This removes Open Whisper from the Accessibility list so you can add it again. You will need to re-grant access afterwards." = "Dadurch wird Open Whisper aus der Bedienungshilfen-Liste entfernt, damit du es erneut hinzufügen kannst. Du musst den Zugriff danach neu erteilen.";
+
+"Dictation failed" = "Diktat fehlgeschlagen";
+"Diagnostics" = "Diagnose";
+"Open Whisper writes events and errors to a log file. Attach it when reporting problems." = "Open Whisper schreibt Ereignisse und Fehler in eine Logdatei. Bei Problemberichten bitte anhängen.";
+"Show log file in Finder" = "Logdatei im Finder anzeigen";
+"Copy recent log to clipboard" = "Letzte Log-Einträge kopieren";
