@@ -111,6 +111,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         keyboardHardwareMonitor.start()
 
+        // Re-place the recording bubble when the display arrangement changes
+        // (monitor plugged/unplugged, resolution change), so it never gets
+        // stranded on a display that no longer exists.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.model.refreshDiagnostics()
@@ -513,8 +523,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         return panel
     }
 
+    /// Picks the display the bubble should appear on. Prefers the screen under
+    /// the mouse cursor (where the user is working), because `NSScreen.main` is
+    /// unreliable for an accessory (LSUIElement) app without a key window — it
+    /// can be nil or resolve to an unexpected display, which left the bubble
+    /// off-screen or on the wrong monitor. Falls back to main, then the first
+    /// screen, so it is never nil when any display exists.
+    private func indicatorScreen() -> NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        if let underMouse = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) {
+            return underMouse
+        }
+        return NSScreen.main ?? NSScreen.screens.first
+    }
+
     private func positionRecordingIndicatorWindow(_ window: NSWindow) {
-        guard let screenFrame = NSScreen.main?.visibleFrame else { return }
+        guard let screen = indicatorScreen() else { return }
+        let screenFrame = screen.visibleFrame
         let margin: CGFloat = 16
         let size = window.frame.size
         let origin = NSPoint(
@@ -522,6 +547,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             y: screenFrame.maxY - size.height - margin
         )
         window.setFrameOrigin(origin)
+    }
+
+    @objc private func screenParametersChanged() {
+        guard let window = recordingIndicatorWindow, window.isVisible else { return }
+        positionRecordingIndicatorWindow(window)
     }
 
     private func rebuildModeMenu() {
