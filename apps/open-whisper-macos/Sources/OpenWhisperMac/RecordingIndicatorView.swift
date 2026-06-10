@@ -131,11 +131,11 @@ struct RecordingIndicatorView: View {
     @ViewBuilder
     private var content: some View {
         switch phase {
-        case .recording, .transcribing, .postProcessing:
-            // Identical layout across every active phase so the box never jumps:
-            // the dark waveform area stays up top (flat while not recording) and
-            // the status line stays put — only the leading icon (stop button vs.
-            // phase dot) and the hint text swap out.
+        case .recording, .transcribing, .postProcessing, .error:
+            // Identical layout across every active phase (including the failure
+            // state) so the box never jumps: the dark waveform area stays up top
+            // (flat while not recording) and the status line stays put — only the
+            // leading dot color and the title/hint text swap out.
             VStack(spacing: 8 * scale) {
                 waveform
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -148,29 +148,24 @@ struct RecordingIndicatorView: View {
         case let .modelNotReady(label, progress, isDownloading):
             modelNotReadyRow(label: label, progress: progress, isDownloading: isDownloading)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case let .error(message):
-            errorRow(message: message)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    @ViewBuilder
-    private func errorRow(message: String) -> some View {
-        HStack(alignment: .top, spacing: 10 * scale) {
-            statusDot
-                .padding(.top, 4 * scale)
-            VStack(alignment: .leading, spacing: 4 * scale) {
-                Text(L("Dictation failed", locale: locale))
-                    .font(scaledFont(13, weight: .medium))
-                    .foregroundStyle(.primary)
-                Text(message)
-                    .font(scaledFont(10))
-                    .foregroundStyle(highContrast ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                    .lineLimit(3)
-                    .truncationMode(.tail)
-            }
-            Spacer(minLength: 0)
-        }
+    /// The failure message when in the error phase, otherwise nil.
+    private var errorMessage: String? {
+        if case let .error(message) = phase { return message }
+        return nil
+    }
+
+    /// Title line in the status row: "Dictation failed" in the error phase,
+    /// otherwise the model name.
+    private var primaryLineText: String {
+        errorMessage != nil ? L("Dictation failed", locale: locale) : modelName
+    }
+
+    /// Detail line: the error message in the error phase, otherwise the phase hint.
+    private var secondaryLineText: String {
+        errorMessage ?? phaseHint
     }
 
     /// Centered status line: a leading control — the stop button while
@@ -181,25 +176,25 @@ struct RecordingIndicatorView: View {
         HStack(spacing: 9 * scale) {
             leadingControl
             VStack(alignment: .leading, spacing: 1 * scale) {
-                if !modelName.isEmpty {
-                    Text(modelName)
+                if !primaryLineText.isEmpty {
+                    Text(primaryLineText)
                         .font(scaledFont(11, weight: .medium))
                         .foregroundStyle(primaryTextStyle)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
-                if let modeName, !modeName.isEmpty {
+                if errorMessage == nil, let modeName, !modeName.isEmpty {
                     Text(modeName)
                         .font(scaledFont(10))
                         .foregroundStyle(subtleTextStyle)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
-                if !phaseHint.isEmpty {
-                    Text(phaseHint)
+                if !secondaryLineText.isEmpty {
+                    Text(secondaryLineText)
                         .font(scaledFont(9))
                         .foregroundStyle(subtleTextStyle)
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .truncationMode(.tail)
                 }
             }
