@@ -294,24 +294,38 @@ impl BridgeRuntime {
         }
 
         self.cancelled.store(true, Ordering::Relaxed);
-
-        let recording_cancelled = self.dictation.cancel_recording();
         self.dictation.clear_blocked();
 
-        // If post-processing was running we have the raw Whisper transcript in
-        // pending_post_processing. Save it to history now and skip the PP result
-        // (Escape means: bail out fast, don't wait for slow LLM).
-        if was_post_processing
+        if was_recording {
+            // Abbruch während der Aufnahme: das bereits aufgenommene Audio NICHT
+            // verwerfen. Es wird transkribiert und (als abgebrochen) in der
+            // Historie abgelegt; der gesetzte cancelled-Flag verhindert das
+            // Einfügen in andere Apps. So geht ein versehentlich mit Escape
+            // beendetes Diktat nicht mehr verloren. Sehr kurze/leere Aufnahmen
+            // erzeugen keinen Eintrag (Mindestlänge in stop_recording_and_transcribe,
+            // leerer Text in record_history_entry).
+            match self.dictation.stop_recording_and_transcribe(
+                &self.settings,
+                "abgebrochen",
+                dictation::RecordingCue::Cancel,
+            ) {
+                Ok(outcomes) => self.apply_dictation_outcomes(outcomes),
+                Err(_) => {
+                    self.dictation.cancel_recording();
+                    dictation::play_cancel_cue();
+                }
+            }
+        } else if was_post_processing
             && let Some(pending) = self.pending_post_processing.take()
         {
+            // Post-processing was running: we already have the raw Whisper
+            // transcript. Save it to history now and skip the slow LLM result.
             self.post_processing_rx = None;
             self.finish_transcript(pending.raw_transcript, "Diktat abgebrochen.", true);
-        } else if was_transcribing {
-            // Whisper still running: let it finish so TranscriptReady arrives and
-            // record_history_entry can save it. Do NOT abandon_transcription.
-        }
-
-        if !recording_cancelled {
+            dictation::play_cancel_cue();
+        } else {
+            // Whisper still transcribing (let it finish so TranscriptReady
+            // arrives and is saved with was_cancelled = true), or blocked.
             dictation::play_cancel_cue();
         }
 
@@ -787,7 +801,7 @@ impl BridgeRuntime {
         self.poll();
         let outcomes = self
             .dictation
-            .stop_recording_and_transcribe(&self.settings, "Menueleisten-Aktion")?;
+            .stop_recording_and_transcribe(&self.settings, "Menueleisten-Aktion", dictation::RecordingCue::Stop)?;
         self.apply_dictation_outcomes(outcomes);
         Ok(self.last_status.clone())
     }

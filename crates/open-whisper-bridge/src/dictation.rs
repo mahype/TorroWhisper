@@ -230,7 +230,7 @@ impl DictationController {
                         Err(err) => vec![DictationOutcome::Status(err)],
                     }
                 } else {
-                    match self.stop_recording_and_transcribe(settings, "key released") {
+                    match self.stop_recording_and_transcribe(settings, "key released", RecordingCue::Stop) {
                         Ok(outcomes) => outcomes,
                         Err(err) => vec![DictationOutcome::Status(err)],
                     }
@@ -242,7 +242,7 @@ impl DictationController {
                 }
 
                 if self.is_recording() {
-                    match self.stop_recording_and_transcribe(settings, "toggle stopped") {
+                    match self.stop_recording_and_transcribe(settings, "toggle stopped", RecordingCue::Stop) {
                         Ok(outcomes) => outcomes,
                         Err(err) => vec![DictationOutcome::Status(err)],
                     }
@@ -292,13 +292,14 @@ impl DictationController {
         &mut self,
         settings: &AppSettings,
         reason: &str,
+        cue: RecordingCue,
     ) -> Result<Vec<DictationOutcome>, String> {
         let Some(recording) = self.recording.take() else {
             return Ok(Vec::new());
         };
 
         let audio = recording.finish()?;
-        play_recording_cue(RecordingCue::Stop);
+        play_recording_cue(cue);
         if audio.samples.is_empty() || audio.duration < Duration::from_millis(200) {
             return Ok(vec![DictationOutcome::Status(
                 "Recording was too short or empty.".to_owned(),
@@ -345,7 +346,7 @@ impl DictationController {
             .and_then(ActiveRecording::poll_event);
         match pending_recording_event {
             Some(RecordingEvent::SilenceDetected) => {
-                match self.stop_recording_and_transcribe(settings, "silence detected") {
+                match self.stop_recording_and_transcribe(settings, "silence detected", RecordingCue::Stop) {
                     Ok(new_outcomes) => outcomes.extend(new_outcomes),
                     Err(err) => outcomes.push(DictationOutcome::Status(err)),
                 }
