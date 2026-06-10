@@ -423,9 +423,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }()
         let modelName = modelSuffix ?? ""
         let modeName: String? = model.settings.postProcessingEnabled ? model.activeModeName : nil
-        let stopHotkeyHint = phase == .recording
-            ? String(format: L("Stop: %@", locale: currentLocale), model.hotkeyDisplayText)
-            : ""
+        let stopHotkeyHint: String = {
+            guard phase == .recording else { return "" }
+            let stop = String(format: L("Stop: %@", locale: currentLocale), model.hotkeyDisplayText)
+            let cancel = L("Cancel: Esc", locale: currentLocale)
+            return "\(stop)   ·   \(cancel)"
+        }()
         let onStop: () -> Void = { [weak self] in self?.model.toggleDictation() }
         let window = recordingIndicatorWindow ?? makeRecordingIndicatorWindow(phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, onStop: onStop)
         recordingIndicatorWindow = window

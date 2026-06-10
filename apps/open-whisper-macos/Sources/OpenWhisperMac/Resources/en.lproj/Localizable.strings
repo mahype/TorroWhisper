@@ -1,6 +1,7 @@
 "Changes take effect after restarting Open Whisper." = "Changes take effect after restarting Open Whisper.";
 "Downloaded" = "Downloaded";
 "Stop: %@" = "Stop: %@";
+"Cancel: Esc" = "Cancel: Esc";
 "Permissions" = "Permissions";
 "Microphone access granted." = "Microphone access granted.";
 "Accessibility access granted." = "Accessibility access granted.";

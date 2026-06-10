@@ -69,23 +69,102 @@ struct RecordingIndicatorView: View {
     @Environment(\.locale) private var locale
 
     var body: some View {
-        VStack(spacing: 6) {
-            topContent
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        content
+            .padding(10)
+            .frame(width: 260, height: 98)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+    }
 
-            if shouldShowStatusRow {
-                statusRow
+    @ViewBuilder
+    private var content: some View {
+        switch phase {
+        case .recording:
+            VStack(spacing: 8) {
+                waveform
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(
+                        Color.black.opacity(0.85),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                infoRow
             }
+        case .transcribing, .postProcessing:
+            infoRow
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case let .modelNotReady(label, progress, isDownloading):
+            modelNotReadyRow(label: label, progress: progress, isDownloading: isDownloading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 4)
-        .padding(.bottom, 10)
-        .frame(width: 260, height: 98)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        )
+    }
+
+    /// Centered status line: a leading control — the stop button while
+    /// recording (replacing the red dot), otherwise the blinking phase dot —
+    /// next to the model name and a small phase hint underneath ("Stop:
+    /// ⌃⇧Space" / "Transcription in progress…"), so every phase looks alike.
+    private var infoRow: some View {
+        HStack(spacing: 9) {
+            Spacer(minLength: 0)
+            leadingControl
+            VStack(alignment: .leading, spacing: 1) {
+                if !modelName.isEmpty {
+                    Text(modelName)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                if let modeName, !modeName.isEmpty {
+                    Text(modeName)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                if !phaseHint.isEmpty {
+                    Text(phaseHint)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder
+    private var leadingControl: some View {
+        if phase == .recording, let onStop {
+            Button(action: onStop) {
+                Image(systemName: "stop.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.red)
+                    .padding(6)
+                    .background(Color.red.opacity(0.14), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .help(L("Stop dictation", locale: locale))
+            .accessibilityLabel(L("Stop dictation", locale: locale))
+        } else {
+            statusDot
+        }
+    }
+
+    private var phaseHint: String {
+        switch phase {
+        case .recording:
+            return stopHotkeyHint
+        case .transcribing:
+            return L("Transcription in progress", locale: locale)
+        case .postProcessing:
+            return L("Post-processing in progress", locale: locale)
+        case .modelNotReady:
+            return ""
+        }
     }
 
     private var statusDot: some View {
@@ -121,29 +200,6 @@ struct RecordingIndicatorView: View {
         switch phase {
         case .transcribing, .postProcessing: return true
         case .recording, .modelNotReady: return false
-        }
-    }
-
-    private var shouldShowStatusRow: Bool {
-        guard !modelName.isEmpty else { return false }
-        switch phase {
-        case .recording, .transcribing, .postProcessing: return true
-        case .modelNotReady: return false
-        }
-    }
-
-    @ViewBuilder
-    private var topContent: some View {
-        switch phase {
-        case .recording:
-            waveform
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .transcribing:
-            processingText(L("Transcribing…", locale: locale))
-        case .postProcessing:
-            processingText(L("Post-processing…", locale: locale))
-        case let .modelNotReady(label, progress, isDownloading):
-            modelNotReadyRow(label: label, progress: progress, isDownloading: isDownloading)
         }
     }
 
@@ -184,46 +240,6 @@ struct RecordingIndicatorView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var statusRow: some View {
-        HStack(alignment: .center, spacing: 8) {
-            statusDot
-            VStack(alignment: .leading, spacing: 1) {
-                Text(modelName)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                if let modeName, !modeName.isEmpty {
-                    Text(modeName)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                if phase == .recording, !stopHotkeyHint.isEmpty {
-                    Text(stopHotkeyHint)
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-            }
-            Spacer(minLength: 4)
-            if phase == .recording, let onStop {
-                Button(action: onStop) {
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                        .padding(5)
-                        .background(Color.primary.opacity(0.08), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .help(L("Stop dictation", locale: locale))
-                .accessibilityLabel(L("Stop dictation", locale: locale))
-            }
-        }
     }
 
     @ViewBuilder
@@ -327,13 +343,6 @@ struct RecordingIndicatorView: View {
             }
             path.closeSubpath()
         }
-    }
-
-    private func processingText(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private func barHeight(for level: Float) -> CGFloat {

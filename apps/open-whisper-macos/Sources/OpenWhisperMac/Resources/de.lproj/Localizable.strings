@@ -1,6 +1,7 @@
 "Changes take effect after restarting Open Whisper." = "Änderungen werden nach einem Neustart von Open Whisper wirksam.";
 "Downloaded" = "Heruntergeladen";
 "Stop: %@" = "Beenden: %@";
+"Cancel: Esc" = "Abbrechen: Esc";
 "Permissions" = "Berechtigungen";
 "Microphone access granted." = "Mikrofon-Zugriff erteilt.";
 "Accessibility access granted." = "Bedienungshilfen-Zugriff erteilt.";
