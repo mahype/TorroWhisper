@@ -1,8 +1,8 @@
 "Changes take effect after restarting Open Whisper." = "Änderungen werden nach einem Neustart von Open Whisper wirksam.";
 "Downloaded" = "Heruntergeladen";
 "No action needed." = "Keine Aktion nötig.";
-"Enable Open Whisper under Microphone in System Settings → Privacy & Security." = "Aktiviere Open Whisper unter „Mikrofon" in den Systemeinstellungen → Datenschutz & Sicherheit.";
-"Enable Open Whisper under Accessibility in System Settings → Privacy & Security so it can type into other apps." = "Aktiviere Open Whisper unter „Bedienungshilfen" in den Systemeinstellungen → Datenschutz & Sicherheit, damit es in andere Apps schreiben kann.";
+"Enable Open Whisper under Microphone in System Settings → Privacy & Security." = "Aktiviere Open Whisper unter „Mikrofon“ in den Systemeinstellungen → Datenschutz & Sicherheit.";
+"Enable Open Whisper under Accessibility in System Settings → Privacy & Security so it can type into other apps." = "Aktiviere Open Whisper unter „Bedienungshilfen“ in den Systemeinstellungen → Datenschutz & Sicherheit, damit es in andere Apps schreiben kann.";
 "Stop: %@" = "Beenden: %@";
 "Cancel: Esc" = "Abbrechen: Esc";
 "Cancelling — saving to history…" = "Wird abgebrochen – in Historie gespeichert…";
@@ -26,7 +26,7 @@
 "Required to record your dictation." = "Erforderlich, um dein Diktat aufzunehmen.";
 "Needed so Open Whisper can type the transcribed text into other apps." = "Nötig, damit Open Whisper den transkribierten Text in andere Apps schreiben kann.";
 "Check again" = "Erneut prüfen";
-"After granting a permission in System Settings, tap 'Check again' to refresh the status here." = "Nachdem du eine Berechtigung in den Systemeinstellungen erteilt hast, tippe auf „Erneut prüfen", um den Status hier zu aktualisieren.";
+"After granting a permission in System Settings, tap 'Check again' to refresh the status here." = "Nachdem du eine Berechtigung in den Systemeinstellungen erteilt hast, tippe auf „Erneut prüfen“, um den Status hier zu aktualisieren.";
 "A post-processing model is installed." = "Ein Nachbearbeitungs-Modell ist installiert.";
 "No post-processing model installed yet." = "Noch kein Nachbearbeitungs-Modell installiert.";
 "Choose a post-processing model" = "Nachbearbeitungs-Modell auswählen";

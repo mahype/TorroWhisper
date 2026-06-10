@@ -163,6 +163,14 @@ copied_localizable=false
 for lproj_dir in apps/open-whisper-macos/Sources/OpenWhisperMac/Resources/*.lproj; do
     if [[ -f "$lproj_dir/Localizable.strings" ]]; then
         lang_name="$(basename "$lproj_dir")"
+        # A single bad escape (e.g. a stray ASCII quote in a value) makes macOS
+        # silently fail to parse the WHOLE table, so every key falls back to the
+        # base language. Fail the build instead of shipping a dead translation.
+        if ! plutil -lint "$lproj_dir/Localizable.strings" >/dev/null 2>&1; then
+            echo "error: $lproj_dir/Localizable.strings has a syntax error:" >&2
+            plutil -lint "$lproj_dir/Localizable.strings" >&2 || true
+            exit 1
+        fi
         mkdir -p "$app/Contents/Resources/$lang_name"
         cp "$lproj_dir/Localizable.strings" "$app/Contents/Resources/$lang_name/Localizable.strings"
         copied_localizable=true
