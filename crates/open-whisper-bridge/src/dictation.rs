@@ -850,6 +850,13 @@ fn transcribe_with_whisper(
     params.set_print_timestamps(false);
     params.set_no_timestamps(true);
     params.set_single_segment(false);
+    // Suppress Whisper's non-speech hallucinations. On trailing silence the
+    // model loves to emit subtitle-style filler it learned from video training
+    // data — most visibly "Vielen Dank", "Untertitel von …", "Thank you for
+    // watching". suppress_nst drops those non-speech tokens; suppress_blank
+    // avoids spurious leading blanks.
+    params.set_suppress_nst(true);
+    params.set_suppress_blank(true);
 
     state
         .full(params, &mono_16khz)
