@@ -4,6 +4,27 @@ All notable changes to Open Whisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-06-10
+
+### Added
+- **Save dictations to disk** — a new *Save to disk* section under Settings → History optionally writes each completed dictation to a folder you choose: the recording as an MP3 and/or the transcript as a `.txt`, with matching timestamped names. Cancelled dictations are not saved ([#7](https://github.com/mahype/open-whisper/issues/7)).
+- **Accessible recording bubble** — two independent Settings toggles: a *Large view* (~1.7×) for low-vision users and a *High contrast* mode (bolder text, stronger colors). Both default off and combine freely ([#8](https://github.com/mahype/open-whisper/issues/8)).
+- **Onboarding permissions step** — a dedicated step requests microphone and accessibility access up front and confirms once granted, instead of surfacing the prompt only after the first dictation.
+- **Permission checks in Diagnostics** — microphone and accessibility authorization now appear as OK/error entries with a hint pointing at the right System Settings pane.
+- **File logging, panic hook and structured dictation errors**, with quick access to the log from the Help section, plus an explicit error state in the recording bubble.
+
+### Changed
+- **Onboarding no longer auto-downloads models** — the transcription model is downloaded on demand and required to continue; post-processing is optional with a pointer to the language-models manager.
+- **Launch at login is a simple yes/no toggle** (in Settings and onboarding) instead of the three-way "ask on first launch" picker.
+- **Recording bubble overhaul** — a small stop button replaces the red dot, shortcut hints ("Stop: ⌥⇧S · Cancel: Esc") sit under the model name, a "being cancelled" state is shown, and the layout stays steady across recording/transcribing/post-processing/error so the box no longer jumps. The bubble now reliably appears on the active monitor in multi-display setups ([#9](https://github.com/mahype/open-whisper/issues/9)).
+- **Fewer Whisper hallucinations** — non-speech token suppression cuts the spurious "Vielen Dank" / "Untertitel von …" filler Whisper emits on trailing silence.
+
+### Fixed
+- **Escape no longer loses a dictation** — cancelling while still recording now transcribes the captured audio and keeps it in history (marked cancelled) instead of discarding it.
+- **System language is detected correctly** — with the UI language set to *System*, a German system now shows German.
+- **German localization repaired** — a stray ASCII quote had broken the entire German strings table, falling the whole UI back to English; the build now lints every strings file and fails on a syntax error.
+- **Released builds reliably pick up Rust changes** — the app binary is now force-relinked against the freshly built Rust library.
+
 ## [0.3.3] — 2026-06-09
 
 ### Changed
