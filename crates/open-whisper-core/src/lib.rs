@@ -930,6 +930,10 @@ pub struct RuntimeStatusDto {
     pub is_recording: bool,
     pub is_transcribing: bool,
     pub is_post_processing: bool,
+    /// True while a cancelled dictation is still finishing transcription /
+    /// post-processing — the result will be archived to history but not
+    /// inserted. Drives the "being cancelled" hint in the recording bubble.
+    pub is_cancelling: bool,
     pub last_status: String,
     pub last_transcript: String,
     pub dictation_trigger_count: u64,

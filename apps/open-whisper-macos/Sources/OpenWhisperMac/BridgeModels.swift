@@ -802,6 +802,7 @@ struct RuntimeStatusDTO: Codable {
     var isRecording: Bool
     var isTranscribing: Bool
     var isPostProcessing: Bool
+    var isCancelling: Bool
     var lastStatus: String
     var lastTranscript: String
     var dictationTriggerCount: UInt64
@@ -824,6 +825,7 @@ struct RuntimeStatusDTO: Codable {
         isRecording: false,
         isTranscribing: false,
         isPostProcessing: false,
+        isCancelling: false,
         lastStatus: "Open Whisper wird gestartet.",
         lastTranscript: "",
         dictationTriggerCount: 0,

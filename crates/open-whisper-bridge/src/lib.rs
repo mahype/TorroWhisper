@@ -843,10 +843,14 @@ impl BridgeRuntime {
             (String::new(), false, None)
         };
 
+        let is_transcribing = self.dictation.is_transcribing();
+        let is_post_processing = self.post_processing_rx.is_some();
         RuntimeStatusDto {
             is_recording: self.dictation.is_recording(),
-            is_transcribing: self.dictation.is_transcribing(),
-            is_post_processing: self.post_processing_rx.is_some(),
+            is_transcribing,
+            is_post_processing,
+            is_cancelling: self.cancelled.load(Ordering::Relaxed)
+                && (is_transcribing || is_post_processing),
             last_status: self.last_status.clone(),
             last_transcript: self.last_transcript.clone(),
             dictation_trigger_count: self.dictation_trigger_count,

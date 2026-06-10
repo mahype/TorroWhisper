@@ -65,6 +65,10 @@ struct RecordingIndicatorView: View {
     /// Invoked by the small stop button in the bubble. Ends the dictation
     /// cleanly (keeps the transcript) — not a cancel.
     var onStop: (() -> Void)? = nil
+    /// True while a cancelled dictation is still finishing transcription. Shows
+    /// a "being cancelled" hint so the user knows work is still happening (and
+    /// will be archived, not inserted).
+    var isCancelling: Bool = false
     @ObservedObject var feed: RecordingLevelFeed
     @Environment(\.locale) private var locale
 
@@ -165,9 +169,13 @@ struct RecordingIndicatorView: View {
         case .recording:
             return stopHotkeyHint
         case .transcribing:
-            return L("Transcription in progress", locale: locale)
+            return isCancelling
+                ? L("Cancelling — saving to history…", locale: locale)
+                : L("Transcription in progress", locale: locale)
         case .postProcessing:
-            return L("Post-processing in progress", locale: locale)
+            return isCancelling
+                ? L("Cancelling — saving to history…", locale: locale)
+                : L("Post-processing in progress", locale: locale)
         case .modelNotReady:
             return ""
         }
@@ -194,6 +202,9 @@ struct RecordingIndicatorView: View {
     }
 
     private var statusDotColor: Color {
+        if isCancelling {
+            return .orange
+        }
         switch phase {
         case .recording: return .red
         case .transcribing: return .yellow

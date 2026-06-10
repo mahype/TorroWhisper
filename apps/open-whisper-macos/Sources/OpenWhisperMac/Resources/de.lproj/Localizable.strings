@@ -5,6 +5,7 @@
 "Enable Open Whisper under Accessibility in System Settings → Privacy & Security so it can type into other apps." = "Aktiviere Open Whisper unter „Bedienungshilfen" in den Systemeinstellungen → Datenschutz & Sicherheit, damit es in andere Apps schreiben kann.";
 "Stop: %@" = "Beenden: %@";
 "Cancel: Esc" = "Abbrechen: Esc";
+"Cancelling — saving to history…" = "Wird abgebrochen – in Historie gespeichert…";
 "Permissions" = "Berechtigungen";
 "Microphone access granted." = "Mikrofon-Zugriff erteilt.";
 "Accessibility access granted." = "Bedienungshilfen-Zugriff erteilt.";
