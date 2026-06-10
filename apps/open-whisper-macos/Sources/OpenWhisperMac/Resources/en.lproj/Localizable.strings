@@ -1,5 +1,8 @@
 "Changes take effect after restarting Open Whisper." = "Changes take effect after restarting Open Whisper.";
 "Downloaded" = "Downloaded";
+"No action needed." = "No action needed.";
+"Enable Open Whisper under Microphone in System Settings → Privacy & Security." = "Enable Open Whisper under Microphone in System Settings → Privacy & Security.";
+"Enable Open Whisper under Accessibility in System Settings → Privacy & Security so it can type into other apps." = "Enable Open Whisper under Accessibility in System Settings → Privacy & Security so it can type into other apps.";
 "Stop: %@" = "Stop: %@";
 "Cancel: Esc" = "Cancel: Esc";
 "Permissions" = "Permissions";

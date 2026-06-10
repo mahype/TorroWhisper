@@ -251,12 +251,8 @@ struct OnboardingView: View {
             }
         case 4:
             Section {
-                Picker(selection: model.binding(for: \.startupBehavior)) {
-                    ForEach(StartupBehavior.allCases) { behavior in
-                        Text(behavior.label(locale: locale)).tag(behavior)
-                    }
-                } label: {
-                    Text("System startup", bundle: .module)
+                Toggle(isOn: model.launchAtLoginBinding) {
+                    Text("Launch at login", bundle: .module)
                 }
             } header: {
                 Text("System startup", bundle: .module)

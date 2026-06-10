@@ -486,13 +486,18 @@ struct DiagnosticDisclosureCard: View {
 
     var body: some View {
         DisclosureGroup {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.problem)
                     .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
                 Text(item.recommendation)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 6)
         } label: {
             HStack(spacing: 10) {

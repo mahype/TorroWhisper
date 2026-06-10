@@ -216,6 +216,17 @@ final class AppModel: ObservableObject {
         )
     }
 
+    /// A plain on/off binding for "launch at login", mapping the on state to
+    /// `.launchAtLogin` and off to `.manualLaunch`. The `.askOnFirstLaunch`
+    /// behavior is no longer offered in the UI — a yes/no choice is clearer.
+    var launchAtLoginBinding: Binding<Bool> {
+        let base = binding(for: \.startupBehavior)
+        return Binding(
+            get: { base.wrappedValue == .launchAtLogin },
+            set: { base.wrappedValue = $0 ? .launchAtLogin : .manualLaunch }
+        )
+    }
+
     func modeBinding<Value>(for keyPath: WritableKeyPath<ProcessingMode, Value>) -> Binding<Value> {
         Binding(
             get: {
@@ -636,11 +647,56 @@ final class AppModel: ObservableObject {
 
     func refreshDiagnostics() {
         do {
-            diagnostics = try bridge.runPermissionDiagnostics()
+            var loaded = try bridge.runPermissionDiagnostics()
+            loaded.items.append(contentsOf: permissionDiagnosticItems())
+            diagnostics = loaded
             bridgeError = nil
         } catch {
             publish(error)
         }
+    }
+
+    /// Swift-side permission checks appended to the bridge diagnostics. The Rust
+    /// bridge can't read macOS TCC state, so the actual microphone/accessibility
+    /// authorization is evaluated here and surfaced as OK/error entries.
+    private func permissionDiagnosticItems() -> [DiagnosticItemDTO] {
+        let locale = settings.effectiveLocale
+
+        let microphone: DiagnosticItemDTO
+        if microphoneAuthorizationStatus == .authorized {
+            microphone = DiagnosticItemDTO(
+                title: L("Microphone permission", locale: locale),
+                status: .ok,
+                problem: L("Microphone access granted.", locale: locale),
+                recommendation: L("No action needed.", locale: locale)
+            )
+        } else {
+            microphone = DiagnosticItemDTO(
+                title: L("Microphone permission", locale: locale),
+                status: .error,
+                problem: L("Microphone access is not granted yet.", locale: locale),
+                recommendation: L("Enable Open Whisper under Microphone in System Settings → Privacy & Security.", locale: locale)
+            )
+        }
+
+        let accessibility: DiagnosticItemDTO
+        if accessibilityTrusted {
+            accessibility = DiagnosticItemDTO(
+                title: L("Accessibility permission", locale: locale),
+                status: .ok,
+                problem: L("Accessibility access granted.", locale: locale),
+                recommendation: L("No action needed.", locale: locale)
+            )
+        } else {
+            accessibility = DiagnosticItemDTO(
+                title: L("Accessibility permission", locale: locale),
+                status: .warning,
+                problem: L("Accessibility access is not granted yet.", locale: locale),
+                recommendation: L("Enable Open Whisper under Accessibility in System Settings → Privacy & Security so it can type into other apps.", locale: locale)
+            )
+        }
+
+        return [microphone, accessibility]
     }
 
     @discardableResult

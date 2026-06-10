@@ -413,12 +413,8 @@ struct SettingsView: View {
     @ViewBuilder
     private var startupContent: some View {
         Section {
-            Picker(selection: model.binding(for: \.startupBehavior)) {
-                ForEach(StartupBehavior.allCases) { behavior in
-                    Text(behavior.label(locale: locale)).tag(behavior)
-                }
-            } label: {
-                Text("Behavior", bundle: .module)
+            Toggle(isOn: model.launchAtLoginBinding) {
+                Text("Launch at login", bundle: .module)
             }
         } header: {
             Text("System startup", bundle: .module)
