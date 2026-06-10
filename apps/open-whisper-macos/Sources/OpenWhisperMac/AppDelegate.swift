@@ -423,14 +423,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }()
         let modelName = modelSuffix ?? ""
         let modeName: String? = model.settings.postProcessingEnabled ? model.activeModeName : nil
-        let window = recordingIndicatorWindow ?? makeRecordingIndicatorWindow(phase: phase, style: style, color: color, modelName: modelName, modeName: modeName)
+        let stopHotkeyHint = phase == .recording
+            ? String(format: L("Stop: %@", locale: currentLocale), model.hotkeyDisplayText)
+            : ""
+        let onStop: () -> Void = { [weak self] in self?.model.toggleDictation() }
+        let window = recordingIndicatorWindow ?? makeRecordingIndicatorWindow(phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, onStop: onStop)
         recordingIndicatorWindow = window
-        updateIndicatorPhase(window: window, phase: phase, style: style, color: color, modelName: modelName, modeName: modeName)
+        // The bubble normally ignores mouse events so it never steals clicks
+        // from whatever is underneath. While recording we accept them so the
+        // small stop button is clickable.
+        window.ignoresMouseEvents = (phase != .recording)
+        updateIndicatorPhase(window: window, phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, onStop: onStop)
         positionRecordingIndicatorWindow(window)
         window.orderFrontRegardless()
     }
 
-    private func updateIndicatorPhase(window: NSWindow, phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?) {
+    private func updateIndicatorPhase(window: NSWindow, phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?, stopHotkeyHint: String, onStop: @escaping () -> Void) {
         guard let hosting = window.contentViewController as? NSHostingController<LocalizedRoot<RecordingIndicatorView>> else {
             return
         }
@@ -439,7 +447,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             || inner.style != style
             || inner.color != color
             || inner.modelName != modelName
-            || inner.modeName != modeName {
+            || inner.modeName != modeName
+            || inner.stopHotkeyHint != stopHotkeyHint {
             hosting.rootView = LocalizedRoot(model: model) {
                 RecordingIndicatorView(
                     phase: phase,
@@ -447,14 +456,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     color: color,
                     modelName: modelName,
                     modeName: modeName,
+                    stopHotkeyHint: stopHotkeyHint,
+                    onStop: onStop,
                     feed: self.recordingLevelFeed
                 )
             }
         }
     }
 
-    private func makeRecordingIndicatorWindow(phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?) -> NSWindow {
-        let size = NSSize(width: 260, height: 86)
+    private func makeRecordingIndicatorWindow(phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?, stopHotkeyHint: String, onStop: @escaping () -> Void) -> NSWindow {
+        let size = NSSize(width: 260, height: 98)
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -480,6 +491,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     color: color,
                     modelName: modelName,
                     modeName: modeName,
+                    stopHotkeyHint: stopHotkeyHint,
+                    onStop: onStop,
                     feed: self.recordingLevelFeed
                 )
             }

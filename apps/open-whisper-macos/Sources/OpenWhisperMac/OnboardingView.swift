@@ -5,6 +5,11 @@ struct OnboardingView: View {
     let onFinish: () -> Void
     @Environment(\.locale) private var locale
 
+    @State private var isManagingLanguageModels = false
+    @State private var managerTab: LanguageModelsManagerTab = .postProcessing
+
+    private static let lastStep = 5
+
     var body: some View {
         HStack(spacing: 0) {
             StepRail(currentStep: model.onboardingStep)
@@ -24,14 +29,20 @@ struct OnboardingView: View {
         }
         .frame(width: 760, height: 520)
         .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(isPresented: $isManagingLanguageModels) {
+            LanguageModelsManagerSheet(model: model, selectedTab: $managerTab) {
+                isManagingLanguageModels = false
+            }
+        }
     }
 
     private var stepTitle: String {
         switch model.onboardingStep {
         case 0: return L("Welcome", locale: locale)
         case 1: return L("Audio & hotkey", locale: locale)
-        case 2: return L("Language models", locale: locale)
-        case 3: return L("Start & behavior", locale: locale)
+        case 2: return L("Permissions", locale: locale)
+        case 3: return L("Language models", locale: locale)
+        case 4: return L("Start & behavior", locale: locale)
         default: return L("Diagnostics", locale: locale)
         }
     }
@@ -133,6 +144,50 @@ struct OnboardingView: View {
             }
         case 2:
             Section {
+                permissionRow(
+                    granted: model.microphoneAuthorizationStatus == .authorized,
+                    grantedKey: "Microphone access granted.",
+                    pendingKey: "Microphone access is not granted yet.",
+                    buttonKey: "Grant microphone access",
+                    action: { model.checkAndRequestMicrophoneAccess() }
+                )
+            } header: {
+                Text("Microphone", bundle: .module)
+            } footer: {
+                Text("Required to record your dictation.", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                permissionRow(
+                    granted: model.accessibilityTrusted,
+                    grantedKey: "Accessibility access granted.",
+                    pendingKey: "Accessibility access is not granted yet.",
+                    buttonKey: "Grant accessibility access",
+                    action: { model.checkAndRequestAccessibilityAccess() }
+                )
+            } header: {
+                Text("Accessibility", bundle: .module)
+            } footer: {
+                Text("Needed so Open Whisper can type the transcribed text into other apps.", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Button {
+                    model.refreshDiagnostics()
+                } label: {
+                    Text("Check again", bundle: .module)
+                }
+            } footer: {
+                Text("After granting a permission in System Settings, tap 'Check again' to refresh the status here.", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        case 3:
+            Section {
                 Picker(selection: model.binding(for: \.localModel)) {
                     ForEach(ModelPreset.allCases) { preset in
                         Text(preset.displayName).tag(preset)
@@ -166,38 +221,35 @@ struct OnboardingView: View {
             }
 
             Section {
-                Picker(selection: model.binding(for: \.localLlm)) {
-                    ForEach(LlmPreset.allCases) { preset in
-                        Text(preset.displayName).tag(preset)
+                if hasPostProcessingModel {
+                    Label {
+                        Text("A post-processing model is installed.", bundle: .module)
+                    } icon: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
                     }
-                } label: {
-                    Text("Language model", bundle: .module)
-                }
-
-                Text("\(model.settings.localLlm.description(locale: locale)) (\(model.settings.localLlm.approxSizeLabel))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let status = currentLlmStatus {
-                    if status.isDownloading, let basisPoints = status.progressBasisPoints {
-                        ProgressView(value: Double(basisPoints) / 10_000.0)
-                    }
-                    LabeledContent {
-                        Text(status.summary)
+                } else {
+                    Text("No post-processing model installed yet.", bundle: .module)
+                        .font(.callout.weight(.medium))
+                    Button {
+                        managerTab = .postProcessing
+                        isManagingLanguageModels = true
                     } label: {
-                        Text("Status", bundle: .module)
+                        Label {
+                            Text("Choose a post-processing model", bundle: .module)
+                        } icon: {
+                            Image(systemName: "arrow.down.circle")
+                        }
                     }
                 }
-
-                llmDownloadControl
             } header: {
                 Text("Post-processing", bundle: .module)
             } footer: {
-                Text("Optional — only needed if you want post-processing. Post-processing runs your dictation through a language model to clean it up: fixing punctuation and capitalization and removing filler words. Download a model here if you want it, or skip and add one later in Settings.", bundle: .module)
+                Text("Optional — only needed if you want post-processing. It runs your dictation through a language model to clean it up: punctuation, capitalization, and filler-word removal. Choose a model now if you want it, or just continue and add one later in Settings.", bundle: .module)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-        case 3:
+        case 4:
             Section {
                 Picker(selection: model.binding(for: \.startupBehavior)) {
                     ForEach(StartupBehavior.allCases) { behavior in
@@ -272,7 +324,7 @@ struct OnboardingView: View {
 
             Spacer()
 
-            if model.onboardingStep == 4 {
+            if model.onboardingStep == Self.lastStep {
                 Button {
                     if model.completeOnboarding() {
                         onFinish()
@@ -284,18 +336,46 @@ struct OnboardingView: View {
                 .keyboardShortcut(.defaultAction)
             } else {
                 Button {
-                    model.onboardingStep = min(4, model.onboardingStep + 1)
+                    model.onboardingStep = min(Self.lastStep, model.onboardingStep + 1)
                 } label: {
                     Text("Next", bundle: .module)
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(model.onboardingStep == 2 && !whisperReady)
+                .disabled(model.onboardingStep == 3 && !whisperReady)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(.regularMaterial)
+    }
+
+    /// One permission entry: a green "granted" confirmation once the access is
+    /// in place, otherwise a short note plus the button that requests it (or
+    /// deep-links into System Settings when already denied).
+    @ViewBuilder
+    private func permissionRow(
+        granted: Bool,
+        grantedKey: LocalizedStringKey,
+        pendingKey: LocalizedStringKey,
+        buttonKey: LocalizedStringKey,
+        action: @escaping () -> Void
+    ) -> some View {
+        if granted {
+            Label {
+                Text(grantedKey, bundle: .module)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            }
+        } else {
+            Text(pendingKey, bundle: .module)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Button(action: action) {
+                Text(buttonKey, bundle: .module)
+            }
+        }
     }
 
     private var deviceNames: [String] {
@@ -317,8 +397,12 @@ struct OnboardingView: View {
         return model.modelStatusList.first { $0.backendModelName == model.settings.localModel.whisperModel }
     }
 
-    private var currentLlmStatus: LlmModelStatusDTO? {
-        model.llmStatusList.first { $0.displayLabel == model.settings.localLlm.displayName }
+    /// Whether any post-processing (LLM) model is already downloaded. Drives the
+    /// optional hint on the model step — no LLM is offered for download in
+    /// onboarding anymore; the user is pointed at the language-models manager
+    /// instead.
+    private var hasPostProcessingModel: Bool {
+        model.llmStatusList.contains { $0.isDownloaded }
     }
 
     /// Gating for the model step: only the transcription model is mandatory.
@@ -343,27 +427,6 @@ struct OnboardingView: View {
         } else {
             Button {
                 model.startModelDownload(preset: model.settings.localModel)
-            } label: {
-                Text((status?.isDownloading ?? false) ? "Loading…" : "Download", bundle: .module)
-            }
-            .disabled(status?.isDownloading ?? false)
-        }
-    }
-
-    /// Manual, optional download control for the post-processing model.
-    @ViewBuilder
-    private var llmDownloadControl: some View {
-        let status = currentLlmStatus
-        if status?.isDownloaded ?? false {
-            Label {
-                Text("Downloaded", bundle: .module)
-            } icon: {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-            }
-        } else {
-            Button {
-                model.startLlmDownload(preset: model.settings.localLlm)
             } label: {
                 Text((status?.isDownloading ?? false) ? "Loading…" : "Download", bundle: .module)
             }

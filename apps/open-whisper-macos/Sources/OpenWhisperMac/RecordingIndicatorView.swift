@@ -58,6 +58,13 @@ struct RecordingIndicatorView: View {
     var color: WaveformColor = .accent
     var modelName: String = ""
     var modeName: String? = nil
+    /// Readable shortcut hint shown under the model label while recording, e.g.
+    /// "Stop: ⌃⇧Space", so the user knows how to end the dictation without
+    /// guessing (and without hitting Escape, which discards it).
+    var stopHotkeyHint: String = ""
+    /// Invoked by the small stop button in the bubble. Ends the dictation
+    /// cleanly (keeps the transcript) — not a cancel.
+    var onStop: (() -> Void)? = nil
     @ObservedObject var feed: RecordingLevelFeed
     @Environment(\.locale) private var locale
 
@@ -73,7 +80,7 @@ struct RecordingIndicatorView: View {
         .padding(.horizontal, 8)
         .padding(.top, 4)
         .padding(.bottom, 10)
-        .frame(width: 260, height: 86)
+        .frame(width: 260, height: 98)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -180,10 +187,8 @@ struct RecordingIndicatorView: View {
     }
 
     private var statusRow: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Spacer(minLength: 0)
+        HStack(alignment: .center, spacing: 8) {
             statusDot
-                .padding(.top, 3)
             VStack(alignment: .leading, spacing: 1) {
                 Text(modelName)
                     .font(.system(size: 11, weight: .medium))
@@ -197,8 +202,27 @@ struct RecordingIndicatorView: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
+                if phase == .recording, !stopHotkeyHint.isEmpty {
+                    Text(stopHotkeyHint)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 4)
+            if phase == .recording, let onStop {
+                Button(action: onStop) {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .padding(5)
+                        .background(Color.primary.opacity(0.08), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .help(L("Stop dictation", locale: locale))
+                .accessibilityLabel(L("Stop dictation", locale: locale))
+            }
         }
     }
 

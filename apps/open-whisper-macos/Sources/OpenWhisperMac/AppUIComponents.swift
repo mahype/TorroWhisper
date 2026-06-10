@@ -513,6 +513,7 @@ struct StepRail: View {
         [
             L("Welcome", locale: locale),
             L("Audio & hotkey", locale: locale),
+            L("Permissions", locale: locale),
             L("Language models", locale: locale),
             L("Start & behavior", locale: locale),
             L("Diagnostics", locale: locale),
