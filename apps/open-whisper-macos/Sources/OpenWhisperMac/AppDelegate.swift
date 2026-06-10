@@ -445,18 +445,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }()
         let onStop: () -> Void = { [weak self] in self?.model.toggleDictation() }
         let isCancelling = model.runtime.isCancelling
-        let window = recordingIndicatorWindow ?? makeRecordingIndicatorWindow(phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, isCancelling: isCancelling, onStop: onStop)
+        let isLargeIndicator = model.settings.largeRecordingIndicator
+        let highContrastIndicator = model.settings.highContrastRecordingIndicator
+        let window = recordingIndicatorWindow ?? makeRecordingIndicatorWindow(phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, isCancelling: isCancelling, isLarge: isLargeIndicator, highContrast: highContrastIndicator, onStop: onStop)
         recordingIndicatorWindow = window
+        // Resize the panel to match the (possibly large) bubble — the size
+        // setting can change between recordings.
+        let indicatorScale = isLargeIndicator ? RecordingIndicatorView.largeScale : 1.0
+        let indicatorSize = NSSize(
+            width: RecordingIndicatorView.baseSize.width * indicatorScale,
+            height: RecordingIndicatorView.baseSize.height * indicatorScale
+        )
+        if window.frame.size != indicatorSize {
+            window.setContentSize(indicatorSize)
+        }
         // The bubble normally ignores mouse events so it never steals clicks
         // from whatever is underneath. While recording we accept them so the
         // small stop button is clickable.
         window.ignoresMouseEvents = (phase != .recording)
-        updateIndicatorPhase(window: window, phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, isCancelling: isCancelling, onStop: onStop)
+        updateIndicatorPhase(window: window, phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, isCancelling: isCancelling, isLarge: isLargeIndicator, highContrast: highContrastIndicator, onStop: onStop)
         positionRecordingIndicatorWindow(window)
         window.orderFrontRegardless()
     }
 
-    private func updateIndicatorPhase(window: NSWindow, phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?, stopHotkeyHint: String, isCancelling: Bool, onStop: @escaping () -> Void) {
+    private func updateIndicatorPhase(window: NSWindow, phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?, stopHotkeyHint: String, isCancelling: Bool, isLarge: Bool, highContrast: Bool, onStop: @escaping () -> Void) {
         guard let hosting = window.contentViewController as? NSHostingController<LocalizedRoot<RecordingIndicatorView>> else {
             return
         }
@@ -467,7 +479,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             || inner.modelName != modelName
             || inner.modeName != modeName
             || inner.stopHotkeyHint != stopHotkeyHint
-            || inner.isCancelling != isCancelling {
+            || inner.isCancelling != isCancelling
+            || inner.isLarge != isLarge
+            || inner.highContrast != highContrast {
             hosting.rootView = LocalizedRoot(model: model) {
                 RecordingIndicatorView(
                     phase: phase,
@@ -478,14 +492,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     stopHotkeyHint: stopHotkeyHint,
                     onStop: onStop,
                     isCancelling: isCancelling,
+                    isLarge: isLarge,
+                    highContrast: highContrast,
                     feed: self.recordingLevelFeed
                 )
             }
         }
     }
 
-    private func makeRecordingIndicatorWindow(phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?, stopHotkeyHint: String, isCancelling: Bool, onStop: @escaping () -> Void) -> NSWindow {
-        let size = NSSize(width: 260, height: 98)
+    private func makeRecordingIndicatorWindow(phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?, stopHotkeyHint: String, isCancelling: Bool, isLarge: Bool, highContrast: Bool, onStop: @escaping () -> Void) -> NSWindow {
+        let scale = isLarge ? RecordingIndicatorView.largeScale : 1.0
+        let size = NSSize(width: RecordingIndicatorView.baseSize.width * scale, height: RecordingIndicatorView.baseSize.height * scale)
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -514,6 +531,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     stopHotkeyHint: stopHotkeyHint,
                     onStop: onStop,
                     isCancelling: isCancelling,
+                    isLarge: isLarge,
+                    highContrast: highContrast,
                     feed: self.recordingLevelFeed
                 )
             }

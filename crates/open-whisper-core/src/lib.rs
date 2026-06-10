@@ -593,6 +593,11 @@ pub struct AppSettings {
     pub show_recording_indicator: bool,
     pub waveform_style: WaveformStyle,
     pub waveform_color: WaveformColor,
+    /// Larger recording bubble for low-vision users (roughly 1.7x).
+    pub large_recording_indicator: bool,
+    /// Higher-contrast recording bubble (stronger background, bolder text,
+    /// more saturated waveform/dot colors). Independent of the large toggle.
+    pub high_contrast_recording_indicator: bool,
     pub local_model: ModelPreset,
     pub local_model_path: String,
     pub local_llm: LlmPreset,
@@ -795,6 +800,8 @@ impl Default for AppSettings {
             show_recording_indicator: true,
             waveform_style: WaveformStyle::default(),
             waveform_color: WaveformColor::default(),
+            large_recording_indicator: false,
+            high_contrast_recording_indicator: false,
             local_model: ModelPreset::default(),
             local_model_path: String::new(),
             local_llm: LlmPreset::default(),

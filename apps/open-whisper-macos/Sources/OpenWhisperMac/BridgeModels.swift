@@ -651,6 +651,8 @@ struct AppSettings: Codable, Equatable {
     var showRecordingIndicator: Bool
     var waveformStyle: WaveformStyle
     var waveformColor: WaveformColor
+    var largeRecordingIndicator: Bool
+    var highContrastRecordingIndicator: Bool
     var localModel: ModelPreset
     var localModelPath: String
     var localLlm: LlmPreset
@@ -689,6 +691,8 @@ struct AppSettings: Codable, Equatable {
         showRecordingIndicator: true,
         waveformStyle: .centeredBars,
         waveformColor: .accent,
+        largeRecordingIndicator: false,
+        highContrastRecordingIndicator: false,
         localModel: .standard,
         localModelPath: "",
         localLlm: .medium,

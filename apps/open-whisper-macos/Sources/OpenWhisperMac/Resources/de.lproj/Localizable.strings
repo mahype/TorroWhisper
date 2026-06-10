@@ -6,6 +6,8 @@
 "Stop: %@" = "Beenden: %@";
 "Cancel: Esc" = "Abbrechen: Esc";
 "Cancelling — saving to history…" = "Wird abgebrochen – in Historie gespeichert…";
+"Large view (easier to read)" = "Große Ansicht (besser lesbar)";
+"High contrast" = "Hoher Kontrast";
 "Permissions" = "Berechtigungen";
 "Microphone access granted." = "Mikrofon-Zugriff erteilt.";
 "Accessibility access granted." = "Bedienungshilfen-Zugriff erteilt.";

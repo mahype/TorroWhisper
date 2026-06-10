@@ -69,17 +69,58 @@ struct RecordingIndicatorView: View {
     /// a "being cancelled" hint so the user knows work is still happening (and
     /// will be archived, not inserted).
     var isCancelling: Bool = false
+    /// Larger bubble for low-vision users (accessibility). Scales every
+    /// dimension and font; the window frame in AppDelegate scales to match.
+    var isLarge: Bool = false
+    /// Higher-contrast styling: bolder text, stronger text/background colors and
+    /// a heavier border. Independent of `isLarge`.
+    var highContrast: Bool = false
     @ObservedObject var feed: RecordingLevelFeed
     @Environment(\.locale) private var locale
 
+    /// Base bubble size at 1x. The window is sized to `baseSize * scale`.
+    static let baseSize = CGSize(width: 260, height: 98)
+    /// Scale factor applied when the large (low-vision) view is enabled.
+    static let largeScale: CGFloat = 1.7
+
+    private var scale: CGFloat { isLarge ? Self.largeScale : 1.0 }
+    private var leadingControlSize: CGFloat { 24 * scale }
+
+    private func scaledFont(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        .system(size: size * scale, weight: highContrast ? boostedWeight(weight) : weight)
+    }
+
+    private func boostedWeight(_ weight: Font.Weight) -> Font.Weight {
+        switch weight {
+        case .medium: return .semibold
+        case .semibold, .bold: return .bold
+        default: return .semibold
+        }
+    }
+
+    /// Model-name style: full primary in high-contrast mode, secondary otherwise.
+    private var primaryTextStyle: AnyShapeStyle {
+        highContrast ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
+    }
+    /// Mode-name / hint style: one step stronger in high-contrast mode.
+    private var subtleTextStyle: AnyShapeStyle {
+        highContrast ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary)
+    }
+
     var body: some View {
         content
-            .padding(10)
-            .frame(width: 260, height: 98)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(10 * scale)
+            .frame(width: Self.baseSize.width * scale, height: Self.baseSize.height * scale)
+            .background(
+                highContrast ? AnyShapeStyle(.ultraThickMaterial) : AnyShapeStyle(.regularMaterial),
+                in: RoundedRectangle(cornerRadius: 14 * scale, style: .continuous)
+            )
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 14 * scale, style: .continuous)
+                    .strokeBorder(
+                        highContrast ? Color.primary.opacity(0.35) : Color.primary.opacity(0.08),
+                        lineWidth: (highContrast ? 1.5 : 1) * scale
+                    )
             )
     }
 
@@ -91,12 +132,12 @@ struct RecordingIndicatorView: View {
             // the dark waveform area stays up top (flat while not recording) and
             // the status line stays put — only the leading icon (stop button vs.
             // phase dot) and the hint text swap out.
-            VStack(spacing: 8) {
+            VStack(spacing: 8 * scale) {
                 waveform
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(
-                        Color.black.opacity(0.85),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        Color.black.opacity(highContrast ? 1.0 : 0.85),
+                        in: RoundedRectangle(cornerRadius: 8 * scale, style: .continuous)
                     )
                 infoRow
             }
@@ -111,27 +152,27 @@ struct RecordingIndicatorView: View {
     /// next to the model name and a small phase hint underneath ("Stop:
     /// ⌃⇧Space" / "Transcription in progress…"), so every phase looks alike.
     private var infoRow: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 9 * scale) {
             leadingControl
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 1 * scale) {
                 if !modelName.isEmpty {
                     Text(modelName)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .font(scaledFont(11, weight: .medium))
+                        .foregroundStyle(primaryTextStyle)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
                 if let modeName, !modeName.isEmpty {
                     Text(modeName)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
+                        .font(scaledFont(10))
+                        .foregroundStyle(subtleTextStyle)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
                 if !phaseHint.isEmpty {
                     Text(phaseHint)
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
+                        .font(scaledFont(9))
+                        .foregroundStyle(subtleTextStyle)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
@@ -140,27 +181,23 @@ struct RecordingIndicatorView: View {
         }
     }
 
-    /// Fixed footprint shared by the stop button and the phase dot so the
-    /// status text never shifts horizontally when the phase changes.
-    private static let leadingControlSize: CGFloat = 24
-
     @ViewBuilder
     private var leadingControl: some View {
         if phase == .recording, let onStop {
             Button(action: onStop) {
                 Image(systemName: "stop.fill")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: 11 * scale, weight: .bold))
                     .foregroundStyle(.red)
-                    .frame(width: Self.leadingControlSize, height: Self.leadingControlSize)
-                    .background(Color.red.opacity(0.14), in: Circle())
+                    .frame(width: leadingControlSize, height: leadingControlSize)
+                    .background(Color.red.opacity(highContrast ? 0.24 : 0.14), in: Circle())
             }
             .buttonStyle(.plain)
             .help(L("Stop dictation", locale: locale))
             .accessibilityLabel(L("Stop dictation", locale: locale))
         } else {
             statusDot
-                .frame(width: Self.leadingControlSize, height: Self.leadingControlSize)
-                .background(statusDotColor.opacity(0.15), in: Circle())
+                .frame(width: leadingControlSize, height: leadingControlSize)
+                .background(statusDotColor.opacity(highContrast ? 0.25 : 0.15), in: Circle())
         }
     }
 
@@ -185,9 +222,9 @@ struct RecordingIndicatorView: View {
         TimelineView(.animation(minimumInterval: 0.05, paused: !isBlinkPhase)) { context in
             Circle()
                 .fill(statusDotColor)
-                .frame(width: 8, height: 8)
+                .frame(width: 8 * scale, height: 8 * scale)
                 .opacity(dotOpacity(at: context.date))
-                .shadow(color: phase == .recording ? Color.red.opacity(0.6) : .clear, radius: 3)
+                .shadow(color: phase == .recording ? Color.red.opacity(0.6) : .clear, radius: 3 * scale)
         }
     }
 
@@ -222,12 +259,12 @@ struct RecordingIndicatorView: View {
 
     @ViewBuilder
     private func modelNotReadyRow(label: String, progress: Double?, isDownloading: Bool) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 10 * scale) {
             statusDot
-                .padding(.top, 4)
-            VStack(alignment: .leading, spacing: 4) {
+                .padding(.top, 4 * scale)
+            VStack(alignment: .leading, spacing: 4 * scale) {
                 Text("Recording not possible", bundle: .module)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(scaledFont(13, weight: .medium))
                     .foregroundStyle(.primary)
                 if let progress, isDownloading {
                     let percent = Int((progress * 100.0).rounded())
@@ -274,11 +311,11 @@ struct RecordingIndicatorView: View {
     private var tint: Color { color.swiftUIColor }
 
     private var centeredBars: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 3 * scale) {
             ForEach(Array(feed.bars.enumerated()), id: \.offset) { _, level in
                 Capsule()
                     .fill(tint)
-                    .frame(width: 4, height: barHeight(for: level))
+                    .frame(width: 4 * scale, height: barHeight(for: level))
                     .animation(.linear(duration: RecordingLevelFeed.pollingInterval), value: level)
             }
         }
@@ -363,7 +400,7 @@ struct RecordingIndicatorView: View {
     }
 
     private func barHeight(for level: Float) -> CGFloat {
-        return max(2.0, normalizedLevel(level) * 48.0)
+        return max(2.0 * scale, normalizedLevel(level) * 48.0 * scale)
     }
 
     private func normalizedLevel(_ level: Float) -> CGFloat {

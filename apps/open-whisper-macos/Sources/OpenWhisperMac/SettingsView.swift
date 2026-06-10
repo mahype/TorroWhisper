@@ -213,6 +213,16 @@ struct SettingsView: View {
                 Text("Color", bundle: .module)
             }
             .disabled(!model.settings.showRecordingIndicator)
+
+            Toggle(isOn: model.binding(for: \.largeRecordingIndicator)) {
+                Text("Large view (easier to read)", bundle: .module)
+            }
+            .disabled(!model.settings.showRecordingIndicator)
+
+            Toggle(isOn: model.binding(for: \.highContrastRecordingIndicator)) {
+                Text("High contrast", bundle: .module)
+            }
+            .disabled(!model.settings.showRecordingIndicator)
         } header: {
             Text("Recording indicator", bundle: .module)
         }
