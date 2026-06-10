@@ -86,6 +86,17 @@ else
 fi
 lipo -info "$rust_lib_dir/libopen_whisper_bridge.a"
 
+# --- Force the Swift executable to re-link against the fresh Rust lib ---------
+# The Rust static library is pulled in via raw `-Xlinker -L` flags, so SwiftPM
+# does NOT track it as a build input. When only the Rust side changes, `swift
+# build` sees the Swift sources unchanged and skips re-linking — shipping a
+# binary built against a STALE libopen_whisper_bridge.a (e.g. missing newly
+# added settings fields). Delete the linked executables so SwiftPM must relink.
+rm -f \
+    "apps/open-whisper-macos/.build/release/OpenWhisperMac" \
+    "apps/open-whisper-macos/.build/apple/Products/Release/OpenWhisperMac" \
+    2>/dev/null || true
+
 # --- Swift executable --------------------------------------------------------
 
 if $build_universal; then
