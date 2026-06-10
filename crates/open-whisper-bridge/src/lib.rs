@@ -8,6 +8,7 @@ mod history_store;
 mod llm_model_manager;
 #[allow(dead_code)]
 mod local_llm;
+mod logging;
 #[allow(dead_code)]
 mod model_manager;
 mod permission_diagnostics;
@@ -55,6 +56,8 @@ struct BridgeRuntime {
     dictation_trigger_count: u64,
     last_status: String,
     last_transcript: String,
+    last_dictation_error: String,
+    dictation_error_count: u64,
     cancelled: Arc<AtomicBool>,
     history: Vec<HistoryEntry>,
     history_revision: u64,
@@ -68,6 +71,7 @@ struct PendingPostProcessing {
 
 impl BridgeRuntime {
     fn new() -> Self {
+        logging::init();
         let mut last_status = "Ready".to_owned();
         let mut settings = settings_store::load().unwrap_or_else(|err| {
             last_status = format!("Settings could not be loaded: {err}");
@@ -130,6 +134,8 @@ impl BridgeRuntime {
             dictation_trigger_count: 0,
             last_status,
             last_transcript: String::new(),
+            last_dictation_error: String::new(),
+            dictation_error_count: 0,
             cancelled: Arc::new(AtomicBool::new(false)),
             history: history_store::load().unwrap_or_default(),
             history_revision: 0,
@@ -172,8 +178,10 @@ impl BridgeRuntime {
                             "Post-processing '{}' via {} failed. Using raw transcript. {err}",
                             pending.mode_name, pending.provider_label
                         );
+                        log::warn!(target: "bridge", "{fallback_status}");
                         self.finish_transcript(pending.raw_transcript, &fallback_status, was_cancelled);
                     } else if !was_cancelled {
+                        log::warn!(target: "bridge", "post-processing failed: {err}");
                         self.last_status = err;
                     }
                 }
@@ -185,8 +193,10 @@ impl BridgeRuntime {
                             "Post-processing '{}' stopped unexpectedly. Using raw transcript.",
                             pending.mode_name
                         );
+                        log::warn!(target: "bridge", "{fallback_status}");
                         self.finish_transcript(pending.raw_transcript, &fallback_status, was_cancelled);
                     } else if !was_cancelled {
+                        log::warn!(target: "bridge", "post-processing worker stopped unexpectedly");
                         self.last_status =
                             "Post-processing worker stopped unexpectedly.".to_owned();
                     }
@@ -232,6 +242,9 @@ impl BridgeRuntime {
                     if !self.cancelled.load(Ordering::Relaxed) {
                         self.last_status = message;
                     }
+                }
+                DictationOutcome::Error(message) => {
+                    self.report_dictation_error(message);
                 }
                 DictationOutcome::TranscriptReady(transcript) => {
                     let was_cancelled = self.cancelled.load(Ordering::Relaxed);
@@ -281,6 +294,18 @@ impl BridgeRuntime {
         self.cancelled = Arc::new(AtomicBool::new(false));
     }
 
+    /// Records a dictation failure so the UI can surface it: bumps the error
+    /// counter (polled by the app for the red bubble phase), keeps the
+    /// message for display, and writes it to the log file.
+    fn report_dictation_error(&mut self, message: String) {
+        log::error!(target: "dictation", "{message}");
+        self.dictation_error_count = self.dictation_error_count.wrapping_add(1);
+        self.last_dictation_error = message.clone();
+        if !self.cancelled.load(Ordering::Relaxed) {
+            self.last_status = message;
+        }
+    }
+
     fn cancel_dictation(&mut self) -> Result<String, String> {
         let was_recording = self.dictation.is_recording();
         let was_transcribing = self.dictation.is_transcribing();
@@ -293,6 +318,10 @@ impl BridgeRuntime {
             return Ok(self.last_status.clone());
         }
 
+        log::info!(
+            target: "dictation",
+            "dictation cancelled (recording: {was_recording}, transcribing: {was_transcribing}, post-processing: {was_post_processing})"
+        );
         self.cancelled.store(true, Ordering::Relaxed);
         self.dictation.clear_blocked();
 
@@ -351,6 +380,7 @@ impl BridgeRuntime {
         if self.settings.insert_text_automatically {
             match text_inserter::insert_text_into_active_app(&transcript, &self.settings) {
                 Ok(message) => {
+                    log::info!(target: "bridge", "transcript inserted ({} chars)", transcript.chars().count());
                     if ready_status.is_empty() {
                         self.last_status = message;
                     } else {
@@ -359,11 +389,15 @@ impl BridgeRuntime {
                 }
                 Err(err) => match text_inserter::copy_to_clipboard(&transcript) {
                     Ok(()) => {
-                        self.last_status =
-                            "Einfuegen fehlgeschlagen – Text in Zwischenablage kopiert.".to_owned();
+                        log::error!(target: "bridge", "text insertion failed, copied to clipboard instead: {err}");
+                        self.report_dictation_error(
+                            "Einfuegen fehlgeschlagen – Text in Zwischenablage kopiert.".to_owned(),
+                        );
                     }
                     Err(clip_err) => {
-                        self.last_status = format!("{err} Zwischenablage-Fallback: {clip_err}");
+                        self.report_dictation_error(format!(
+                            "{err} Zwischenablage-Fallback: {clip_err}"
+                        ));
                     }
                 },
             }
@@ -846,6 +880,8 @@ impl BridgeRuntime {
         let is_transcribing = self.dictation.is_transcribing();
         let is_post_processing = self.post_processing_rx.is_some();
         RuntimeStatusDto {
+            last_dictation_error: self.last_dictation_error.clone(),
+            dictation_error_count: self.dictation_error_count,
             is_recording: self.dictation.is_recording(),
             is_transcribing,
             is_post_processing,
@@ -1133,6 +1169,38 @@ fn validate_hotkey_text(raw_hotkey: &str) -> Result<String, String> {
     })?;
 
     Ok(hotkey.to_owned())
+}
+
+#[derive(Deserialize)]
+struct LogMessageRequest {
+    level: String,
+    message: String,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_get_log_path() -> *mut c_char {
+    logging::init();
+    response_ok(logging::log_path().display().to_string())
+}
+
+/// Lets the Swift host app write into the shared log file. Levels: "error",
+/// "warn", "debug"; anything else logs at info.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_log_message(request_json: *const c_char) -> *mut c_char {
+    logging::init();
+    let result = parse_json_arg::<LogMessageRequest>(request_json, "LogMessageRequest").map(
+        |request| {
+            let level = match request.level.as_str() {
+                "error" => log::Level::Error,
+                "warn" => log::Level::Warn,
+                "debug" => log::Level::Debug,
+                _ => log::Level::Info,
+            };
+            log::log!(target: "app", level, "{}", request.message);
+            "ok".to_owned()
+        },
+    );
+    response_from_result(result)
 }
 
 #[unsafe(no_mangle)]

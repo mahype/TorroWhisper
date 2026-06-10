@@ -943,6 +943,12 @@ pub struct RuntimeStatusDto {
     pub is_cancelling: bool,
     pub last_status: String,
     pub last_transcript: String,
+    /// Message of the most recent dictation failure (recording could not
+    /// start, transcription error, worker panic, insertion failure).
+    pub last_dictation_error: String,
+    /// Bumped on every dictation failure; the app compares it against the
+    /// last seen value to drive the error state of the recording bubble.
+    pub dictation_error_count: u64,
     pub dictation_trigger_count: u64,
     pub hotkey_registered: bool,
     pub hotkey_text: String,

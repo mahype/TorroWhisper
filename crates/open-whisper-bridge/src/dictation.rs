@@ -27,6 +27,10 @@ const RECORDING_CANCEL_NOTES: [(f32, u32); 3] = [(523.25, 50), (392.00, 60), (32
 pub enum DictationOutcome {
     Status(String),
     TranscriptReady(String),
+    /// A dictation step failed and the user should see it (recording could
+    /// not start, transcription errored, worker thread died). Unlike
+    /// `Status`, this feeds the error indicator in the UI.
+    Error(String),
 }
 
 pub struct DictationController {
@@ -227,12 +231,12 @@ impl DictationController {
                 if pressed {
                     match self.start_recording(settings) {
                         Ok(message) => vec![DictationOutcome::Status(message)],
-                        Err(err) => vec![DictationOutcome::Status(err)],
+                        Err(err) => vec![DictationOutcome::Error(err)],
                     }
                 } else {
                     match self.stop_recording_and_transcribe(settings, "key released", RecordingCue::Stop) {
                         Ok(outcomes) => outcomes,
-                        Err(err) => vec![DictationOutcome::Status(err)],
+                        Err(err) => vec![DictationOutcome::Error(err)],
                     }
                 }
             }
@@ -244,12 +248,12 @@ impl DictationController {
                 if self.is_recording() {
                     match self.stop_recording_and_transcribe(settings, "toggle stopped", RecordingCue::Stop) {
                         Ok(outcomes) => outcomes,
-                        Err(err) => vec![DictationOutcome::Status(err)],
+                        Err(err) => vec![DictationOutcome::Error(err)],
                     }
                 } else {
                     match self.start_recording(settings) {
                         Ok(message) => vec![DictationOutcome::Status(message)],
-                        Err(err) => vec![DictationOutcome::Status(err)],
+                        Err(err) => vec![DictationOutcome::Error(err)],
                     }
                 }
             }
@@ -276,6 +280,11 @@ impl DictationController {
         self.active_input_device_name = used_name.clone();
         self.clear_blocked();
         play_recording_cue(RecordingCue::Start);
+        log::info!(
+            target: "dictation",
+            "recording started via '{used_name}' (vad: {})",
+            settings.vad_enabled
+        );
 
         Ok(format!(
             "Recording started via '{}'{}.",
@@ -311,9 +320,32 @@ impl DictationController {
         let app_settings = settings.clone();
         let (tx, rx) = mpsc::channel();
 
+        let audio_duration = audio.duration;
+        log::info!(
+            target: "dictation",
+            "recording stopped ({reason}): {:.1}s audio, starting transcription with '{}'",
+            audio_duration.as_secs_f32(),
+            settings.local_model.display_label()
+        );
+
         thread::spawn(move || {
+            let started = Instant::now();
             let result =
                 transcribe_with_whisper(context, &app_settings, audio, language.as_deref());
+            match &result {
+                Ok(text) => log::info!(
+                    target: "dictation",
+                    "transcription finished in {:.1}s ({} chars from {:.1}s audio)",
+                    started.elapsed().as_secs_f32(),
+                    text.chars().count(),
+                    audio_duration.as_secs_f32()
+                ),
+                Err(err) => log::error!(
+                    target: "dictation",
+                    "transcription failed after {:.1}s: {err}",
+                    started.elapsed().as_secs_f32()
+                ),
+            }
             let _ = tx.send(result);
         });
 
@@ -348,7 +380,7 @@ impl DictationController {
             Some(RecordingEvent::SilenceDetected) => {
                 match self.stop_recording_and_transcribe(settings, "silence detected", RecordingCue::Stop) {
                     Ok(new_outcomes) => outcomes.extend(new_outcomes),
-                    Err(err) => outcomes.push(DictationOutcome::Status(err)),
+                    Err(err) => outcomes.push(DictationOutcome::Error(err)),
                 }
             }
             Some(RecordingEvent::StreamError(err)) => {
@@ -359,7 +391,7 @@ impl DictationController {
                     }
                     None => {
                         self.recording.take();
-                        outcomes.push(DictationOutcome::Status(err));
+                        outcomes.push(DictationOutcome::Error(err));
                     }
                 }
             }
@@ -377,11 +409,14 @@ impl DictationController {
                 }
                 Ok(Err(err)) => {
                     self.transcription_rx = None;
-                    outcomes.push(DictationOutcome::Status(err));
+                    outcomes.push(DictationOutcome::Error(err));
                 }
                 Err(TryRecvError::Disconnected) => {
+                    // The worker thread died without sending a result — most
+                    // likely a panic inside whisper. The panic hook has the
+                    // details in the log.
                     self.transcription_rx = None;
-                    outcomes.push(DictationOutcome::Status(
+                    outcomes.push(DictationOutcome::Error(
                         "Transcription worker stopped unexpectedly.".to_owned(),
                     ));
                 }
@@ -412,11 +447,23 @@ impl DictationController {
         }
 
         let model_path_string = model_path.to_string_lossy().to_string();
+        let load_started = Instant::now();
         let context = WhisperContext::new_with_params(
             &model_path_string,
             WhisperContextParameters::default(),
         )
-        .map_err(|err| format!("Whisper model could not be loaded: {err}"))?;
+        .map_err(|err| {
+            log::error!(
+                target: "dictation",
+                "whisper model load failed ({model_path_string}): {err}"
+            );
+            format!("Whisper model could not be loaded: {err}")
+        })?;
+        log::info!(
+            target: "dictation",
+            "whisper model loaded in {:.1}s ({model_path_string})",
+            load_started.elapsed().as_secs_f32()
+        );
 
         let context = Arc::new(context);
         self.model_cache = Some(ModelCache {

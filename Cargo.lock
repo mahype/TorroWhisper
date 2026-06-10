@@ -1716,6 +1716,7 @@ dependencies = [
  "enigo",
  "global-hotkey",
  "llama-cpp-2",
+ "log",
  "once_cell",
  "open-whisper-core",
  "regex",
