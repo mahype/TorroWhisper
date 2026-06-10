@@ -21,7 +21,19 @@ extension UiLanguage {
 
 extension AppSettings {
     var effectiveLocale: Locale {
-        uiLanguage.explicitLocale ?? Locale.current
+        if let explicit = uiLanguage.explicitLocale {
+            return explicit
+        }
+        // .system — derive from the user's preferred languages directly.
+        // `Locale.current` is filtered through the app's own bundle
+        // localizations and falls back to the development region (en) when the
+        // app isn't recognized as German-localized, so it reports English even
+        // though the system language is German. `Locale.preferredLanguages`
+        // reflects the real system setting.
+        if let preferred = Locale.preferredLanguages.first {
+            return Locale(identifier: preferred)
+        }
+        return Locale.current
     }
 }
 
