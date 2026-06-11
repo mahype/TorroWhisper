@@ -519,6 +519,7 @@ impl Default for DictionaryEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
+#[derive(Default)]
 pub struct HistoryEntry {
     pub id: String,
     pub text: String,
@@ -526,19 +527,6 @@ pub struct HistoryEntry {
     pub mode_id: String,
     pub mode_name: String,
     pub was_cancelled: bool,
-}
-
-impl Default for HistoryEntry {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            text: String::new(),
-            timestamp: 0,
-            mode_id: String::new(),
-            mode_name: String::new(),
-            was_cancelled: false,
-        }
-    }
 }
 
 pub const HISTORY_MAX_ENTRIES_DEFAULT: u32 = 100;
@@ -555,21 +543,12 @@ fn default_history_max_entries() -> u32 {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
+#[derive(Default)]
 pub struct PreferredDevice {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uid: Option<String>,
     pub last_selected_at: i64,
-}
-
-impl Default for PreferredDevice {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            uid: None,
-            last_selected_at: 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -662,7 +641,7 @@ impl AppSettings {
 
     pub fn preferred_input_devices_sorted(&self) -> Vec<&PreferredDevice> {
         let mut list: Vec<&PreferredDevice> = self.preferred_input_devices.iter().collect();
-        list.sort_by(|a, b| b.last_selected_at.cmp(&a.last_selected_at));
+        list.sort_by_key(|device| std::cmp::Reverse(device.last_selected_at));
         list
     }
 

@@ -60,10 +60,10 @@ fn log_dir() -> PathBuf {
     {
         return PathBuf::from(dir);
     }
-    if cfg!(target_os = "macos") {
-        if let Some(base) = directories::BaseDirs::new() {
-            return base.home_dir().join("Library/Logs/OpenWhisper");
-        }
+    if cfg!(target_os = "macos")
+        && let Some(base) = directories::BaseDirs::new()
+    {
+        return base.home_dir().join("Library/Logs/OpenWhisper");
     }
     if let Some(dirs) = directories::ProjectDirs::from("", "", "OpenWhisper") {
         return dirs.data_local_dir().join("logs");

@@ -119,7 +119,13 @@ fn handle_request(
     }
     let model = &loaded.as_ref().expect("ensure_loaded just succeeded").model;
 
-    match generate(backend, model, request.n_ctx, &request.system_prompt, &request.text) {
+    match generate(
+        backend,
+        model,
+        request.n_ctx,
+        &request.system_prompt,
+        &request.text,
+    ) {
         Ok(text) => Response::success(text),
         Err(err) => Response::failure(err),
     }

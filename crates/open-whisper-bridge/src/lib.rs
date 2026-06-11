@@ -388,13 +388,12 @@ impl BridgeRuntime {
         // Save the transcript next to its MP3 (same base name) for completed
         // dictations only. Cancelled ones never carry a pending save, but clear
         // it defensively so it can't leak into the next dictation.
-        if let Some(base) = self.pending_transcript_save.take() {
-            if !was_cancelled && !transcript.trim().is_empty() {
-                if let Err(err) = audio_export::write_transcript(&self.settings, &base, &transcript)
-                {
-                    log::warn!(target: "bridge", "transcript export failed: {err}");
-                }
-            }
+        if let Some(base) = self.pending_transcript_save.take()
+            && !was_cancelled
+            && !transcript.trim().is_empty()
+            && let Err(err) = audio_export::write_transcript(&self.settings, &base, &transcript)
+        {
+            log::warn!(target: "bridge", "transcript export failed: {err}");
         }
 
         if was_cancelled {
