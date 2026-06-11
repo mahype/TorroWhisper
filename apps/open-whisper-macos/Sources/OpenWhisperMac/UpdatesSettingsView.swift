@@ -1,14 +1,11 @@
 import SwiftUI
 
 struct UpdatesSettingsView: View {
-    let updaterController: UpdaterController
+    @ObservedObject var updaterController: UpdaterController
 
     var body: some View {
         Section {
-            Toggle(isOn: Binding(
-                get: { updaterController.automaticallyChecksForUpdates },
-                set: { updaterController.automaticallyChecksForUpdates = $0 }
-            )) {
+            Toggle(isOn: $updaterController.automaticallyChecksForUpdates) {
                 Text("Automatically check for updates", bundle: .module)
             }
             .disabled(!updaterController.isAvailable)
@@ -19,6 +16,19 @@ struct UpdatesSettingsView: View {
                 Text("Check for updates now", bundle: .module)
             }
             .disabled(!updaterController.isAvailable)
+
+            if updaterController.isAvailable {
+                HStack(spacing: 4) {
+                    Text("Last checked:", bundle: .module)
+                    if let date = updaterController.lastUpdateCheckDate {
+                        Text(date, format: .dateTime.day().month().year().hour().minute())
+                    } else {
+                        Text("Never", bundle: .module)
+                    }
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
         } header: {
             Text("Automatic updates", bundle: .module)
         }

@@ -10,8 +10,18 @@ import Sparkle
 /// is no bundle identity or `SUFeedURL`, so starting Sparkle would surface the
 /// "Unable to Check For Updates" alert on every launch.
 @MainActor
-final class UpdaterController {
+final class UpdaterController: ObservableObject {
     private let controller: SPUStandardUpdaterController?
+
+    /// Mirrors Sparkle's setting so SwiftUI toggles update immediately.
+    @Published var automaticallyChecksForUpdates: Bool {
+        didSet {
+            guard let updater = controller?.updater,
+                  updater.automaticallyChecksForUpdates != automaticallyChecksForUpdates
+            else { return }
+            updater.automaticallyChecksForUpdates = automaticallyChecksForUpdates
+        }
+    }
 
     init() {
         if UpdaterController.isPackagedApp {
@@ -24,17 +34,16 @@ final class UpdaterController {
             self.controller = nil
             print("Sparkle disabled: running outside a packaged .app bundle")
         }
+        self.automaticallyChecksForUpdates =
+            controller?.updater.automaticallyChecksForUpdates ?? false
     }
 
     var isAvailable: Bool { controller != nil }
 
+    var lastUpdateCheckDate: Date? { controller?.updater.lastUpdateCheckDate }
+
     func checkForUpdates() {
         controller?.checkForUpdates(nil)
-    }
-
-    var automaticallyChecksForUpdates: Bool {
-        get { controller?.updater.automaticallyChecksForUpdates ?? false }
-        set { controller?.updater.automaticallyChecksForUpdates = newValue }
     }
 
     private static var isPackagedApp: Bool {

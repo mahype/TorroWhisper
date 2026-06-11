@@ -111,6 +111,7 @@
 "Large" = "Groß";
 "Large language model (Gemma 4 26B A4B, Mixture-of-Experts) with best quality — needs 32 GB of RAM or more." = "Großes Sprachmodell (Gemma 4 26B A4B, Mixture-of-Experts) mit bester Qualität, braucht 32 GB RAM oder mehr.";
 "Larger model with higher accuracy and more CPU/RAM demand." = "Größeres Modell mit höherer Genauigkeit und mehr CPU-/RAM-Bedarf.";
+"Last checked:" = "Zuletzt geprüft:";
 "Launch at login" = "Mit dem System starten";
 "Launch manually only" = "Nur manuell starten";
 "Line" = "Linie";
@@ -132,6 +133,7 @@
 "Model loading: %@" = "Modell lädt: %@";
 "Model loading: %@ (%d%%)" = "Modell lädt: %@ (%d%%)";
 "Name" = "Name";
+"Never" = "Noch nie";
 "New post-processing" = "Neue Nachbearbeitung";
 "Next" = "Weiter";
 "No custom language models added yet." = "Noch keine eigenen Sprachmodelle hinzugefügt.";
