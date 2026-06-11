@@ -1096,6 +1096,12 @@ final class AppModel: ObservableObject {
         requestAutoSave()
     }
 
+    /// Opens the configured "save to disk" folder in Finder.
+    func revealSaveDirectoryInFinder() {
+        guard !settings.saveDirectory.isEmpty else { return }
+        NSWorkspace.shared.open(URL(fileURLWithPath: settings.saveDirectory, isDirectory: true))
+    }
+
     /// Current macOS authorization status for the microphone.
     var microphoneAuthorizationStatus: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .audio)

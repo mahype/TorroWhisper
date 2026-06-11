@@ -14,6 +14,7 @@
 "Folder" = "Folder";
 "No folder selected" = "No folder selected";
 "Choose folder…" = "Choose folder…";
+"Show in Finder" = "Show in Finder";
 "Choose" = "Choose";
 "Saves each completed dictation into the chosen folder: the recording as MP3 and/or the transcript as a .txt, with matching timestamped names. A folder must be selected; cancelled dictations are not saved." = "Saves each completed dictation into the chosen folder: the recording as MP3 and/or the transcript as a .txt, with matching timestamped names. A folder must be selected; cancelled dictations are not saved.";
 "Permissions" = "Permissions";

@@ -351,10 +351,18 @@ struct SettingsView: View {
             } label: {
                 Text("Folder", bundle: .module)
             }
-            Button {
-                model.chooseSaveDirectory()
-            } label: {
-                Text("Choose folder…", bundle: .module)
+            HStack {
+                Button {
+                    model.chooseSaveDirectory()
+                } label: {
+                    Text("Choose folder…", bundle: .module)
+                }
+                Button {
+                    model.revealSaveDirectoryInFinder()
+                } label: {
+                    Text("Show in Finder", bundle: .module)
+                }
+                .disabled(model.settings.saveDirectory.isEmpty)
             }
         } header: {
             Text("Save to disk", bundle: .module)
