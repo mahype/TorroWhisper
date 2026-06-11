@@ -26,6 +26,12 @@
 "Grant accessibility access" = "Grant accessibility access";
 "Required to record your dictation." = "Required to record your dictation.";
 "Needed so Open Whisper can type the transcribed text into other apps." = "Needed so Open Whisper can type the transcribed text into other apps.";
+"Permissions missing" = "Permissions missing";
+"Grant permissions" = "Grant permissions";
+"Continue anyway" = "Continue anyway";
+"Without microphone and accessibility access, Open Whisper cannot record dictation or insert text into other apps. Do you really want to continue?" = "Without microphone and accessibility access, Open Whisper cannot record dictation or insert text into other apps. Do you really want to continue?";
+"Without microphone access, Open Whisper cannot record your dictation. Do you really want to continue?" = "Without microphone access, Open Whisper cannot record your dictation. Do you really want to continue?";
+"Without accessibility access, Open Whisper cannot insert the transcribed text into other apps. Do you really want to continue?" = "Without accessibility access, Open Whisper cannot insert the transcribed text into other apps. Do you really want to continue?";
 "Check again" = "Check again";
 "After granting a permission in System Settings, tap 'Check again' to refresh the status here." = "After granting a permission in System Settings, tap 'Check again' to refresh the status here.";
 "A post-processing model is installed." = "A post-processing model is installed.";

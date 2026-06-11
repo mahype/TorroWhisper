@@ -7,8 +7,10 @@ struct OnboardingView: View {
 
     @State private var isManagingLanguageModels = false
     @State private var managerTab: LanguageModelsManagerTab = .postProcessing
+    @State private var showsPermissionWarning = false
 
     private static let lastStep = 5
+    private static let permissionsStep = 2
 
     var body: some View {
         HStack(spacing: 0) {
@@ -34,6 +36,33 @@ struct OnboardingView: View {
                 isManagingLanguageModels = false
             }
         }
+        .alert(Text("Permissions missing", bundle: .module), isPresented: $showsPermissionWarning) {
+            Button(role: .cancel) {
+            } label: {
+                Text("Grant permissions", bundle: .module)
+            }
+            Button {
+                model.onboardingStep = min(Self.lastStep, model.onboardingStep + 1)
+            } label: {
+                Text("Continue anyway", bundle: .module)
+            }
+        } message: {
+            Text(permissionWarningMessageKey, bundle: .module)
+        }
+    }
+
+    /// Which warning to show when the user tries to leave the permissions step
+    /// without granting everything — names exactly what is still missing.
+    private var permissionWarningMessageKey: LocalizedStringKey {
+        let microphoneMissing = model.microphoneAuthorizationStatus != .authorized
+        let accessibilityMissing = !model.accessibilityTrusted
+        if microphoneMissing && accessibilityMissing {
+            return "Without microphone and accessibility access, Open Whisper cannot record dictation or insert text into other apps. Do you really want to continue?"
+        }
+        if microphoneMissing {
+            return "Without microphone access, Open Whisper cannot record your dictation. Do you really want to continue?"
+        }
+        return "Without accessibility access, Open Whisper cannot insert the transcribed text into other apps. Do you really want to continue?"
     }
 
     private var stepTitle: String {
@@ -332,7 +361,7 @@ struct OnboardingView: View {
                 .keyboardShortcut(.defaultAction)
             } else {
                 Button {
-                    model.onboardingStep = min(Self.lastStep, model.onboardingStep + 1)
+                    advanceToNextStep()
                 } label: {
                     Text("Next", bundle: .module)
                 }
@@ -344,6 +373,18 @@ struct OnboardingView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(.regularMaterial)
+    }
+
+    /// Advances the wizard, but intercepts leaving the permissions step while a
+    /// required permission is still missing: instead of moving on silently, a
+    /// warning dialog explains the consequences and asks for confirmation.
+    private func advanceToNextStep() {
+        if model.onboardingStep == Self.permissionsStep,
+           model.microphoneAuthorizationStatus != .authorized || !model.accessibilityTrusted {
+            showsPermissionWarning = true
+            return
+        }
+        model.onboardingStep = min(Self.lastStep, model.onboardingStep + 1)
     }
 
     /// One permission entry: a green "granted" confirmation once the access is
