@@ -1084,6 +1084,7 @@ final class AppModel: ObservableObject {
     func chooseSaveDirectory() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.prompt = L("Choose", locale: settings.effectiveLocale)
