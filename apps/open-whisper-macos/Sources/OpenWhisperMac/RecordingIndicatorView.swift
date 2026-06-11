@@ -333,15 +333,23 @@ struct RecordingIndicatorView: View {
     private var tint: Color { color.swiftUIColor }
 
     private var centeredBars: some View {
-        HStack(spacing: 3 * scale) {
-            ForEach(Array(feed.bars.enumerated()), id: \.offset) { _, level in
-                Capsule()
-                    .fill(tint)
-                    .frame(width: 4 * scale, height: barHeight(for: level))
-                    .animation(.linear(duration: RecordingLevelFeed.pollingInterval), value: level)
+        // Size the bars from the space the layout actually grants (like the
+        // line/envelope styles do via GeometryReader). A fixed maximum bar
+        // height can exceed the waveform slot — `.frame(maxHeight: .infinity)`
+        // never shrinks below its child, so loud bars used to push the dark
+        // box (and with it the whole bubble layout) taller in sync with the
+        // audio level.
+        GeometryReader { geo in
+            HStack(spacing: 3 * scale) {
+                ForEach(Array(feed.bars.enumerated()), id: \.offset) { _, level in
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: 4 * scale, height: barHeight(for: level, available: geo.size.height))
+                        .animation(.linear(duration: RecordingLevelFeed.pollingInterval), value: level)
+                }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .frame(maxWidth: .infinity)
     }
 
     private var lineWave: some View {
@@ -421,8 +429,8 @@ struct RecordingIndicatorView: View {
         }
     }
 
-    private func barHeight(for level: Float) -> CGFloat {
-        return max(2.0 * scale, normalizedLevel(level) * 48.0 * scale)
+    private func barHeight(for level: Float, available: CGFloat) -> CGFloat {
+        max(2.0 * scale, min(normalizedLevel(level) * available, available))
     }
 
     private func normalizedLevel(_ level: Float) -> CGFloat {
