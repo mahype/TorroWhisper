@@ -66,11 +66,11 @@ esac
 # --- Rust static library -----------------------------------------------------
 
 if $build_universal; then
-    echo "==> Building Rust static library for aarch64-apple-darwin"
-    cargo build --release --target aarch64-apple-darwin -p open-whisper-bridge
+    echo "==> Building Rust static library + LLM helper for aarch64-apple-darwin"
+    cargo build --release --target aarch64-apple-darwin -p open-whisper-bridge -p open-whisper-llm-helper
 
-    echo "==> Building Rust static library for x86_64-apple-darwin"
-    cargo build --release --target x86_64-apple-darwin -p open-whisper-bridge
+    echo "==> Building Rust static library + LLM helper for x86_64-apple-darwin"
+    cargo build --release --target x86_64-apple-darwin -p open-whisper-bridge -p open-whisper-llm-helper
 
     echo "==> Lipo'ing universal Rust static library"
     mkdir -p target/universal/release
@@ -78,13 +78,20 @@ if $build_universal; then
         target/aarch64-apple-darwin/release/libopen_whisper_bridge.a \
         target/x86_64-apple-darwin/release/libopen_whisper_bridge.a \
         -output target/universal/release/libopen_whisper_bridge.a
+
+    echo "==> Lipo'ing universal LLM helper"
+    lipo -create \
+        target/aarch64-apple-darwin/release/open-whisper-llm-helper \
+        target/x86_64-apple-darwin/release/open-whisper-llm-helper \
+        -output target/universal/release/open-whisper-llm-helper
     rust_lib_dir="$repo_root/target/universal/release"
 else
-    echo "==> Building Rust static library for $native_rust_target"
-    cargo build --release --target "$native_rust_target" -p open-whisper-bridge
+    echo "==> Building Rust static library + LLM helper for $native_rust_target"
+    cargo build --release --target "$native_rust_target" -p open-whisper-bridge -p open-whisper-llm-helper
     rust_lib_dir="$repo_root/target/$native_rust_target/release"
 fi
 lipo -info "$rust_lib_dir/libopen_whisper_bridge.a"
+lipo -info "$rust_lib_dir/open-whisper-llm-helper"
 
 # --- Force the Swift executable to re-link against the fresh Rust lib ---------
 # The Rust static library is pulled in via raw `-Xlinker -L` flags, so SwiftPM
@@ -144,6 +151,11 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 
 cp "$swift_build_bin" "$app/Contents/MacOS/OpenWhisperMac"
 cp apps/open-whisper-macos/Resources/Info.plist "$app/Contents/Info.plist"
+
+# The local LLM runs in its own process (ggml symbol isolation from whisper);
+# the bridge looks for the helper next to the main executable.
+cp "$rust_lib_dir/open-whisper-llm-helper" "$app/Contents/MacOS/open-whisper-llm-helper"
+chmod +x "$app/Contents/MacOS/open-whisper-llm-helper"
 
 if [[ -f apps/open-whisper-macos/Resources/AppIcon.icns ]]; then
     cp apps/open-whisper-macos/Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
@@ -224,14 +236,20 @@ install_name_tool -add_rpath "@executable_path/../Frameworks" "$app/Contents/Mac
 
 entitlements="apps/open-whisper-macos/Resources/OpenWhisper.entitlements"
 
+# The helper is a second Mach-O in Contents/MacOS; `codesign --deep` does not
+# reliably treat it as nested code, so sign it explicitly before the bundle.
 if [[ -n "${MACOS_SIGN_IDENTITY:-}" ]]; then
     echo "==> Signing with \"$MACOS_SIGN_IDENTITY\" (hardened runtime)"
+    codesign --force --timestamp --options=runtime \
+        --sign "$MACOS_SIGN_IDENTITY" \
+        "$app/Contents/MacOS/open-whisper-llm-helper"
     codesign --force --deep --timestamp --options=runtime \
         --entitlements "$entitlements" \
         --sign "$MACOS_SIGN_IDENTITY" \
         "$app"
 else
     echo "==> Ad-hoc signing (MACOS_SIGN_IDENTITY unset)"
+    codesign --force --sign - "$app/Contents/MacOS/open-whisper-llm-helper"
     codesign --force --deep --sign - \
         --entitlements "$entitlements" \
         "$app"

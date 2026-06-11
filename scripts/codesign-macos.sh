@@ -30,6 +30,11 @@ if [[ ! -d "$app" ]]; then
 fi
 
 echo "==> Signing $app with hardened runtime"
+# Sign the LLM helper explicitly first — `--deep` does not reliably treat a
+# second Mach-O in Contents/MacOS as nested code.
+codesign --force --timestamp --options=runtime \
+    --sign "$MACOS_SIGN_IDENTITY" \
+    "$app/Contents/MacOS/open-whisper-llm-helper"
 codesign --force --deep --timestamp --options=runtime \
     --entitlements "$entitlements" \
     --sign "$MACOS_SIGN_IDENTITY" \

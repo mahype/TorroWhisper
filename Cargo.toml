@@ -2,6 +2,7 @@
 members = [
     "crates/open-whisper-bridge",
     "crates/open-whisper-core",
+    "crates/open-whisper-llm-helper",
 ]
 resolver = "2"
 

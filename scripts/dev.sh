@@ -19,5 +19,10 @@ cat <<'BANNER'
 ────────────────────────────────────────────────────────────────
 BANNER
 
-cargo build -p open-whisper-bridge
+cargo build -p open-whisper-bridge -p open-whisper-llm-helper
+
+# The app looks for the LLM helper next to its own executable; in the SPM dev
+# loop the helper lives in target/, so point the bridge at it explicitly.
+export OW_LLM_HELPER="$repo_root/target/debug/open-whisper-llm-helper"
+
 swift run --package-path apps/open-whisper-macos OpenWhisperMac

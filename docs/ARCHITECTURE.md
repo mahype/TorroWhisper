@@ -23,16 +23,25 @@ Open Whisper is split into a **shared Rust core**, an **FFI bridge** that expose
 │  dictation.rs    cpal capture + whisper-rs transcription│
 │  model_manager   Whisper model download & cleanup       │
 │  llm_model_…     Local LLM GGUF download & cleanup      │
-│  local_llm.rs    llama-cpp-2 (Gemma 4, Metal)           │
+│  local_llm.rs    client for the LLM helper process      │
 │  post_processing Local + Ollama / LM Studio dispatcher  │
 │  remote_models   Ollama / LM Studio model listing       │
 │  autostart.rs    auto-launch wrapper (Dev fallback)     │
 │  settings_store  settings.json read/write               │
 │  text_inserter   arboard + enigo (clipboard + paste)    │
 │  permission_…    TCC / platform-specific probes         │
-└───────────┬─────────────────────────────────────────────┘
-            │ pure-Rust types & enums
-            ▼
+└──────┬────┬─────────────────────────────────────────────┘
+       │    │ line-based JSON over stdin/stdout
+       │    ▼
+       │ ┌──────────────────────────────────────────────┐
+       │ │  crates/open-whisper-llm-helper (executable) │
+       │ │  llama-cpp-2 (Gemma 4, Metal) in its own     │
+       │ │  process — whisper-rs and llama-cpp-2 bundle │
+       │ │  incompatible ggml revisions and must never  │
+       │ │  be linked into the same binary              │
+       │ └──────────────────────────────────────────────┘
+       │ pure-Rust types & enums
+       ▼
 ┌─────────────────────────────────────────────────────────┐
 │  crates/open-whisper-core  (no_std-friendly domain)     │
 │                                                         │
@@ -75,7 +84,7 @@ Module responsibilities:
 | [dictation.rs](../crates/open-whisper-bridge/src/dictation.rs) | Mic capture via `cpal`, VAD-based silence detection, whisper.cpp transcription |
 | [model_manager.rs](../crates/open-whisper-bridge/src/model_manager.rs) | Download, list, and delete Whisper `.bin` models |
 | [llm_model_manager.rs](../crates/open-whisper-bridge/src/llm_model_manager.rs) | Download, list, and delete local LLM GGUF files (Gemma 4 presets and user-added custom models) |
-| [local_llm.rs](../crates/open-whisper-bridge/src/local_llm.rs) | `llama-cpp-2` inference for Gemma 4 with Metal acceleration; idle-based auto-unload |
+| [local_llm.rs](../crates/open-whisper-bridge/src/local_llm.rs) | Client for the `open-whisper-llm-helper` process (line-based JSON over stdin/stdout); idle-based auto-unload and cancellation by killing the helper. llama-cpp-2 lives only in the helper: its bundled ggml is incompatible with whisper-rs's, and linking both into one binary mixes the duplicated symbols and crashes the app |
 | [post_processing.rs](../crates/open-whisper-bridge/src/post_processing.rs) | Applies the active `ProcessingMode`'s prompt via the resolved `PostProcessingChoice` — dispatches to `local_llm` or to Ollama / LM Studio over HTTP; 45 s timeout; cancellable |
 | [remote_models.rs](../crates/open-whisper-bridge/src/remote_models.rs) | Lists models exposed by a running Ollama or LM Studio endpoint for the backend picker |
 | [autostart.rs](../crates/open-whisper-bridge/src/autostart.rs) | `auto-launch` crate wrapper; writes a `LaunchAgent` plist on macOS, XDG autostart on Linux, registry on Windows. Used as a fallback when the app is **not** running from a `.app` bundle. |
