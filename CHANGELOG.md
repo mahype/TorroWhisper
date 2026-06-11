@@ -4,10 +4,20 @@ All notable changes to Open Whisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-06-11
+
+### Added
+- **Show in Finder** — the *Save to disk* section gains a button that opens the configured save folder in Finder, and the save-folder picker now allows creating new folders directly.
+- **Last update check visible** — Settings → Updates shows when Sparkle last checked for updates, and the auto-check toggle now reflects the Sparkle setting immediately.
+- **Warning when skipping permissions in onboarding** — leaving the permissions step without microphone or accessibility access no longer moves on silently; a dialog names exactly which access is missing, with an explicit *Continue anyway*.
+
 ### Fixed
 - **Random crashes during transcription** — whisper-rs and llama-cpp-2 each bundle their own, mutually incompatible ggml revision; statically linking both into the app binary silently mixed the two copies, so Whisper could dispatch wrong compute kernels and crash the whole app mid-dictation (the menu bar icon simply vanished). The local post-processing LLM now runs in a separate `open-whisper-llm-helper` process, giving each library its own consistent ggml. Cancelling post-processing or auto-unloading the model now terminates the helper, which also releases model memory more reliably.
 - **Recording bubble no longer burns CPU after hiding** — the hidden bubble kept its blink animation running at 20 fps in an invisible window (~25 % CPU and steadily growing memory until the next restart). The panel is now torn down completely when it hides.
 - **Recording bubble no longer pulses in height with the audio level** — the bar-style waveform used a fixed maximum bar height that could exceed the space the layout grants (e.g. with a post-processing mode line shown), so loud input pushed the waveform box taller and quiet passages let it collapse again. Bars now size themselves to the granted space, like the line and envelope styles always did.
+- **German UI fully translated** — status texts coming from the Rust core (launch-at-login state, dictation/transcription status, model summaries, diagnostics) were shown in English in the settings footer, the tray status line, VoiceOver announcements, and the diagnostics cards. They are now localized, together with the previously untranslated *Voice Activity Detection* label, the microphone-switch toggles, and the onboarding *Accessibility* tab. Conversely, English users no longer see German placeholder strings during startup.
+- **Dev builds no longer block Sparkle updates** — `CFBundleVersion` carried the `git describe` suffix (e.g. `0.4.0-4-gabc123`), which Sparkle compares as newer than every released version, so a locally installed dev build silently swallowed all updates. The suffix is now stripped for the compared version and kept only for display.
+- **Sparkle update dialog shows clean release notes** — the appcast embeds the release notes as inline HTML instead of rendering the entire GitHub release web page inside the update window, and the GitHub release is published before the appcast entry so the advertised download URL always exists.
 
 ## [0.4.0] — 2026-06-10
 
