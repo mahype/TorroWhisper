@@ -227,9 +227,17 @@ cp -R "$sparkle_framework_src" "$app/Contents/Frameworks/"
 # Add it so dyld can find the embedded framework at runtime.
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$app/Contents/MacOS/OpenWhisperMac"
 
+# Sparkle compares the appcast's sparkle:version against CFBundleVersion.
+# `git describe` suffixes (e.g. 0.4.0-4-g1a06bd2[-dirty]) compare as NEWER than
+# the released 0.4.0 — and even than 0.4.0 hotfix-less follow-ups — in Sparkle's
+# standard comparator, so an installed dev build silently blocked every update
+# until the next minor release. Keep the descriptive string for display, but
+# strip the describe suffix for the version Sparkle compares.
+BUNDLE_VERSION="$(printf '%s' "$VERSION" | sed -E 's/-[0-9]+-g[0-9a-f]+(-dirty)?$//; s/-dirty$//')"
+
 /usr/libexec/PlistBuddy \
     -c "Set :CFBundleShortVersionString $VERSION" \
-    -c "Set :CFBundleVersion $VERSION" \
+    -c "Set :CFBundleVersion $BUNDLE_VERSION" \
     "$app/Contents/Info.plist"
 
 # --- Sign ---------------------------------------------------------------------

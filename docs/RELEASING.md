@@ -116,8 +116,10 @@ The tool writes the key pair into your keychain and prints the **public key**. T
 The release workflow invokes [scripts/update-appcast.sh](../scripts/update-appcast.sh), which:
 
 1. Signs the built DMG with Sparkle's `sign_update` using `SPARKLE_ED_PRIVATE_KEY`.
-2. Prepends a new `<item>` to `appcast.xml` on the `gh-pages` branch, including the version, pub-date, minimum-system-version (14.0), signature, and the GitHub release-notes URL.
+2. Prepends a new `<item>` to `appcast.xml` on the `gh-pages` branch, including the version, pub-date, minimum-system-version (14.0), signature, and the release notes converted to inline HTML (`<description>`). Embedding the notes keeps the Sparkle dialog clean — a `releaseNotesLink` to github.com would render the entire GitHub web page inside the update window.
 3. Commits and pushes the updated appcast.
+
+Version comparison: Sparkle compares the appcast's `sparkle:version` against the installed app's `CFBundleVersion`. The build script strips `git describe` suffixes (`0.4.0-4-gabc123[-dirty]` → `0.4.0`) from `CFBundleVersion`; the full describe string stays visible in `CFBundleShortVersionString`. Without the strip, a locally installed dev build compares as newer than every released version and silently blocks updates.
 
 Users running a previous version will see the new release on their next scheduled check (every 24 h) or when they click *Settings → Updates → Check Now*.
 
