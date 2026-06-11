@@ -277,9 +277,8 @@ impl LocalLlmRuntime {
             let helper = self.helper.as_mut().expect("helper set for this request");
             match helper.responses.recv_timeout(CANCEL_POLL_INTERVAL) {
                 Ok(line) => {
-                    let response: HelperResponse = serde_json::from_str(&line).map_err(|err| {
-                        format!("LLM helper sent an unreadable response: {err}")
-                    })?;
+                    let response: HelperResponse = serde_json::from_str(&line)
+                        .map_err(|err| format!("LLM helper sent an unreadable response: {err}"))?;
                     self.last_used = Instant::now();
                     return if response.ok {
                         // The helper keeps exactly this model loaded until the
@@ -316,10 +315,7 @@ impl LocalLlmRuntime {
     }
 
     fn ensure_helper(&mut self) -> Result<(), String> {
-        let alive = self
-            .helper
-            .as_mut()
-            .is_some_and(HelperProcess::is_alive);
+        let alive = self.helper.as_mut().is_some_and(HelperProcess::is_alive);
         if !alive {
             self.unload();
             self.helper = Some(HelperProcess::spawn()?);

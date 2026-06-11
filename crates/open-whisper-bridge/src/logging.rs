@@ -222,10 +222,7 @@ mod tests {
 
     #[test]
     fn formats_epoch() {
-        assert_eq!(
-            format_utc_timestamp(UNIX_EPOCH),
-            "1970-01-01T00:00:00.000Z"
-        );
+        assert_eq!(format_utc_timestamp(UNIX_EPOCH), "1970-01-01T00:00:00.000Z");
     }
 
     #[test]

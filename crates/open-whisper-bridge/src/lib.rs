@@ -6,6 +6,7 @@ mod autostart;
 mod dictation;
 mod dictionary;
 mod history_store;
+mod i18n;
 #[allow(dead_code)]
 mod llm_model_manager;
 #[allow(dead_code)]
@@ -186,7 +187,11 @@ impl BridgeRuntime {
                             pending.mode_name, pending.provider_label
                         );
                         log::warn!(target: "bridge", "{fallback_status}");
-                        self.finish_transcript(pending.raw_transcript, &fallback_status, was_cancelled);
+                        self.finish_transcript(
+                            pending.raw_transcript,
+                            &fallback_status,
+                            was_cancelled,
+                        );
                     } else if !was_cancelled {
                         log::warn!(target: "bridge", "post-processing failed: {err}");
                         self.last_status = err;
@@ -201,7 +206,11 @@ impl BridgeRuntime {
                             pending.mode_name
                         );
                         log::warn!(target: "bridge", "{fallback_status}");
-                        self.finish_transcript(pending.raw_transcript, &fallback_status, was_cancelled);
+                        self.finish_transcript(
+                            pending.raw_transcript,
+                            &fallback_status,
+                            was_cancelled,
+                        );
                     } else if !was_cancelled {
                         log::warn!(target: "bridge", "post-processing worker stopped unexpectedly");
                         self.last_status =
@@ -345,7 +354,7 @@ impl BridgeRuntime {
             // leerer Text in record_history_entry).
             match self.dictation.stop_recording_and_transcribe(
                 &self.settings,
-                "abgebrochen",
+                "cancelled",
                 dictation::RecordingCue::Cancel,
             ) {
                 Ok(outcomes) => self.apply_dictation_outcomes(outcomes),
@@ -354,13 +363,11 @@ impl BridgeRuntime {
                     dictation::play_cancel_cue();
                 }
             }
-        } else if was_post_processing
-            && let Some(pending) = self.pending_post_processing.take()
-        {
+        } else if was_post_processing && let Some(pending) = self.pending_post_processing.take() {
             // Post-processing was running: we already have the raw Whisper
             // transcript. Save it to history now and skip the slow LLM result.
             self.post_processing_rx = None;
-            self.finish_transcript(pending.raw_transcript, "Diktat abgebrochen.", true);
+            self.finish_transcript(pending.raw_transcript, "Dictation cancelled.", true);
             dictation::play_cancel_cue();
         } else {
             // Whisper still transcribing (let it finish so TranscriptReady
@@ -368,8 +375,8 @@ impl BridgeRuntime {
             dictation::play_cancel_cue();
         }
 
-        if !self.last_status.starts_with("Diktat abgebrochen") {
-            self.last_status = "Diktat abgebrochen.".to_owned();
+        if !self.last_status.starts_with("Dictation cancelled") {
+            self.last_status = "Dictation cancelled.".to_owned();
         }
         Ok(self.last_status.clone())
     }
@@ -383,7 +390,8 @@ impl BridgeRuntime {
         // it defensively so it can't leak into the next dictation.
         if let Some(base) = self.pending_transcript_save.take() {
             if !was_cancelled && !transcript.trim().is_empty() {
-                if let Err(err) = audio_export::write_transcript(&self.settings, &base, &transcript) {
+                if let Err(err) = audio_export::write_transcript(&self.settings, &base, &transcript)
+                {
                     log::warn!(target: "bridge", "transcript export failed: {err}");
                 }
             }
@@ -391,9 +399,9 @@ impl BridgeRuntime {
 
         if was_cancelled {
             self.last_status = if self.settings.history_enabled && !transcript.trim().is_empty() {
-                "Diktat abgebrochen — in Historie gespeichert.".to_owned()
+                "Dictation cancelled — saved to history.".to_owned()
             } else {
-                "Diktat abgebrochen.".to_owned()
+                "Dictation cancelled.".to_owned()
             };
             return;
         }
@@ -412,12 +420,12 @@ impl BridgeRuntime {
                     Ok(()) => {
                         log::error!(target: "bridge", "text insertion failed, copied to clipboard instead: {err}");
                         self.report_dictation_error(
-                            "Einfuegen fehlgeschlagen – Text in Zwischenablage kopiert.".to_owned(),
+                            "Insertion failed – text copied to clipboard.".to_owned(),
                         );
                     }
                     Err(clip_err) => {
                         self.report_dictation_error(format!(
-                            "{err} Zwischenablage-Fallback: {clip_err}"
+                            "{err} Clipboard fallback: {clip_err}"
                         ));
                     }
                 },
@@ -556,7 +564,11 @@ impl BridgeRuntime {
         if self.settings.input_device_name != previous_input_device {
             let _ = settings_store::save(&self.settings);
         }
-        event
+        let lang = i18n::lang(&self.settings);
+        event.map(|mut event| {
+            event.message = i18n::translate(lang, &event.message);
+            event
+        })
     }
 
     fn model_status(&mut self) -> ModelStatusDto {
@@ -580,7 +592,10 @@ impl BridgeRuntime {
             preset_label: self.settings.local_model.display_label().to_owned(),
             backend_model_name: self.settings.local_model.whisper_model().to_owned(),
             path,
-            summary: self.model_downloads.summary(&self.settings),
+            summary: i18n::translate(
+                i18n::lang(&self.settings),
+                &self.model_downloads.summary(&self.settings),
+            ),
             is_downloaded,
             is_downloading: self.model_downloads.is_downloading(),
             progress_basis_points,
@@ -611,6 +626,7 @@ impl BridgeRuntime {
 
         let active_download = self.model_downloads.active_download_preset();
         let active_progress = self.model_downloads.progress_basis_points();
+        let lang = i18n::lang(&self.settings);
 
         ModelPreset::ALL
             .iter()
@@ -644,7 +660,7 @@ impl BridgeRuntime {
                     preset_label: preset.label().to_owned(),
                     backend_model_name: preset.whisper_model().to_owned(),
                     path,
-                    summary,
+                    summary: i18n::translate(lang, &summary),
                     is_downloaded,
                     is_downloading,
                     progress_basis_points,
@@ -664,6 +680,7 @@ impl BridgeRuntime {
             .and_then(|runtime| runtime.loaded_preset());
         let active_download = self.llm_downloads.active_download_preset();
         let active_progress = self.llm_downloads.progress_basis_points();
+        let lang = i18n::lang(&self.settings);
 
         LlmPreset::ALL
             .iter()
@@ -693,7 +710,7 @@ impl BridgeRuntime {
                     preset_label: preset.label().to_owned(),
                     display_label: preset.display_label().to_owned(),
                     path,
-                    summary,
+                    summary: i18n::translate(lang, &summary),
                     is_downloaded,
                     is_downloading,
                     is_loaded: loaded_preset == Some(preset),
@@ -720,6 +737,7 @@ impl BridgeRuntime {
             .and_then(|runtime| runtime.loaded_custom_id());
         let active_custom_download = self.llm_downloads.active_download_custom_id();
         let active_progress = self.llm_downloads.progress_basis_points();
+        let lang = i18n::lang(&self.settings);
 
         self.settings
             .custom_llm_models
@@ -729,12 +747,12 @@ impl BridgeRuntime {
                     CustomLlmSource::LocalPath { path } => (
                         Some(std::path::PathBuf::from(path)),
                         false,
-                        format!("Lokale Datei: {path}"),
+                        format!("Local file: {path}"),
                     ),
                     CustomLlmSource::DownloadUrl { url, .. } => (
                         llm_model_manager::default_custom_llm_path(&entry.id).ok(),
                         true,
-                        format!("Download-URL: {url}"),
+                        format!("Download URL: {url}"),
                     ),
                 };
                 let path_display = path_buf
@@ -752,7 +770,7 @@ impl BridgeRuntime {
                 CustomLlmStatusDto {
                     id: entry.id.clone(),
                     name: entry.name.clone(),
-                    source_label,
+                    source_label: i18n::translate(lang, &source_label),
                     path: path_display,
                     is_downloaded,
                     is_downloading,
@@ -836,12 +854,20 @@ impl BridgeRuntime {
 
     fn run_permission_diagnostics(&mut self) -> DiagnosticsDto {
         self.poll();
-        permission_diagnostics::collect(
+        let mut diagnostics = permission_diagnostics::collect(
             &self.settings,
             &self.dictation,
             self.hotkey.as_ref(),
             self.autostart.summary(),
-        )
+        );
+        let lang = i18n::lang(&self.settings);
+        diagnostics.summary = i18n::translate(lang, &diagnostics.summary);
+        for item in &mut diagnostics.items {
+            item.title = i18n::translate(lang, &item.title);
+            item.problem = i18n::translate(lang, &item.problem);
+            item.recommendation = i18n::translate(lang, &item.recommendation);
+        }
+        diagnostics
     }
 
     fn start_dictation(&mut self) -> Result<String, String> {
@@ -854,9 +880,11 @@ impl BridgeRuntime {
 
     fn stop_dictation(&mut self) -> Result<String, String> {
         self.poll();
-        let outcomes = self
-            .dictation
-            .stop_recording_and_transcribe(&self.settings, "Menueleisten-Aktion", dictation::RecordingCue::Stop)?;
+        let outcomes = self.dictation.stop_recording_and_transcribe(
+            &self.settings,
+            "menu bar action",
+            dictation::RecordingCue::Stop,
+        )?;
         self.apply_dictation_outcomes(outcomes);
         Ok(self.last_status.clone())
     }
@@ -900,15 +928,16 @@ impl BridgeRuntime {
 
         let is_transcribing = self.dictation.is_transcribing();
         let is_post_processing = self.post_processing_rx.is_some();
+        let lang = i18n::lang(&self.settings);
         RuntimeStatusDto {
-            last_dictation_error: self.last_dictation_error.clone(),
+            last_dictation_error: i18n::translate(lang, &self.last_dictation_error),
             dictation_error_count: self.dictation_error_count,
             is_recording: self.dictation.is_recording(),
             is_transcribing,
             is_post_processing,
             is_cancelling: self.cancelled.load(Ordering::Relaxed)
                 && (is_transcribing || is_post_processing),
-            last_status: self.last_status.clone(),
+            last_status: i18n::translate(lang, &self.last_status),
             last_transcript: self.last_transcript.clone(),
             dictation_trigger_count: self.dictation_trigger_count,
             hotkey_registered: self
@@ -920,8 +949,8 @@ impl BridgeRuntime {
                 .as_ref()
                 .and_then(HotKeyController::registered_text)
                 .unwrap_or_else(|| self.settings.hotkey.clone()),
-            startup_summary: self.autostart.summary().to_owned(),
-            provider_summary: self.settings.active_provider_summary(),
+            startup_summary: i18n::translate(lang, self.autostart.summary()),
+            provider_summary: i18n::translate(lang, &self.settings.active_provider_summary()),
             active_mode_name: self.settings.active_mode_name().to_owned(),
             onboarding_completed: self.settings.onboarding_completed,
             dictation_blocked_by_missing_model: is_blocked,
@@ -929,7 +958,10 @@ impl BridgeRuntime {
             blocked_model_is_downloading: blocked_is_downloading,
             blocked_model_progress_basis_points: blocked_progress,
             active_input_device_name: self.dictation.active_input_device_name().to_owned(),
-            last_mic_switch_message: self.dictation.last_mic_switch_message().to_owned(),
+            last_mic_switch_message: i18n::translate(
+                lang,
+                self.dictation.last_mic_switch_message(),
+            ),
             mic_switch_event_count: self.dictation.mic_switch_event_count(),
             history_revision: self.history_revision,
         }
@@ -1094,7 +1126,9 @@ struct CustomLlmIdRequest {
 fn with_runtime<T>(f: impl FnOnce(&mut BridgeRuntime) -> Result<T, String>) -> Result<T, String> {
     RUNTIME.with(|runtime| {
         let mut runtime = runtime.borrow_mut();
-        f(&mut runtime)
+        let result = f(&mut runtime);
+        let lang = i18n::lang(&runtime.settings);
+        result.map_err(|err| i18n::translate(lang, &err))
     })
 }
 
@@ -1209,8 +1243,8 @@ pub extern "C" fn ow_get_log_path() -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_log_message(request_json: *const c_char) -> *mut c_char {
     logging::init();
-    let result = parse_json_arg::<LogMessageRequest>(request_json, "LogMessageRequest").map(
-        |request| {
+    let result =
+        parse_json_arg::<LogMessageRequest>(request_json, "LogMessageRequest").map(|request| {
             let level = match request.level.as_str() {
                 "error" => log::Level::Error,
                 "warn" => log::Level::Warn,
@@ -1219,8 +1253,7 @@ pub extern "C" fn ow_log_message(request_json: *const c_char) -> *mut c_char {
             };
             log::log!(target: "app", level, "{}", request.message);
             "ok".to_owned()
-        },
-    );
+        });
     response_from_result(result)
 }
 

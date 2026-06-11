@@ -327,9 +327,9 @@
 "Transcription worker stopped unexpectedly." = "Transcription worker stopped unexpectedly.";
 "Post-processing worker stopped unexpectedly." = "Post-processing worker stopped unexpectedly.";
 "Hotkey needs a real key like Space, R, or F8 in addition to modifier keys." = "Hotkey needs a real key like Space, R, or F8 in addition to modifier keys.";
-"Diktat abgebrochen." = "Dictation cancelled.";
-"Diktat abgebrochen — in Historie gespeichert." = "Dictation cancelled — saved to history.";
-"Einfuegen fehlgeschlagen – Text in Zwischenablage kopiert." = "Insertion failed – text copied to clipboard.";
+"Dictation cancelled." = "Dictation cancelled.";
+"Dictation cancelled — saved to history." = "Dictation cancelled — saved to history.";
+"Insertion failed – text copied to clipboard." = "Insertion failed – text copied to clipboard.";
 
 /* Bridge status: model summaries */
 "No model status loaded yet." = "No model status loaded yet.";

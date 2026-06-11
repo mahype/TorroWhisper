@@ -25,5 +25,6 @@ regex = "1.11"
 reqwest = { version = "0.13.2", features = ["blocking", "json", "rustls"] }
 serde.workspace = true
 serde_json = "1.0.149"
+sys-locale = "0.3"
 sysinfo = { version = "0.38", default-features = false, features = ["system"] }
 whisper-rs = "0.16.0"

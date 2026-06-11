@@ -61,7 +61,8 @@ pub fn write_mp3(samples: &[f32], sample_rate: u32, path: &Path) -> Result<(), S
         .build()
         .map_err(|err| format!("MP3 encoder init: {err:?}"))?;
 
-    let mut out: Vec<u8> = Vec::with_capacity(mp3lame_encoder::max_required_buffer_size(samples.len()));
+    let mut out: Vec<u8> =
+        Vec::with_capacity(mp3lame_encoder::max_required_buffer_size(samples.len()));
     encoder
         .encode_to_vec(MonoPcm(samples), &mut out)
         .map_err(|err| format!("MP3 encode: {err:?}"))?;
@@ -74,7 +75,11 @@ pub fn write_mp3(samples: &[f32], sample_rate: u32, path: &Path) -> Result<(), S
 
 /// Writes the transcript to `{save_directory}/{base}.txt`. No-op if transcript
 /// saving is off or no directory is set.
-pub fn write_transcript(settings: &AppSettings, base: &str, transcript: &str) -> Result<(), String> {
+pub fn write_transcript(
+    settings: &AppSettings,
+    base: &str,
+    transcript: &str,
+) -> Result<(), String> {
     if guard_directory(settings).is_none() || !settings.save_transcripts {
         return Ok(());
     }

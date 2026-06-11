@@ -327,9 +327,9 @@
 "Transcription worker stopped unexpectedly." = "Transkriptionsprozess wurde unerwartet beendet.";
 "Post-processing worker stopped unexpectedly." = "Nachbearbeitungsprozess wurde unerwartet beendet.";
 "Hotkey needs a real key like Space, R, or F8 in addition to modifier keys." = "Der Hotkey braucht zusätzlich zu den Modifikatortasten eine echte Taste wie Leertaste, R oder F8.";
-"Diktat abgebrochen." = "Diktat abgebrochen.";
-"Diktat abgebrochen — in Historie gespeichert." = "Diktat abgebrochen — in Historie gespeichert.";
-"Einfuegen fehlgeschlagen – Text in Zwischenablage kopiert." = "Einfügen fehlgeschlagen – Text in Zwischenablage kopiert.";
+"Dictation cancelled." = "Diktat abgebrochen.";
+"Dictation cancelled — saved to history." = "Diktat abgebrochen — in Historie gespeichert.";
+"Insertion failed – text copied to clipboard." = "Einfügen fehlgeschlagen – Text in Zwischenablage kopiert.";
 
 /* Bridge-Status: Modell-Zusammenfassungen */
 "No model status loaded yet." = "Noch kein Modellstatus geladen.";

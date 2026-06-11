@@ -239,7 +239,11 @@ impl DictationController {
                         Err(err) => vec![DictationOutcome::Error(err)],
                     }
                 } else {
-                    match self.stop_recording_and_transcribe(settings, "key released", RecordingCue::Stop) {
+                    match self.stop_recording_and_transcribe(
+                        settings,
+                        "key released",
+                        RecordingCue::Stop,
+                    ) {
                         Ok(outcomes) => outcomes,
                         Err(err) => vec![DictationOutcome::Error(err)],
                     }
@@ -251,7 +255,11 @@ impl DictationController {
                 }
 
                 if self.is_recording() {
-                    match self.stop_recording_and_transcribe(settings, "toggle stopped", RecordingCue::Stop) {
+                    match self.stop_recording_and_transcribe(
+                        settings,
+                        "toggle stopped",
+                        RecordingCue::Stop,
+                    ) {
                         Ok(outcomes) => outcomes,
                         Err(err) => vec![DictationOutcome::Error(err)],
                     }
@@ -329,10 +337,14 @@ impl DictationController {
             if let Some(mp3_path) = audio_export::audio_destination(settings, &base) {
                 let samples = audio.samples.clone();
                 let rate = audio.sample_rate;
-                thread::spawn(move || match audio_export::write_mp3(&samples, rate, &mp3_path) {
-                    Ok(()) => log::info!(target: "dictation", "saved recording to {}", mp3_path.display()),
-                    Err(err) => log::warn!(target: "dictation", "MP3 export failed: {err}"),
-                });
+                thread::spawn(
+                    move || match audio_export::write_mp3(&samples, rate, &mp3_path) {
+                        Ok(()) => {
+                            log::info!(target: "dictation", "saved recording to {}", mp3_path.display())
+                        }
+                        Err(err) => log::warn!(target: "dictation", "MP3 export failed: {err}"),
+                    },
+                );
             }
             outcomes.push(DictationOutcome::PendingTranscriptSave(base));
         }
@@ -401,7 +413,11 @@ impl DictationController {
             .and_then(ActiveRecording::poll_event);
         match pending_recording_event {
             Some(RecordingEvent::SilenceDetected) => {
-                match self.stop_recording_and_transcribe(settings, "silence detected", RecordingCue::Stop) {
+                match self.stop_recording_and_transcribe(
+                    settings,
+                    "silence detected",
+                    RecordingCue::Stop,
+                ) {
                     Ok(new_outcomes) => outcomes.extend(new_outcomes),
                     Err(err) => outcomes.push(DictationOutcome::Error(err)),
                 }
@@ -715,7 +731,7 @@ fn build_input_stream(
     let error_sender = event_tx.clone();
     let error_callback = move |err| {
         let _ = error_sender.send(RecordingEvent::StreamError(format!(
-            "Audiofehler im Stream: {err}"
+            "Audio error in stream: {err}"
         )));
     };
 
