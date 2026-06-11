@@ -483,15 +483,16 @@ struct DiagnosticStatusBadge: View {
 
 struct DiagnosticDisclosureCard: View {
     let item: DiagnosticItemDTO
+    @Environment(\.locale) private var locale
 
     var body: some View {
         DisclosureGroup {
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.problem)
+                Text(L(item.problem, locale: locale))
                     .font(.caption)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
-                Text(item.recommendation)
+                Text(L(item.recommendation, locale: locale))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -501,7 +502,7 @@ struct DiagnosticDisclosureCard: View {
             .padding(.top, 6)
         } label: {
             HStack(spacing: 10) {
-                Text(item.title)
+                Text(L(item.title, locale: locale))
                     .font(.body.weight(.medium))
                 Spacer()
                 DiagnosticStatusBadge(status: item.status)

@@ -232,7 +232,7 @@
 "Updates are only available in the installed .app (dev build)." = "Updates sind nur in der installierten .app verfügbar (Dev-Build).";
 "Uses global model: %@." = "Nutzt globales Modell: %@.";
 "Version" = "Version";
-"Voice Activity Detection" = "Voice Activity Detection";
+"Voice Activity Detection" = "Sprachaktivitätserkennung (VAD)";
 "Warning" = "Warnung";
 "Welcome" = "Willkommen";
 "Whisper model" = "Whisper-Modell";
@@ -288,3 +288,73 @@
 "Open Whisper writes events and errors to a log file. Attach it when reporting problems." = "Open Whisper schreibt Ereignisse und Fehler in eine Logdatei. Bei Problemberichten bitte anhängen.";
 "Show log file in Finder" = "Logdatei im Finder anzeigen";
 "Copy recent log to clipboard" = "Letzte Log-Einträge kopieren";
+
+/* Einstellungen: bisher unübersetzte UI-Strings */
+"Switch microphone automatically when unplugged" = "Mikrofon automatisch wechseln, wenn es entfernt wird";
+"Show notification when microphone changes" = "Benachrichtigung anzeigen, wenn das Mikrofon wechselt";
+"Accessibility" = "Bedienungshilfen";
+"Microphone changed to '%@'." = "Mikrofon gewechselt zu '%@'.";
+
+/* Bridge-Status: Start bei Anmeldung */
+"Startup status not synchronized yet." = "Systemstart noch nicht synchronisiert.";
+"Launch at login is active. 'Ask on first launch' leaves the OS state unchanged." = "Start bei Anmeldung ist aktiv. ‚Beim ersten Start fragen' lässt die Systemeinstellung unverändert.";
+"Launch at login is inactive. 'Ask on first launch' leaves the OS state unchanged." = "Start bei Anmeldung ist inaktiv. ‚Beim ersten Start fragen' lässt die Systemeinstellung unverändert.";
+"Launch at login is active and starts the app hidden." = "Start bei Anmeldung ist aktiv; die App startet im Hintergrund.";
+"Launch at login should be active but could not be confirmed." = "Start bei Anmeldung sollte aktiv sein, konnte aber nicht bestätigt werden.";
+"Launch at login should be disabled but is still active." = "Start bei Anmeldung sollte deaktiviert sein, ist aber noch aktiv.";
+"Launch at login is disabled." = "Start bei Anmeldung ist deaktiviert.";
+"Launch at login enabled." = "Start bei Anmeldung aktiviert.";
+"Launch at login disabled." = "Start bei Anmeldung deaktiviert.";
+"Launch at login could not be confirmed." = "Start bei Anmeldung konnte nicht bestätigt werden.";
+"Launch at login is still active." = "Start bei Anmeldung ist noch aktiv.";
+
+/* Bridge-Status: Footer / Statuszeile im Menü */
+"Open Whisper is starting." = "Open Whisper wird gestartet.";
+"History cleared." = "Historie geleert.";
+"Local transcription complete." = "Lokale Transkription abgeschlossen.";
+"Transcript ready." = "Transkript bereit.";
+"Transcript inserted into the active app." = "Transkript in die aktive App eingefügt.";
+"No text available to copy." = "Kein Text zum Kopieren vorhanden.";
+"No text available to paste." = "Kein Text zum Einfügen vorhanden.";
+"Post-processing cancelled." = "Nachbearbeitung abgebrochen.";
+"Post-processing returned no text." = "Nachbearbeitung lieferte keinen Text.";
+"Recording already in progress." = "Aufnahme läuft bereits.";
+"Recording was too short or empty." = "Aufnahme war zu kurz oder leer.";
+"Recording buffer could not be read." = "Aufnahmepuffer konnte nicht gelesen werden.";
+"No audio data available for Whisper." = "Keine Audiodaten für Whisper verfügbar.";
+"No default input device available." = "Kein Standard-Eingabegerät verfügbar.";
+"No input device found." = "Kein Eingabegerät gefunden.";
+"Transcription worker stopped unexpectedly." = "Transkriptionsprozess wurde unerwartet beendet.";
+"Post-processing worker stopped unexpectedly." = "Nachbearbeitungsprozess wurde unerwartet beendet.";
+"Hotkey needs a real key like Space, R, or F8 in addition to modifier keys." = "Der Hotkey braucht zusätzlich zu den Modifikatortasten eine echte Taste wie Leertaste, R oder F8.";
+"Diktat abgebrochen." = "Diktat abgebrochen.";
+"Diktat abgebrochen — in Historie gespeichert." = "Diktat abgebrochen — in Historie gespeichert.";
+"Einfuegen fehlgeschlagen – Text in Zwischenablage kopiert." = "Einfügen fehlgeschlagen – Text in Zwischenablage kopiert.";
+
+/* Bridge-Status: Modell-Zusammenfassungen */
+"No model status loaded yet." = "Noch kein Modellstatus geladen.";
+"Local model ready." = "Lokales Modell bereit.";
+"Local model has not been downloaded yet." = "Lokales Modell wurde noch nicht heruntergeladen.";
+"Local model path is not currently resolvable." = "Lokaler Modellpfad ist derzeit nicht auflösbar.";
+"Local language model ready." = "Lokales Sprachmodell bereit.";
+"Local language model has not been downloaded yet." = "Lokales Sprachmodell wurde noch nicht heruntergeladen.";
+"Local language model path is not currently resolvable." = "Pfad des lokalen Sprachmodells ist derzeit nicht auflösbar.";
+
+/* Bridge-Diagnose */
+"Diagnostics loading." = "Diagnose wird geladen.";
+"Diagnostics: no open issues detected." = "Diagnose: keine offenen Probleme gefunden.";
+"Input device" = "Eingabegerät";
+"Autostart" = "Autostart";
+"macOS privacy" = "macOS-Datenschutz";
+"No input device was detected." = "Es wurde kein Eingabegerät erkannt.";
+"Check microphone permissions and that at least one input device is connected." = "Prüfe die Mikrofon-Berechtigungen und ob mindestens ein Eingabegerät angeschlossen ist.";
+"Pick a different microphone in Onboarding or Settings." = "Wähle im Onboarding oder in den Einstellungen ein anderes Mikrofon.";
+"Local dictation is ready to use." = "Lokales Diktieren ist einsatzbereit.";
+"Download the selected model before your first dictation." = "Lade das ausgewählte Modell vor deinem ersten Diktat herunter.";
+"Check the model path or pick one of the built-in presets again." = "Prüfe den Modellpfad oder wähle erneut eines der integrierten Presets.";
+"Check the hotkey combination and, on macOS, grant Accessibility or Input Monitoring permission if needed." = "Prüfe die Hotkey-Kombination und erteile unter macOS bei Bedarf die Berechtigung für Bedienungshilfen oder Eingabeüberwachung.";
+"The hotkey integration could not be initialized." = "Die Hotkey-Integration konnte nicht initialisiert werden.";
+"Restart the app and check whether the combination is already in use by another app." = "Starte die App neu und prüfe, ob die Kombination bereits von einer anderen App verwendet wird.";
+"Adjust the behavior in Onboarding or Settings." = "Passe das Verhalten im Onboarding oder in den Einstellungen an.";
+"macOS may require privacy permissions for the microphone, global hotkey, and pasting into other apps." = "macOS verlangt ggf. Datenschutz-Berechtigungen für Mikrofon, globalen Hotkey und das Einfügen in andere Apps.";
+"If you run into issues, open System Settings > Privacy & Security and check Microphone, Accessibility, and Input Monitoring." = "Öffne bei Problemen Systemeinstellungen > Datenschutz & Sicherheit und prüfe Mikrofon, Bedienungshilfen und Eingabeüberwachung.";

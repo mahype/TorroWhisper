@@ -521,7 +521,7 @@ struct SettingsView: View {
 
         Section {
             LabeledContent {
-                Text(model.runtime.startupSummary)
+                Text(L(model.runtime.startupSummary, locale: locale))
             } label: {
                 Text("System startup", bundle: .module)
             }
@@ -543,7 +543,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var diagnosticsContent: some View {
         Section {
-            Text(model.diagnostics.summary)
+            Text(L(model.diagnostics.summary, locale: locale))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -756,7 +756,7 @@ struct SettingsView: View {
         if model.runtime.isTranscribing {
             return L("Transcription in progress", locale: locale)
         }
-        return model.runtime.lastStatus.isEmpty ? L("Ready", locale: locale) : model.runtime.lastStatus
+        return model.runtime.lastStatus.isEmpty ? L("Ready", locale: locale) : L(model.runtime.lastStatus, locale: locale)
     }
 
     private var runtimeAccent: Color {

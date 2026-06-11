@@ -248,7 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         rebuildModelMenu()
         rebuildMicMenu()
         rebuildRecentHistoryMenu()
-        statusItemLine.title = model.bridgeError ?? runtime.lastStatus
+        statusItemLine.title = model.bridgeError ?? L(runtime.lastStatus, locale: locale)
         statusItem.button?.image = statusImage(recording: runtime.isRecording)
         statusItem.button?.toolTip = buildStatusTooltip(runtime: runtime)
         updateRecordingIndicatorVisibility()
@@ -281,7 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             key = "idle"
             if let last = lastAnnouncedPhaseKey, last != "idle", last != "blocked" {
                 let status = runtime.lastStatus.trimmingCharacters(in: .whitespaces)
-                announcement = status.isEmpty ? L("Dictation finished.", locale: locale) : status
+                announcement = status.isEmpty ? L("Dictation finished.", locale: locale) : L(status, locale: locale)
             }
         }
 
@@ -307,15 +307,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     private func buildStatusTooltip(runtime: RuntimeStatusDTO) -> String {
-        let base = model.bridgeError ?? runtime.lastStatus
+        let locale = currentLocale
+        let base = model.bridgeError ?? L(runtime.lastStatus, locale: locale)
         let mic = runtime.activeInputDeviceName
         guard !mic.isEmpty else { return base }
-        return "\(base)\nMicrophone: \(mic)"
+        return "\(base)\n\(L("Microphone", locale: locale)): \(mic)"
     }
 
     private func showMicSwitchToast(_ notification: MicSwitchNotification) {
         let message = notification.message.isEmpty
-            ? "Microphone changed to '\(notification.activeDevice)'."
+            ? String(format: L("Microphone changed to '%@'.", locale: currentLocale), notification.activeDevice)
             : notification.message
         let window = micSwitchToastWindow ?? makeMicSwitchToastWindow(message: message)
         if let hosting = window.contentViewController as? NSHostingController<MicSwitchToastView> {

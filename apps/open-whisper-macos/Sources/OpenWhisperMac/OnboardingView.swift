@@ -234,7 +234,7 @@ struct OnboardingView: View {
                         ProgressView(value: Double(basisPoints) / 10_000.0)
                     }
                     LabeledContent {
-                        Text(status.summary)
+                        Text(L(status.summary, locale: locale))
                     } label: {
                         Text("Status", bundle: .module)
                     }
@@ -307,7 +307,7 @@ struct OnboardingView: View {
             }
         default:
             Section {
-                Text(model.diagnostics.summary)
+                Text(L(model.diagnostics.summary, locale: locale))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 

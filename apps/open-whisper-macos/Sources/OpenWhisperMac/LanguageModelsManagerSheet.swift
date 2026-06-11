@@ -399,7 +399,7 @@ struct LanguageModelsManagerSheet: View {
             }
 
             HStack(spacing: 10) {
-                Text(status?.summary ?? L("Status unknown.", locale: locale))
+                Text(status.map { L($0.summary, locale: locale) } ?? L("Status unknown.", locale: locale))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -464,7 +464,7 @@ struct LanguageModelsManagerSheet: View {
             }
 
             HStack(spacing: 10) {
-                Text(status?.summary ?? L("Status unknown.", locale: locale))
+                Text(status.map { L($0.summary, locale: locale) } ?? L("Status unknown.", locale: locale))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

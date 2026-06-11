@@ -288,3 +288,73 @@
 "Open Whisper writes events and errors to a log file. Attach it when reporting problems." = "Open Whisper writes events and errors to a log file. Attach it when reporting problems.";
 "Show log file in Finder" = "Show log file in Finder";
 "Copy recent log to clipboard" = "Copy recent log to clipboard";
+
+/* Settings: previously untranslated UI strings */
+"Switch microphone automatically when unplugged" = "Switch microphone automatically when unplugged";
+"Show notification when microphone changes" = "Show notification when microphone changes";
+"Accessibility" = "Accessibility";
+"Microphone changed to '%@'." = "Microphone changed to '%@'.";
+
+/* Bridge status: launch at login */
+"Startup status not synchronized yet." = "Startup status not synchronized yet.";
+"Launch at login is active. 'Ask on first launch' leaves the OS state unchanged." = "Launch at login is active. 'Ask on first launch' leaves the OS state unchanged.";
+"Launch at login is inactive. 'Ask on first launch' leaves the OS state unchanged." = "Launch at login is inactive. 'Ask on first launch' leaves the OS state unchanged.";
+"Launch at login is active and starts the app hidden." = "Launch at login is active and starts the app hidden.";
+"Launch at login should be active but could not be confirmed." = "Launch at login should be active but could not be confirmed.";
+"Launch at login should be disabled but is still active." = "Launch at login should be disabled but is still active.";
+"Launch at login is disabled." = "Launch at login is disabled.";
+"Launch at login enabled." = "Launch at login enabled.";
+"Launch at login disabled." = "Launch at login disabled.";
+"Launch at login could not be confirmed." = "Launch at login could not be confirmed.";
+"Launch at login is still active." = "Launch at login is still active.";
+
+/* Bridge status: footer / tray status line */
+"Open Whisper is starting." = "Open Whisper is starting.";
+"History cleared." = "History cleared.";
+"Local transcription complete." = "Local transcription complete.";
+"Transcript ready." = "Transcript ready.";
+"Transcript inserted into the active app." = "Transcript inserted into the active app.";
+"No text available to copy." = "No text available to copy.";
+"No text available to paste." = "No text available to paste.";
+"Post-processing cancelled." = "Post-processing cancelled.";
+"Post-processing returned no text." = "Post-processing returned no text.";
+"Recording already in progress." = "Recording already in progress.";
+"Recording was too short or empty." = "Recording was too short or empty.";
+"Recording buffer could not be read." = "Recording buffer could not be read.";
+"No audio data available for Whisper." = "No audio data available for Whisper.";
+"No default input device available." = "No default input device available.";
+"No input device found." = "No input device found.";
+"Transcription worker stopped unexpectedly." = "Transcription worker stopped unexpectedly.";
+"Post-processing worker stopped unexpectedly." = "Post-processing worker stopped unexpectedly.";
+"Hotkey needs a real key like Space, R, or F8 in addition to modifier keys." = "Hotkey needs a real key like Space, R, or F8 in addition to modifier keys.";
+"Diktat abgebrochen." = "Dictation cancelled.";
+"Diktat abgebrochen — in Historie gespeichert." = "Dictation cancelled — saved to history.";
+"Einfuegen fehlgeschlagen – Text in Zwischenablage kopiert." = "Insertion failed – text copied to clipboard.";
+
+/* Bridge status: model summaries */
+"No model status loaded yet." = "No model status loaded yet.";
+"Local model ready." = "Local model ready.";
+"Local model has not been downloaded yet." = "Local model has not been downloaded yet.";
+"Local model path is not currently resolvable." = "Local model path is not currently resolvable.";
+"Local language model ready." = "Local language model ready.";
+"Local language model has not been downloaded yet." = "Local language model has not been downloaded yet.";
+"Local language model path is not currently resolvable." = "Local language model path is not currently resolvable.";
+
+/* Bridge diagnostics */
+"Diagnostics loading." = "Diagnostics loading.";
+"Diagnostics: no open issues detected." = "Diagnostics: no open issues detected.";
+"Input device" = "Input device";
+"Autostart" = "Autostart";
+"macOS privacy" = "macOS privacy";
+"No input device was detected." = "No input device was detected.";
+"Check microphone permissions and that at least one input device is connected." = "Check microphone permissions and that at least one input device is connected.";
+"Pick a different microphone in Onboarding or Settings." = "Pick a different microphone in Onboarding or Settings.";
+"Local dictation is ready to use." = "Local dictation is ready to use.";
+"Download the selected model before your first dictation." = "Download the selected model before your first dictation.";
+"Check the model path or pick one of the built-in presets again." = "Check the model path or pick one of the built-in presets again.";
+"Check the hotkey combination and, on macOS, grant Accessibility or Input Monitoring permission if needed." = "Check the hotkey combination and, on macOS, grant Accessibility or Input Monitoring permission if needed.";
+"The hotkey integration could not be initialized." = "The hotkey integration could not be initialized.";
+"Restart the app and check whether the combination is already in use by another app." = "Restart the app and check whether the combination is already in use by another app.";
+"Adjust the behavior in Onboarding or Settings." = "Adjust the behavior in Onboarding or Settings.";
+"macOS may require privacy permissions for the microphone, global hotkey, and pasting into other apps." = "macOS may require privacy permissions for the microphone, global hotkey, and pasting into other apps.";
+"If you run into issues, open System Settings > Privacy & Security and check Microphone, Accessibility, and Input Monitoring." = "If you run into issues, open System Settings > Privacy & Security and check Microphone, Accessibility, and Input Monitoring.";

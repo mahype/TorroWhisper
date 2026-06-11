@@ -752,7 +752,7 @@ struct ModelStatusDTO: Codable, Identifiable {
         presetLabel: "Whisper Small",
         backendModelName: "small",
         path: "",
-        summary: "Noch kein Modellstatus geladen.",
+        summary: "No model status loaded yet.",
         isDownloaded: false,
         isDownloading: false,
         progressBasisPoints: nil,
@@ -799,7 +799,7 @@ struct DiagnosticsDTO: Codable {
     var summary: String
     var items: [DiagnosticItemDTO]
 
-    static let empty = DiagnosticsDTO(summary: "Diagnose wird geladen.", items: [])
+    static let empty = DiagnosticsDTO(summary: "Diagnostics loading.", items: [])
 }
 
 struct RecordingLevelsDTO: Codable {
@@ -838,14 +838,14 @@ struct RuntimeStatusDTO: Codable {
         isTranscribing: false,
         isPostProcessing: false,
         isCancelling: false,
-        lastStatus: "Open Whisper wird gestartet.",
+        lastStatus: "Open Whisper is starting.",
         lastTranscript: "",
         lastDictationError: "",
         dictationErrorCount: 0,
         dictationTriggerCount: 0,
         hotkeyRegistered: false,
         hotkeyText: "Ctrl+Shift+Space",
-        startupSummary: "Systemstart noch nicht synchronisiert.",
+        startupSummary: "Startup status not synchronized yet.",
         providerSummary: "Local Whisper",
         activeModeName: "Standard",
         onboardingCompleted: false,
