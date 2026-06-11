@@ -110,6 +110,32 @@ jobs:
           fi
           echo "sign_update: $sign_update"
 
+      # The release (with the DMG asset) must exist BEFORE the appcast is
+      # published: Sparkle clients poll the appcast every 24h, and an appcast
+      # entry whose enclosure URL 404s shows up as a failed update on user
+      # machines. Creating the release first also lets us embed its generated
+      # notes into the appcast as inline HTML, so the Sparkle dialog shows
+      # clean release notes instead of the full GitHub web page.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/OpenWhisper-*.dmg
+            dist/SHA256SUMS.txt
+
+      - name: Fetch release notes for appcast
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --json body --jq .body > release-notes.md
+          echo "Fetched $(wc -c < release-notes.md) bytes of release notes"
+
       - name: Checkout gh-pages for appcast
         uses: actions/checkout@v4
         with:
@@ -127,7 +153,8 @@ jobs:
             "dist/OpenWhisper-${version}.dmg" \
             "$version" \
             "https://github.com/mahype/open-whisper/releases/tag/${TAG}" \
-            "gh-pages/appcast.xml"
+            "gh-pages/appcast.xml" \
+            "release-notes.md"
 
       - name: Publish appcast
         working-directory: gh-pages
@@ -144,17 +171,6 @@ jobs:
           fi
           git commit -m "appcast: publish ${TAG}"
           git push origin gh-pages
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: false
-          name: ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
-          generate_release_notes: true
-          files: |
-            dist/OpenWhisper-*.dmg
-            dist/SHA256SUMS.txt
 
       - name: Cleanup keychain
         if: always()

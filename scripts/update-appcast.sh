@@ -7,6 +7,9 @@
 #   2  Version (no `v` prefix)         e.g. 0.1.0
 #   3  Release-notes URL               e.g. https://github.com/.../releases/tag/v0.1.0
 #   4  Appcast path                    e.g. gh-pages/appcast.xml
+#   5  Release-notes markdown file     optional; when given, the notes are
+#                                      embedded as inline HTML <description>
+#                                      instead of linking the GitHub page
 #
 # Required env:
 #   SPARKLE_ED_PRIVATE_KEY             The Ed25519 private key content
@@ -20,7 +23,20 @@ DMG_PATH="${1:?DMG path required}"
 VERSION="${2:?version required}"
 RELEASE_NOTES_URL="${3:?release notes URL required}"
 APPCAST_PATH="${4:?appcast path required}"
+RELEASE_NOTES_FILE="${5:-}"
 MIN_SYSTEM_VERSION="${MIN_SYSTEM_VERSION:-14.0}"
+
+RELEASE_NOTES_MD=""
+if [[ -n "$RELEASE_NOTES_FILE" ]]; then
+    if [[ ! -f "$RELEASE_NOTES_FILE" ]]; then
+        echo "error: release notes file not found: $RELEASE_NOTES_FILE" >&2
+        exit 1
+    fi
+    RELEASE_NOTES_MD="$(cat "$RELEASE_NOTES_FILE")"
+    if [[ -z "$RELEASE_NOTES_MD" ]]; then
+        echo "warning: $RELEASE_NOTES_FILE is empty — falling back to releaseNotesLink" >&2
+    fi
+fi
 
 : "${SPARKLE_ED_PRIVATE_KEY:?SPARKLE_ED_PRIVATE_KEY must be set}"
 
@@ -67,6 +83,7 @@ set +e
 APPCAST_PATH="$APPCAST_PATH" \
 VERSION="$VERSION" \
 RELEASE_NOTES_URL="$RELEASE_NOTES_URL" \
+RELEASE_NOTES_MD="$RELEASE_NOTES_MD" \
 DMG_URL="$dmg_url" \
 DMG_LENGTH="$length" \
 DMG_ED_SIGNATURE="$ed_sig" \

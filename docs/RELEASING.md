@@ -41,8 +41,8 @@ On push of a `v*` tag, the GitHub Actions release workflow:
 6. Submits to Apple's notary service via `notarytool` and staples the ticket.
 7. Packages the result into `OpenWhisper-<version>.dmg`.
 8. Runs a **DMG smoke test** ([scripts/smoke-test-dmg.sh](../scripts/smoke-test-dmg.sh)) that mounts the finished DMG and verifies `codesign`, Gatekeeper (`spctl`), and a valid stapled notarization ticket. A broken artifact halts the workflow **before** anything is published.
-9. Signs the DMG with the Sparkle Ed25519 key and appends a new `<item>` to `appcast.xml` on the `gh-pages` branch, so existing installs see the update on their next check (see [Sparkle auto-updates](#sparkle-auto-updates)).
-10. Uploads the DMG and a `SHA256SUMS.txt` to a **published** GitHub Release with auto-generated release notes.
+9. Uploads the DMG and a `SHA256SUMS.txt` to a **published** GitHub Release with auto-generated release notes.
+10. Signs the DMG with the Sparkle Ed25519 key and appends a new `<item>` to `appcast.xml` on the `gh-pages` branch — with the release notes embedded as inline HTML — so existing installs see the update on their next check (see [Sparkle auto-updates](#sparkle-auto-updates)). The release is created first so the appcast never advertises a download URL that does not exist yet.
 
 You can edit the auto-generated release notes afterwards on GitHub.
 
