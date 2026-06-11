@@ -6,6 +6,7 @@ All notable changes to Open Whisper are documented here. The format is based on 
 
 ### Fixed
 - **Random crashes during transcription** — whisper-rs and llama-cpp-2 each bundle their own, mutually incompatible ggml revision; statically linking both into the app binary silently mixed the two copies, so Whisper could dispatch wrong compute kernels and crash the whole app mid-dictation (the menu bar icon simply vanished). The local post-processing LLM now runs in a separate `open-whisper-llm-helper` process, giving each library its own consistent ggml. Cancelling post-processing or auto-unloading the model now terminates the helper, which also releases model memory more reliably.
+- **Recording bubble no longer burns CPU after hiding** — the hidden bubble kept its blink animation running at 20 fps in an invisible window (~25 % CPU and steadily growing memory until the next restart). The panel is now torn down completely when it hides.
 
 ## [0.4.0] — 2026-06-10
 

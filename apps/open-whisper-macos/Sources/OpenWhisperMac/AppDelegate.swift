@@ -415,7 +415,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         guard model.settings.showRecordingIndicator, let phase else {
             recordingLevelFeed.stop()
-            recordingIndicatorWindow?.orderOut(nil)
+            // Tear the panel down completely instead of just ordering it out:
+            // the hosted SwiftUI view keeps its last phase, and a blinking
+            // phase drives TimelineView at 20 fps forever in the invisible
+            // window — measured at ~25 % CPU and steadily growing memory.
+            if let window = recordingIndicatorWindow {
+                window.orderOut(nil)
+                window.contentViewController = nil
+                recordingIndicatorWindow = nil
+            }
             removeEscapeMonitor()
             return
         }
