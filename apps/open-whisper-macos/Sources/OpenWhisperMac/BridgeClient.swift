@@ -107,6 +107,29 @@ final class BridgeClient {
         try decodeResponse(from: ow_list_pipeline_stages())
     }
 
+    // MARK: Chat plugin
+
+    func chatStartListening() throws -> String {
+        try decodeResponse(from: ow_chat_start_listening())
+    }
+
+    func chatStopListening() throws -> String {
+        try decodeResponse(from: ow_chat_stop_listening())
+    }
+
+    func chatGetState() throws -> ChatStateDTO {
+        try decodeResponse(from: ow_chat_get_state())
+    }
+
+    func chatReset() {
+        let _: String? = try? decodeResponse(from: ow_chat_reset())
+    }
+
+    func chatSetModel(_ modelRef: LlmModelRefDTO?) {
+        struct Payload: Encodable { var modelRef: LlmModelRefDTO? }
+        let _: String? = try? encodeAndCall(Payload(modelRef: modelRef), function: ow_chat_set_model)
+    }
+
     func runPermissionDiagnostics() throws -> DiagnosticsDTO {
         try decodeResponse(from: ow_run_permission_diagnostics())
     }

@@ -846,6 +846,38 @@ struct ApiKeyStatusDTO: Codable, Hashable, Identifiable {
     var id: LlmBackendKind { backend }
 }
 
+// MARK: - Chat plugin (#17)
+
+enum ChatRole: String, Codable, Hashable {
+    case system
+    case user
+    case assistant
+}
+
+struct ChatMessageDTO: Codable, Hashable, Identifiable {
+    var role: ChatRole
+    var content: String
+
+    // Stable-enough identity for SwiftUI list diffing within one session.
+    var id: Int { hashValue }
+}
+
+enum ChatPhase: String, Codable, Hashable {
+    case idle
+    case listening
+    case transcribing
+    case generating
+}
+
+struct ChatStateDTO: Codable, Hashable {
+    var phase: ChatPhase
+    var messages: [ChatMessageDTO]
+    var revision: UInt64
+    var error: String?
+
+    static let empty = ChatStateDTO(phase: .idle, messages: [], revision: 0, error: nil)
+}
+
 struct AppSettings: Codable, Equatable {
     var onboardingCompleted: Bool
     var startupBehavior: StartupBehavior

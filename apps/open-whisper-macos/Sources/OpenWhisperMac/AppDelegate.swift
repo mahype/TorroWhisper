@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var statusItem: NSStatusItem!
     private let statusMenu = NSMenu()
     private var dictationItem: NSMenuItem!
+    private var chatItem: NSMenuItem!
     private var settingsItem: NSMenuItem!
     private var modeSwitchItem: NSMenuItem!
     private var modelSwitchItem: NSMenuItem!
@@ -20,6 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var checkForUpdatesItem: NSMenuItem!
     private var feedbackItem: NSMenuItem!
     private var settingsWindow: NSWindow?
+    private var chatWindow: NSWindow?
+    private let chatViewModel = ChatViewModel()
     private var onboardingWindow: NSWindow?
     private var feedbackWindow: NSWindow?
     private var recordingIndicatorWindow: NSWindow?
@@ -57,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         statusItem.button?.toolTip = "Open Whisper"
 
         dictationItem = NSMenuItem(title: "", action: #selector(toggleDictation), keyEquivalent: "")
+        chatItem = NSMenuItem(title: "", action: #selector(showChat), keyEquivalent: "")
         settingsItem = NSMenuItem(title: "", action: #selector(showSettings), keyEquivalent: ",")
         modeSwitchItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         modeSwitchItem.submenu = modeMenu
@@ -84,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         statusMenu.items = [
             dictationItem,
             .separator(),
+            chatItem,
             settingsItem,
             .separator(),
             micSwitchItem,
@@ -171,6 +176,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         model.flushAutoSave()
     }
 
+    @objc private func showChat(_ sender: Any?) {
+        let window = chatWindow ?? makeWindow(
+            title: L("Chat", locale: currentLocale),
+            size: NSSize(width: 480, height: 560),
+            rootView: ChatWindowView(chat: chatViewModel)
+        )
+        chatWindow = window
+        show(window)
+    }
+
     @objc private func showFeedback(_ sender: Any?) {
         let window = feedbackWindow ?? makeWindow(
             title: L("Send feedback", locale: currentLocale),
@@ -236,6 +251,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         dictationItem.title = hotkeySuffix.isEmpty
             ? dictationLabel
             : "\(dictationLabel) — \(hotkeySuffix)"
+        chatItem.title = L("Chat…", locale: locale)
         settingsItem.title = L("Settings…", locale: locale)
         modeSwitchItem.title = L("Post-processing", locale: locale)
         modelSwitchItem.title = L("Transcription model", locale: locale)
@@ -390,6 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func refreshWindowTitles() {
         let locale = currentLocale
         settingsWindow?.title = L("Open Whisper Settings", locale: locale)
+        chatWindow?.title = L("Chat", locale: locale)
         onboardingWindow?.title = L("Open Whisper Setup", locale: locale)
         feedbackWindow?.title = L("Send feedback", locale: locale)
     }
