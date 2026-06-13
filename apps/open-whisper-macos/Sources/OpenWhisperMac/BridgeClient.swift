@@ -101,6 +101,12 @@ final class BridgeClient {
         try decodeResponse(from: ow_get_llm_api_key_status())
     }
 
+    /// Available post-processing pipeline stages (built-in + plugin) for the
+    /// per-mode pipeline editor.
+    func listPipelineStages() throws -> [StageCatalogEntry] {
+        try decodeResponse(from: ow_list_pipeline_stages())
+    }
+
     func runPermissionDiagnostics() throws -> DiagnosticsDTO {
         try decodeResponse(from: ow_run_permission_diagnostics())
     }

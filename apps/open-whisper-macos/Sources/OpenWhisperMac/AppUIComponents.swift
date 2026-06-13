@@ -208,6 +208,7 @@ struct ModeEditorSheet: View {
     @ObservedObject var model: AppModel
     let onDone: () -> Void
     @Environment(\.locale) private var locale
+    @State private var stageCatalog: [StageCatalogEntry] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -271,9 +272,14 @@ struct ModeEditorSheet: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                pipelineSection
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
+            .onAppear {
+                stageCatalog = (try? BridgeClient().listPipelineStages()) ?? []
+            }
 
             HStack {
                 Spacer()
@@ -298,6 +304,75 @@ struct ModeEditorSheet: View {
         return String(
             format: L("Uses global model: %@.", locale: locale),
             model.postProcessingChoiceLabel(global)
+        )
+    }
+
+    @ViewBuilder
+    private var pipelineSection: some View {
+        let steps = model.modeBinding(for: \.pipeline)
+        Section {
+            if steps.wrappedValue.isEmpty {
+                Text("Automatic order: Dictionary → Auto-correct → LLM.", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button {
+                    steps.wrappedValue = model.editingMode.synthesizedPipeline(
+                        postProcessingEnabled: model.settings.postProcessingEnabled
+                    )
+                } label: {
+                    Text("Customize pipeline…", bundle: .module)
+                }
+            } else {
+                ForEach(steps) { $step in
+                    HStack(spacing: 8) {
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundStyle(.tertiary)
+                        Toggle(isOn: $step.enabled) {
+                            Text(stageDisplayName(step.stageId))
+                        }
+                        .toggleStyle(.checkbox)
+                        Spacer()
+                        if step.stageId == "auto_correct" {
+                            Picker("", selection: autoCorrectModeBinding($step)) {
+                                Text("Off", bundle: .module).tag("off")
+                                Text("LLM cleanup", bundle: .module).tag("llm")
+                            }
+                            .labelsHidden()
+                            .frame(width: 130)
+                        }
+                    }
+                }
+                .onMove { from, to in
+                    steps.wrappedValue.move(fromOffsets: from, toOffset: to)
+                }
+
+                Button(role: .destructive) {
+                    steps.wrappedValue = []
+                } label: {
+                    Text("Reset to automatic", bundle: .module)
+                }
+            }
+        } header: {
+            Text("Pipeline", bundle: .module)
+        } footer: {
+            Text("Steps run top to bottom. Drag to reorder, toggle to enable. Plugins can add steps.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func stageDisplayName(_ stageId: String) -> String {
+        stageCatalog.first(where: { $0.stageId == stageId })?.displayName ?? stageId
+    }
+
+    private func autoCorrectModeBinding(_ step: Binding<PipelineStepConfig>) -> Binding<String> {
+        Binding(
+            get: { step.wrappedValue.config?["mode"] ?? "off" },
+            set: { newValue in
+                var config = step.wrappedValue.config ?? [:]
+                config["mode"] = newValue
+                step.wrappedValue.config = config
+            }
         )
     }
 }

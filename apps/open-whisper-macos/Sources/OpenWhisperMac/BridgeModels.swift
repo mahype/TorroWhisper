@@ -524,19 +524,67 @@ enum PostProcessingChoice: Codable, Hashable, Identifiable {
     }
 }
 
+// MARK: - Post-processing pipeline (Issue #16)
+
+/// What a mode does with the transcript. Mirrors Rust `ModeKind`.
+enum ModeKind: String, Codable, Hashable {
+    case dictation
+    case chat
+}
+
+/// One ordered pipeline step. `config` is opaque per-stage JSON; the only
+/// built-in user with config today is auto-correct (`{"mode": "off"|"llm"}`),
+/// so a `[String: String]` map covers v1.
+struct PipelineStepConfig: Codable, Hashable, Identifiable {
+    var stageId: String
+    var enabled: Bool
+    var config: [String: String]?
+
+    var id: String { stageId }
+
+    init(stageId: String, enabled: Bool = true, config: [String: String]? = nil) {
+        self.stageId = stageId
+        self.enabled = enabled
+        self.config = config
+    }
+}
+
+/// A stage available to the pipeline editor (built-in or plugin). Mirrors Rust
+/// `StageCatalogEntryDto`.
+struct StageCatalogEntry: Codable, Hashable, Identifiable {
+    var stageId: String
+    var displayName: String
+    var isConfigurable: Bool
+    var isPlugin: Bool
+
+    var id: String { stageId }
+}
+
 struct ProcessingMode: Codable, Identifiable, Hashable {
     var id: String
     var name: String
     var prompt: String
     var postProcessingChoice: PostProcessingChoice?
     var dictionaryEnabled: Bool
+    var kind: ModeKind
+    var pipeline: [PipelineStepConfig]
 
-    init(id: String, name: String, prompt: String, postProcessingChoice: PostProcessingChoice? = nil, dictionaryEnabled: Bool = true) {
+    init(
+        id: String,
+        name: String,
+        prompt: String,
+        postProcessingChoice: PostProcessingChoice? = nil,
+        dictionaryEnabled: Bool = true,
+        kind: ModeKind = .dictation,
+        pipeline: [PipelineStepConfig] = []
+    ) {
         self.id = id
         self.name = name
         self.prompt = prompt
         self.postProcessingChoice = postProcessingChoice
         self.dictionaryEnabled = dictionaryEnabled
+        self.kind = kind
+        self.pipeline = pipeline
     }
 
     init(from decoder: Decoder) throws {
@@ -546,6 +594,18 @@ struct ProcessingMode: Codable, Identifiable, Hashable {
         self.prompt = try container.decode(String.self, forKey: .prompt)
         self.postProcessingChoice = try container.decodeIfPresent(PostProcessingChoice.self, forKey: .postProcessingChoice)
         self.dictionaryEnabled = try container.decodeIfPresent(Bool.self, forKey: .dictionaryEnabled) ?? true
+        self.kind = try container.decodeIfPresent(ModeKind.self, forKey: .kind) ?? .dictation
+        self.pipeline = try container.decodeIfPresent([PipelineStepConfig].self, forKey: .pipeline) ?? []
+    }
+
+    /// The legacy default order, surfaced when the mode has no explicit pipeline.
+    /// Mirrors `ProcessingMode::synthesized_pipeline` on the Rust side.
+    func synthesizedPipeline(postProcessingEnabled: Bool) -> [PipelineStepConfig] {
+        [
+            PipelineStepConfig(stageId: "dictionary", enabled: dictionaryEnabled),
+            PipelineStepConfig(stageId: "auto_correct", enabled: false, config: ["mode": "off"]),
+            PipelineStepConfig(stageId: "llm", enabled: postProcessingEnabled),
+        ]
     }
 
     static let cleanup = ProcessingMode(
