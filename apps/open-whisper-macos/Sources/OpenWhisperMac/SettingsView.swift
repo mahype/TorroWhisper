@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isConfirmingHistoryClear: Bool = false
     @State private var isConfirmingAccessibilityReset: Bool = false
+    @State private var diagnosticsLogConfirmation: String?
     @Environment(\.locale) private var locale
 
     var body: some View {
@@ -661,9 +662,28 @@ struct SettingsView: View {
             } label: {
                 Text("Copy recent log to clipboard", bundle: .module)
             }
+            HStack(spacing: 10) {
+                Button {
+                    writeDiagnosticsToLog()
+                } label: {
+                    Text("Write diagnostics to log", bundle: .module)
+                }
+                if let confirmation = diagnosticsLogConfirmation {
+                    Text(confirmation)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         } header: {
             Text("Diagnostics", bundle: .module)
         }
+    }
+
+    /// Asks the bridge to append a diagnostics snapshot (settings, hotkey,
+    /// model inventories) to the log so a single file answers support cases.
+    private func writeDiagnosticsToLog() {
+        diagnosticsLogConfirmation = (try? BridgeClient().writeDiagnosticsLog())
+            ?? L("Diagnostics could not be written.", locale: locale)
     }
 
     private func revealLogFileInFinder() {

@@ -95,10 +95,30 @@ impl BridgeRuntime {
             last_status = message;
         }
 
-        if settings.local_model_path.trim().is_empty()
-            && let Ok(path) = dictation.suggested_model_path(&settings)
-        {
-            settings.local_model_path = path.display().to_string();
+        // Older versions pinned the absolute default path of the then-active
+        // preset into local_model_path. After a preset switch that stale pin
+        // made transcription look for the wrong file while the UI reported
+        // the new preset as downloaded. Clear such auto-pinned paths so the
+        // path is resolved per preset again; genuinely custom paths (foreign
+        // filenames) are kept.
+        if Self::is_legacy_pinned_model_path(&settings.local_model_path) {
+            log::info!(
+                target: "bridge",
+                "clearing legacy pinned model path '{}'",
+                settings.local_model_path
+            );
+            settings.local_model_path = String::new();
+            if let Err(err) = settings_store::save(&settings) {
+                last_status = format!("Settings could not be saved: {err}");
+            }
+        }
+
+        let removed_partials = model_manager::cleanup_partial_downloads();
+        if removed_partials > 0 {
+            log::info!(
+                target: "bridge",
+                "removed {removed_partials} stale partial model download(s)"
+            );
         }
 
         model_downloads.refresh_local_state(&settings);
@@ -117,6 +137,10 @@ impl BridgeRuntime {
         }
 
         llm_downloads.refresh_local_state(&settings);
+
+        log_settings_summary(&settings);
+        model_manager::log_model_inventory(&settings);
+        llm_model_manager::log_llm_inventory(&settings);
 
         if let Ok(Some(message)) = autostart.sync_saved_settings(&settings) {
             last_status = message;
@@ -148,6 +172,62 @@ impl BridgeRuntime {
             history_revision: 0,
             pending_transcript_save: None,
         }
+    }
+
+    /// Writes a full diagnostics block into the log file: version, settings
+    /// summary, hotkey state, dictation state, and both model inventories.
+    /// Triggered from Settings ("Write diagnostics to log") and meant to make
+    /// a single user-submitted log file self-sufficient for support.
+    fn write_diagnostics_snapshot(&mut self) -> String {
+        self.poll();
+        log::info!(
+            target: "diag",
+            "---- diagnostics snapshot (bridge {}) ----",
+            env!("CARGO_PKG_VERSION")
+        );
+        log_settings_summary(&self.settings);
+        log::info!(
+            target: "diag",
+            "hotkey: configured '{}', registered: {}",
+            self.settings.hotkey,
+            self.hotkey
+                .as_ref()
+                .is_some_and(HotKeyController::is_registered)
+        );
+        log::info!(target: "diag", "dictation: {}", self.dictation.summary());
+        log::info!(target: "diag", "last status: {}", self.last_status);
+        if !self.last_dictation_error.is_empty() {
+            log::info!(
+                target: "diag",
+                "last dictation error: {} (count: {})",
+                self.last_dictation_error,
+                self.dictation_error_count
+            );
+        }
+        model_manager::log_model_inventory(&self.settings);
+        llm_model_manager::log_llm_inventory(&self.settings);
+        log::info!(target: "diag", "---- end diagnostics snapshot ----");
+
+        i18n::translate(i18n::lang(&self.settings), "Diagnostics written to log.")
+    }
+
+    /// True when `path` points at one of the preset default model filenames —
+    /// the signature of a path auto-pinned by older versions rather than a
+    /// deliberately chosen custom model file.
+    fn is_legacy_pinned_model_path(path: &str) -> bool {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            return false;
+        }
+        let Some(filename) = std::path::Path::new(trimmed)
+            .file_name()
+            .and_then(|value| value.to_str())
+        else {
+            return false;
+        };
+        ModelPreset::ALL
+            .iter()
+            .any(|preset| preset.default_filename() == filename)
     }
 
     fn poll(&mut self) {
@@ -482,10 +562,10 @@ impl BridgeRuntime {
         let previous_input_device_name = self.settings.input_device_name.clone();
         next_settings.normalize();
 
-        if next_settings.local_model_path.trim().is_empty()
-            && let Ok(path) = self.dictation.suggested_model_path(&next_settings)
-        {
-            next_settings.local_model_path = path.display().to_string();
+        // Defensive: never persist an auto-pinned preset default path again
+        // (older app versions and old UI snapshots may still send one).
+        if Self::is_legacy_pinned_model_path(&next_settings.local_model_path) {
+            next_settings.local_model_path = String::new();
         }
 
         if next_settings.input_device_name != previous_input_device_name
@@ -579,9 +659,8 @@ impl BridgeRuntime {
             .map(|value| value.display().to_string())
             .unwrap_or_else(|| self.settings.local_model_path.clone());
 
-        let is_downloaded = model_manager::resolve_model_path(&self.settings)
-            .ok()
-            .is_some_and(|value| value.exists());
+        let is_downloaded = model_manager::validated_model_path(&self.settings).is_ok();
+        let is_corrupt = self.model_downloads.is_corrupt();
         let progress_basis_points = self
             .model_downloads
             .progress_fraction()
@@ -597,6 +676,7 @@ impl BridgeRuntime {
             ),
             is_downloaded,
             is_downloading: self.model_downloads.is_downloading(),
+            is_corrupt,
             progress_basis_points,
             expected_size_bytes: self.settings.local_model.download_size_bytes(),
         }
@@ -634,9 +714,9 @@ impl BridgeRuntime {
                 let path = model_manager::default_model_path(preset)
                     .map(|value| value.display().to_string())
                     .unwrap_or_default();
-                let is_downloaded = model_manager::default_model_path(preset)
-                    .map(|value| value.exists())
-                    .unwrap_or(false);
+                let integrity = model_manager::preset_model_integrity(preset);
+                let is_downloaded = integrity == model_manager::ModelIntegrity::Valid;
+                let is_corrupt = matches!(integrity, model_manager::ModelIntegrity::Corrupt { .. });
                 let is_downloading = active_download == Some(preset);
                 let progress_basis_points = if is_downloading {
                     active_progress
@@ -647,6 +727,11 @@ impl BridgeRuntime {
                     format!("Download for {} in progress.", preset.display_label())
                 } else if is_downloaded {
                     format!("{} ready.", preset.display_label())
+                } else if is_corrupt {
+                    format!(
+                        "{} is damaged or incomplete. Please download it again.",
+                        preset.display_label()
+                    )
                 } else {
                     format!(
                         "{} ({}) not loaded yet.",
@@ -662,6 +747,7 @@ impl BridgeRuntime {
                     summary: i18n::translate(lang, &summary),
                     is_downloaded,
                     is_downloading,
+                    is_corrupt,
                     progress_basis_points,
                     expected_size_bytes: preset.download_size_bytes(),
                 }
@@ -901,15 +987,9 @@ impl BridgeRuntime {
         let now = std::time::Instant::now();
 
         let mut is_blocked = self.dictation.is_blocked(now, blocked_ttl);
-        if is_blocked {
-            let preset = self.settings.local_model;
-            if model_manager::default_model_path(preset)
-                .map(|path| path.exists())
-                .unwrap_or(false)
-            {
-                self.dictation.clear_blocked();
-                is_blocked = false;
-            }
+        if is_blocked && model_manager::validated_model_path(&self.settings).is_ok() {
+            self.dictation.clear_blocked();
+            is_blocked = false;
         }
 
         let (blocked_label, blocked_is_downloading, blocked_progress) = if is_blocked {
@@ -1225,6 +1305,30 @@ fn validate_hotkey_text(raw_hotkey: &str) -> Result<String, String> {
     Ok(hotkey.to_owned())
 }
 
+/// One compact, non-sensitive settings line for startup and diagnostics logs.
+fn log_settings_summary(settings: &AppSettings) {
+    let override_path = settings.local_model_path.trim();
+    log::info!(
+        target: "bridge",
+        "settings: preset '{}', model path override: {}, input device '{}', ui language {:?}, vad: {}, post-processing: {} ('{}')",
+        settings.local_model.display_label(),
+        if override_path.is_empty() {
+            "none".to_owned()
+        } else {
+            format!("'{override_path}'")
+        },
+        if settings.input_device_name.trim().is_empty() {
+            "system default"
+        } else {
+            &settings.input_device_name
+        },
+        settings.ui_language,
+        settings.vad_enabled,
+        settings.post_processing_enabled,
+        settings.active_provider_summary()
+    );
+}
+
 #[derive(Deserialize)]
 struct LogMessageRequest {
     level: String,
@@ -1254,6 +1358,15 @@ pub extern "C" fn ow_log_message(request_json: *const c_char) -> *mut c_char {
             "ok".to_owned()
         });
     response_from_result(result)
+}
+
+/// Writes a diagnostics snapshot (settings, hotkey, model inventories) into
+/// the shared log file. Returns a localized confirmation message.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_write_diagnostics_log() -> *mut c_char {
+    response_ok(with_runtime_value(
+        BridgeRuntime::write_diagnostics_snapshot,
+    ))
 }
 
 #[unsafe(no_mangle)]

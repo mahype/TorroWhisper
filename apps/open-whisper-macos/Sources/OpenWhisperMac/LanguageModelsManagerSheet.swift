@@ -399,10 +399,16 @@ struct LanguageModelsManagerSheet: View {
             }
 
             HStack(spacing: 10) {
+                if status?.isCorrupt == true {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .accessibilityHidden(true)
+                }
+
                 Text(status.map { L($0.summary, locale: locale) } ?? L("Status unknown.", locale: locale))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .foregroundStyle(status?.isCorrupt == true ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                    .lineLimit(2)
 
                 Spacer()
 
@@ -417,7 +423,13 @@ struct LanguageModelsManagerSheet: View {
                     Button {
                         model.startModelDownload(preset: preset)
                     } label: {
-                        Text(status?.isDownloading == true ? "Loading…" : "Download", bundle: .module)
+                        if status?.isDownloading == true {
+                            Text("Loading…", bundle: .module)
+                        } else if status?.isCorrupt == true {
+                            Text("Download again", bundle: .module)
+                        } else {
+                            Text("Download", bundle: .module)
+                        }
                     }
                     .disabled(status?.isDownloading == true)
                 }

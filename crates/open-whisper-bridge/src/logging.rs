@@ -163,7 +163,10 @@ impl Log for FileLogger {
         }
         let target = metadata.target();
         target.starts_with("open_whisper")
-            || matches!(target, "bridge" | "dictation" | "app" | "panic")
+            || matches!(
+                target,
+                "bridge" | "dictation" | "app" | "panic" | "models" | "diag"
+            )
     }
 
     fn log(&self, record: &Record) {

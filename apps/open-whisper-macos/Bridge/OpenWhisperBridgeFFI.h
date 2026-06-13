@@ -31,6 +31,7 @@ char *ow_delete_history_entry(const char *request_json);
 char *ow_clear_history(void);
 char *ow_get_log_path(void);
 char *ow_log_message(const char *request_json);
+char *ow_write_diagnostics_log(void);
 void ow_string_free(char *raw);
 
 #endif

@@ -11,7 +11,7 @@ use std::{
 };
 
 use crate::audio_export;
-use crate::model_manager::{default_model_path, resolve_model_path};
+use crate::model_manager::validated_model_path;
 use cpal::{
     Device, FromSample, I24, Sample, SampleFormat, SizedSample, Stream, SupportedStreamConfig, U24,
     traits::{DeviceTrait, HostTrait, StreamTrait},
@@ -189,10 +189,6 @@ impl DictationController {
         self.last_mic_switch_message.clear();
     }
 
-    pub fn suggested_model_path(&self, settings: &AppSettings) -> Result<PathBuf, String> {
-        default_model_path(settings.local_model)
-    }
-
     pub fn summary(&self) -> String {
         let recording = if self.recording.is_some() {
             "Recording active"
@@ -278,13 +274,11 @@ impl DictationController {
             return Ok("Recording already in progress.".to_owned());
         }
 
-        let model_path = default_model_path(settings.local_model)?;
-        if !model_path.exists() {
+        // Same validation as ensure_whisper_context, so a recording never
+        // starts when the later transcription would fail to find the model.
+        if let Err(err) = validated_model_path(settings) {
             self.mark_blocked_now();
-            return Err(format!(
-                "Recording blocked: {} has not been downloaded yet.",
-                settings.local_model.display_label()
-            ));
+            return Err(format!("Recording blocked: {err}"));
         }
 
         let resolved_name = resolve_input_device_name(settings, &self.available_input_devices);
@@ -470,19 +464,12 @@ impl DictationController {
         &mut self,
         settings: &AppSettings,
     ) -> Result<Arc<WhisperContext>, String> {
-        let model_path = resolve_model_path(settings)?;
+        let model_path = validated_model_path(settings)?;
 
         if let Some(cache) = &self.model_cache
             && cache.path == model_path
         {
             return Ok(cache.context.clone());
-        }
-
-        if !model_path.exists() {
-            return Err(format!(
-                "{} has not been downloaded yet. Download it in Settings first.",
-                settings.local_model.display_label()
-            ));
         }
 
         let model_path_string = model_path.to_string_lossy().to_string();

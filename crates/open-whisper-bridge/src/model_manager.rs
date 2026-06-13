@@ -15,6 +15,220 @@ const USER_AGENT: &str = "open-whisper/0.1";
 const DOWNLOAD_BUFFER_SIZE: usize = 64 * 1024;
 const DOWNLOAD_PROGRESS_INTERVAL: Duration = Duration::from_millis(150);
 
+/// whisper.cpp ggml model files start with this little-endian magic ("ggml").
+const GGML_FILE_MAGIC: u32 = 0x6767_6d6c;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModelIntegrity {
+    Missing,
+    Valid,
+    Corrupt { reason: String },
+}
+
+/// Checks a model file on disk: existence, expected byte size (when known)
+/// and the ggml magic header. Cheap enough to run on every status poll.
+pub fn model_file_integrity(path: &Path, expected_size: Option<u64>) -> ModelIntegrity {
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(_) => return ModelIntegrity::Missing,
+    };
+
+    if let Some(expected) = expected_size
+        && metadata.len() != expected
+    {
+        return ModelIntegrity::Corrupt {
+            reason: format!(
+                "file size is {} but {} was expected",
+                human_readable_size(metadata.len()),
+                human_readable_size(expected)
+            ),
+        };
+    }
+
+    let mut magic_bytes = [0_u8; 4];
+    match fs::File::open(path).and_then(|mut file| file.read_exact(&mut magic_bytes)) {
+        Ok(()) => {
+            if u32::from_le_bytes(magic_bytes) != GGML_FILE_MAGIC {
+                return ModelIntegrity::Corrupt {
+                    reason: "file does not start with the ggml magic header".to_owned(),
+                };
+            }
+        }
+        Err(err) => {
+            return ModelIntegrity::Corrupt {
+                reason: format!("file header could not be read: {err}"),
+            };
+        }
+    }
+
+    ModelIntegrity::Valid
+}
+
+/// Integrity of the file at a preset's default download location.
+pub fn preset_model_integrity(preset: ModelPreset) -> ModelIntegrity {
+    match default_model_path(preset) {
+        Ok(path) => model_file_integrity(&path, Some(preset.download_size_bytes())),
+        Err(_) => ModelIntegrity::Missing,
+    }
+}
+
+/// Resolves the model path for the active settings and validates the file.
+/// Used by dictation before recording and before loading the whisper context,
+/// so both ends of the pipeline agree on what "downloaded" means.
+pub fn validated_model_path(settings: &AppSettings) -> Result<PathBuf, String> {
+    let path = resolve_model_path(settings)?;
+    let default_path = default_model_path(settings.local_model).ok();
+    let expected_size = match &default_path {
+        Some(default_path) if *default_path == path => {
+            Some(settings.local_model.download_size_bytes())
+        }
+        // Custom model file chosen by the user: size is unknown to us.
+        _ => None,
+    };
+
+    let override_path = settings.local_model_path.trim();
+    let override_info = if override_path.is_empty() {
+        "no".to_owned()
+    } else {
+        format!("yes ('{override_path}')")
+    };
+
+    match model_file_integrity(&path, expected_size) {
+        ModelIntegrity::Valid => Ok(path),
+        ModelIntegrity::Missing => {
+            log::warn!(
+                target: "models",
+                "model not usable: preset '{}', resolved '{}', exists: false, override set: {override_info}",
+                settings.local_model.display_label(),
+                path.display()
+            );
+            Err(format!(
+                "{} has not been downloaded yet. Download it in Settings first.",
+                settings.local_model.display_label()
+            ))
+        }
+        ModelIntegrity::Corrupt { reason } => {
+            log::warn!(
+                target: "models",
+                "model not usable: preset '{}', resolved '{}', failed verification ({reason}), override set: {override_info}",
+                settings.local_model.display_label(),
+                path.display()
+            );
+            Err(format!(
+                "{} is damaged or incomplete. Please download it again.",
+                settings.local_model.display_label()
+            ))
+        }
+    }
+}
+
+/// Removes leftover `*.part` files from interrupted downloads in `dir`.
+pub fn cleanup_partial_downloads_in(dir: &Path) -> usize {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return 0;
+    };
+
+    let mut removed = 0_usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let is_partial = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("part"));
+        if is_partial && fs::remove_file(&path).is_ok() {
+            log::info!(
+                target: "models",
+                "removed stale partial download {}",
+                path.display()
+            );
+            removed += 1;
+        }
+    }
+    removed
+}
+
+/// Cleans up interrupted whisper model downloads from the default models dir.
+pub fn cleanup_partial_downloads() -> usize {
+    match default_model_path(ModelPreset::default()) {
+        Ok(path) => path.parent().map(cleanup_partial_downloads_in).unwrap_or(0),
+        Err(_) => 0,
+    }
+}
+
+/// Free space on the volume holding `path` (longest matching mount point).
+pub fn free_disk_space_for(path: &Path) -> Option<u64> {
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    disks
+        .iter()
+        .filter(|disk| path.starts_with(disk.mount_point()))
+        .max_by_key(|disk| disk.mount_point().as_os_str().len())
+        .map(sysinfo::Disk::available_space)
+}
+
+/// Writes a full whisper model inventory to the log: which preset is active,
+/// which file the runtime will actually load, and the verification state of
+/// every preset file on disk. Runs at startup and on diagnostics request so
+/// logs from the field answer "what is really on this machine".
+pub fn log_model_inventory(settings: &AppSettings) {
+    let override_path = settings.local_model_path.trim();
+    match resolve_model_path(settings) {
+        Ok(path) => log::info!(
+            target: "models",
+            "inventory: active preset '{}', resolved path '{}' (source: {})",
+            settings.local_model.display_label(),
+            path.display(),
+            if override_path.is_empty() {
+                "preset default"
+            } else {
+                "custom override"
+            }
+        ),
+        Err(err) => log::warn!(
+            target: "models",
+            "inventory: active model path not resolvable: {err}"
+        ),
+    }
+
+    let mut ready = 0_usize;
+    let mut damaged = 0_usize;
+    let mut missing = 0_usize;
+    for preset in ModelPreset::ALL {
+        let filename = preset.default_filename();
+        let Ok(path) = default_model_path(preset) else {
+            continue;
+        };
+        match model_file_integrity(&path, Some(preset.download_size_bytes())) {
+            ModelIntegrity::Valid => {
+                ready += 1;
+                let size = fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
+                log::info!(
+                    target: "models",
+                    "inventory: {filename} — OK ({}, header verified)",
+                    human_readable_size(size)
+                );
+            }
+            ModelIntegrity::Missing => {
+                missing += 1;
+                log::info!(target: "models", "inventory: {filename} — not downloaded");
+            }
+            ModelIntegrity::Corrupt { reason } => {
+                damaged += 1;
+                log::warn!(target: "models", "inventory: {filename} — CORRUPT ({reason})");
+            }
+        }
+    }
+
+    let free_disk = default_model_path(ModelPreset::default())
+        .ok()
+        .and_then(|path| free_disk_space_for(&path))
+        .map(|bytes| format!(", free disk: {}", human_readable_size(bytes)))
+        .unwrap_or_default();
+    log::info!(
+        target: "models",
+        "inventory: {ready} ready, {damaged} damaged, {missing} not downloaded{free_disk}"
+    );
+}
+
 pub struct ModelDownloadManager {
     state: ModelDownloadState,
     download_rx: Option<Receiver<DownloadEvent>>,
@@ -38,15 +252,28 @@ impl ModelDownloadManager {
         }
 
         let target_path = default_model_path(preset)?;
-        if target_path.exists() {
-            self.state = ModelDownloadState::Ready {
-                path: target_path.clone(),
-            };
-            return Ok(format!("{} is already present.", preset.display_label()));
+        match model_file_integrity(&target_path, Some(preset.download_size_bytes())) {
+            ModelIntegrity::Valid => {
+                self.state = ModelDownloadState::Ready {
+                    path: target_path.clone(),
+                };
+                return Ok(format!("{} is already present.", preset.display_label()));
+            }
+            ModelIntegrity::Corrupt { reason } => {
+                log::warn!(
+                    target: "models",
+                    "replacing damaged model file {} ({reason})",
+                    target_path.display()
+                );
+                fs::remove_file(&target_path)
+                    .map_err(|err| format!("Model could not be deleted: {err}"))?;
+            }
+            ModelIntegrity::Missing => {}
         }
 
         let download_url = preset.download_url().to_owned();
         let download_path = target_path.clone();
+        let expected_size = preset.download_size_bytes();
         let temp_path = temporary_download_path(&target_path);
         let (tx, rx) = mpsc::channel();
 
@@ -58,11 +285,42 @@ impl ModelDownloadManager {
             started_at: Instant::now(),
         };
 
+        log::info!(
+            target: "models",
+            "download started: {} from {download_url} (expected {})",
+            preset.default_filename(),
+            human_readable_size(expected_size)
+        );
+
         thread::spawn(move || {
-            let result = download_model_file(&download_url, &download_path, &temp_path, &tx);
-            if let Err(err) = result {
-                let _ = cleanup_temp_file(&temp_path);
-                let _ = tx.send(DownloadEvent::Failed(err));
+            let started = Instant::now();
+            let result = download_model_file(
+                &download_url,
+                &download_path,
+                &temp_path,
+                Some(expected_size),
+                &tx,
+            );
+            let elapsed = started.elapsed();
+            match result {
+                Ok(downloaded_bytes) => log::info!(
+                    target: "models",
+                    "download finished: {} ({} in {}, {}/s), verification OK",
+                    download_path.display(),
+                    human_readable_size(downloaded_bytes),
+                    human_readable_duration(elapsed),
+                    human_readable_size(per_second(downloaded_bytes, elapsed))
+                ),
+                Err(err) => {
+                    log::error!(
+                        target: "models",
+                        "download failed: {} after {} — {err}",
+                        download_path.display(),
+                        human_readable_duration(elapsed)
+                    );
+                    let _ = cleanup_temp_file(&temp_path);
+                    let _ = tx.send(DownloadEvent::Failed(err));
+                }
             }
         });
 
@@ -159,12 +417,20 @@ impl ModelDownloadManager {
         }
 
         if let Ok(path) = resolve_model_path(settings) {
-            self.state = if path.exists() {
-                ModelDownloadState::Ready { path }
-            } else {
-                ModelDownloadState::Missing
+            let expected_size = default_model_path(settings.local_model)
+                .ok()
+                .filter(|default_path| *default_path == path)
+                .map(|_| settings.local_model.download_size_bytes());
+            self.state = match model_file_integrity(&path, expected_size) {
+                ModelIntegrity::Valid => ModelDownloadState::Ready { path },
+                ModelIntegrity::Missing => ModelDownloadState::Missing,
+                ModelIntegrity::Corrupt { .. } => ModelDownloadState::Corrupt,
             };
         }
+    }
+
+    pub fn is_corrupt(&self) -> bool {
+        matches!(self.state, ModelDownloadState::Corrupt)
     }
 
     pub fn is_downloading(&self) -> bool {
@@ -208,6 +474,12 @@ impl ModelDownloadManager {
                     settings.local_model.display_label()
                 )
             }
+            ModelDownloadState::Corrupt => {
+                format!(
+                    "{} is damaged or incomplete. Please download it again.",
+                    settings.local_model.display_label()
+                )
+            }
             ModelDownloadState::Ready { path } => summary_for_existing_path(path),
             ModelDownloadState::Downloading {
                 preset,
@@ -239,6 +511,7 @@ impl ModelDownloadManager {
 enum ModelDownloadState {
     Idle,
     Missing,
+    Corrupt,
     Ready {
         path: PathBuf,
     },
@@ -282,12 +555,14 @@ pub fn default_model_path(preset: ModelPreset) -> Result<PathBuf, String> {
         .join(preset.default_filename()))
 }
 
+/// Returns the number of downloaded bytes on success.
 fn download_model_file(
     url: &str,
     target_path: &Path,
     temp_path: &Path,
+    expected_size: Option<u64>,
     tx: &mpsc::Sender<DownloadEvent>,
-) -> Result<(), String> {
+) -> Result<u64, String> {
     if let Some(parent) = target_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Model directory could not be created: {err}"))?;
@@ -335,6 +610,33 @@ fn download_model_file(
 
     file.sync_all()
         .map_err(|err| format!("Model file could not be finalized: {err}"))?;
+    drop(file);
+
+    if let Some(total) = total_bytes
+        && downloaded_bytes != total
+    {
+        return Err(format!(
+            "Model download was incomplete ({} of {}). Please try again.",
+            human_readable_size(downloaded_bytes),
+            human_readable_size(total)
+        ));
+    }
+
+    match model_file_integrity(temp_path, expected_size) {
+        ModelIntegrity::Valid => {}
+        ModelIntegrity::Missing => {
+            return Err("Downloaded model file disappeared before verification.".to_owned());
+        }
+        ModelIntegrity::Corrupt { reason } => {
+            log::warn!(
+                target: "models",
+                "downloaded model failed verification ({}): {reason}",
+                temp_path.display()
+            );
+            return Err(format!("Downloaded model failed verification: {reason}"));
+        }
+    }
+
     fs::rename(temp_path, target_path)
         .map_err(|err| format!("Model file could not be activated: {err}"))?;
 
@@ -343,7 +645,17 @@ fn download_model_file(
         downloaded_bytes,
     });
 
-    Ok(())
+    Ok(downloaded_bytes)
+}
+
+/// Average bytes per second; saturates to the total on sub-second downloads.
+fn per_second(bytes: u64, elapsed: Duration) -> u64 {
+    let secs = elapsed.as_secs_f64();
+    if secs < 0.001 {
+        bytes
+    } else {
+        (bytes as f64 / secs) as u64
+    }
 }
 
 fn temporary_download_path(target_path: &Path) -> PathBuf {
@@ -432,5 +744,64 @@ mod tests {
     fn human_readable_size_uses_expected_units() {
         assert_eq!(human_readable_size(900), "900 B");
         assert_eq!(human_readable_size(2_048), "2.0 KB");
+    }
+
+    fn write_temp_model(name: &str, contents: &[u8]) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("open-whisper-test-{name}"));
+        fs::write(&path, contents).unwrap();
+        path
+    }
+
+    #[test]
+    fn integrity_missing_for_absent_file() {
+        let path = std::env::temp_dir().join("open-whisper-test-does-not-exist.bin");
+        assert_eq!(model_file_integrity(&path, None), ModelIntegrity::Missing);
+    }
+
+    #[test]
+    fn integrity_valid_for_ggml_file_with_expected_size() {
+        let mut contents = GGML_FILE_MAGIC.to_le_bytes().to_vec();
+        contents.extend_from_slice(&[0_u8; 12]);
+        let path = write_temp_model("valid.bin", &contents);
+        assert_eq!(
+            model_file_integrity(&path, Some(contents.len() as u64)),
+            ModelIntegrity::Valid
+        );
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn integrity_corrupt_on_size_mismatch() {
+        let mut contents = GGML_FILE_MAGIC.to_le_bytes().to_vec();
+        contents.extend_from_slice(&[0_u8; 12]);
+        let path = write_temp_model("truncated.bin", &contents);
+        assert!(matches!(
+            model_file_integrity(&path, Some(contents.len() as u64 + 1)),
+            ModelIntegrity::Corrupt { .. }
+        ));
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn integrity_corrupt_on_bad_magic() {
+        let contents = b"<html>not a model</html>".to_vec();
+        let path = write_temp_model("bad-magic.bin", &contents);
+        assert!(matches!(
+            model_file_integrity(&path, Some(contents.len() as u64)),
+            ModelIntegrity::Corrupt { .. }
+        ));
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn cleanup_removes_only_part_files() {
+        let dir = std::env::temp_dir().join("open-whisper-test-partials");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("ggml-base.bin.part"), b"partial").unwrap();
+        fs::write(dir.join("ggml-base.bin"), b"keep").unwrap();
+        assert_eq!(cleanup_partial_downloads_in(&dir), 1);
+        assert!(!dir.join("ggml-base.bin.part").exists());
+        assert!(dir.join("ggml-base.bin").exists());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

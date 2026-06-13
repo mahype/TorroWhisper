@@ -828,6 +828,9 @@ pub struct ModelStatusDto {
     pub summary: String,
     pub is_downloaded: bool,
     pub is_downloading: bool,
+    /// File exists but failed verification (wrong size or bad header) —
+    /// typically an interrupted or damaged download.
+    pub is_corrupt: bool,
     pub progress_basis_points: Option<u16>,
     pub expected_size_bytes: u64,
 }

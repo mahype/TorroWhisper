@@ -788,21 +788,21 @@ final class AppModel: ObservableObject {
     }
 
     func choosePreset(_ preset: ModelPreset) {
-        let previousFilename = URL(fileURLWithPath: settings.localModelPath).lastPathComponent
-        let previousDefaults = Set(ModelPreset.allCases.map(\.defaultFilename))
-
         settings.localModel = preset
-        if settings.localModelPath.isEmpty || previousDefaults.contains(previousFilename) {
-            let basePath = modelStatus.path.isEmpty ? settings.localModelPath : modelStatus.path
-            if !basePath.isEmpty {
-                let newURL = URL(fileURLWithPath: basePath).deletingLastPathComponent().appendingPathComponent(preset.defaultFilename)
-                settings.localModelPath = newURL.path
-            } else {
-                settings.localModelPath = ""
-            }
-        }
-
+        clearPinnedDefaultModelPath(&settings.localModelPath)
         requestAutoSave()
+    }
+
+    /// localModelPath is only meant for user-chosen custom model files. Older
+    /// versions pinned a preset's default path here, which went stale after a
+    /// preset switch — the bridge resolves the per-preset default itself when
+    /// the path is empty.
+    private func clearPinnedDefaultModelPath(_ path: inout String) {
+        guard !path.isEmpty else { return }
+        let filename = URL(fileURLWithPath: path).lastPathComponent
+        if Set(ModelPreset.allCases.map(\.defaultFilename)).contains(filename) {
+            path = ""
+        }
     }
 
     func beginEditingMode(_ modeID: String) {
@@ -866,22 +866,8 @@ final class AppModel: ObservableObject {
     func persistWhisperPresetImmediately(_ preset: ModelPreset) {
         do {
             var freshSettings = try bridge.loadSettings()
-            let previousFilename = URL(fileURLWithPath: freshSettings.localModelPath).lastPathComponent
-            let previousDefaults = Set(ModelPreset.allCases.map(\.defaultFilename))
-
             freshSettings.localModel = preset
-            if freshSettings.localModelPath.isEmpty || previousDefaults.contains(previousFilename) {
-                let basePath = modelStatus.path.isEmpty ? freshSettings.localModelPath : modelStatus.path
-                if !basePath.isEmpty {
-                    let newURL = URL(fileURLWithPath: basePath)
-                        .deletingLastPathComponent()
-                        .appendingPathComponent(preset.defaultFilename)
-                    freshSettings.localModelPath = newURL.path
-                } else {
-                    freshSettings.localModelPath = ""
-                }
-            }
-
+            clearPinnedDefaultModelPath(&freshSettings.localModelPath)
             _ = try bridge.saveSettings(freshSettings)
             reloadAll()
         } catch {

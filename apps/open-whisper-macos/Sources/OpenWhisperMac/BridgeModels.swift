@@ -743,6 +743,7 @@ struct ModelStatusDTO: Codable, Identifiable {
     var summary: String
     var isDownloaded: Bool
     var isDownloading: Bool
+    var isCorrupt: Bool
     var progressBasisPoints: UInt16?
     var expectedSizeBytes: UInt64
 
@@ -755,6 +756,7 @@ struct ModelStatusDTO: Codable, Identifiable {
         summary: "No model status loaded yet.",
         isDownloaded: false,
         isDownloading: false,
+        isCorrupt: false,
         progressBasisPoints: nil,
         expectedSizeBytes: ModelPreset.standard.downloadSizeBytes
     )
