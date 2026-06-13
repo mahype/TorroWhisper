@@ -129,6 +129,12 @@ final class BridgeClient {
         try decodeResponse(from: ow_get_log_path())
     }
 
+    /// Writes a diagnostics snapshot (settings, hotkey, model inventories)
+    /// into the shared log file. Returns a localized confirmation message.
+    func writeDiagnosticsLog() throws -> String {
+        try decodeResponse(from: ow_write_diagnostics_log())
+    }
+
     /// Writes a line into the shared bridge log file. Levels: "error",
     /// "warn", "debug"; anything else logs at info.
     func logMessage(level: String, message: String) {
