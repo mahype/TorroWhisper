@@ -22,6 +22,7 @@ char *ow_get_llm_registry(void);
 char *ow_set_llm_api_key(const char *request_json);
 char *ow_delete_llm_api_key(const char *request_json);
 char *ow_get_llm_api_key_status(void);
+char *ow_list_pipeline_stages(void);
 char *ow_run_permission_diagnostics(void);
 char *ow_start_dictation(void);
 char *ow_stop_dictation(void);
