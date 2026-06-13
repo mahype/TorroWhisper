@@ -93,6 +93,7 @@
 "Display name" = "Anzeigename";
 "Done" = "Fertig";
 "Download" = "Herunterladen";
+"Download again" = "Erneut herunterladen";
 "Download URL (.gguf)" = "Download-URL (.gguf)";
 "Downloading" = "Download läuft";
 "Edit post-processing" = "Nachbearbeitung bearbeiten";
@@ -288,6 +289,8 @@
 "Open Whisper writes events and errors to a log file. Attach it when reporting problems." = "Open Whisper schreibt Ereignisse und Fehler in eine Logdatei. Bei Problemberichten bitte anhängen.";
 "Show log file in Finder" = "Logdatei im Finder anzeigen";
 "Copy recent log to clipboard" = "Letzte Log-Einträge kopieren";
+"Write diagnostics to log" = "Diagnose ins Protokoll schreiben";
+"Diagnostics could not be written." = "Diagnose konnte nicht geschrieben werden.";
 
 /* Einstellungen: bisher unübersetzte UI-Strings */
 "Switch microphone automatically when unplugged" = "Mikrofon automatisch wechseln, wenn es entfernt wird";

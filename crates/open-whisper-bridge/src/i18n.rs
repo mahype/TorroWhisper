@@ -233,6 +233,9 @@ fn static_de(en: &str) -> Option<&'static str> {
             "Ein laufender Download kann nicht gleichzeitig gelöscht werden."
         }
         "Download worker stopped unexpectedly." => "Download-Prozess wurde unerwartet beendet.",
+        "Downloaded model file disappeared before verification." => {
+            "Heruntergeladene Modelldatei verschwand vor der Überprüfung."
+        }
         "Language model download worker stopped unexpectedly." => {
             "Sprachmodell-Download-Prozess wurde unerwartet beendet."
         }
@@ -255,6 +258,7 @@ fn static_de(en: &str) -> Option<&'static str> {
 
         // Diagnostics
         "Diagnostics loading." => "Diagnose wird geladen.",
+        "Diagnostics written to log." => "Diagnose ins Protokoll geschrieben.",
         "Diagnostics: no open issues detected." => "Diagnose: keine offenen Probleme gefunden.",
         "Microphone" => "Mikrofon",
         "Input device" => "Eingabegerät",
@@ -316,6 +320,7 @@ const TEMPLATES_DE: &[(&str, &str)] = &[
         "Recording blocked: {0} has not been downloaded yet.",
         "Aufnahme blockiert: {0} wurde noch nicht heruntergeladen.",
     ),
+    ("Recording blocked: {0}", "Aufnahme blockiert: {0}"),
     (
         "Whisper transcript ready. Post-processing '{0}' running.",
         "Whisper-Transkript bereit. Nachbearbeitung '{0}' läuft.",
@@ -358,8 +363,28 @@ const TEMPLATES_DE: &[(&str, &str)] = &[
     ),
     ("Local model ready ({0})", "Lokales Modell bereit ({0})"),
     (
+        "{0} has not been downloaded yet. Download it in Settings first.",
+        "{0} wurde noch nicht heruntergeladen. Lade es zuerst in den Einstellungen herunter.",
+    ),
+    (
         "{0} has not been downloaded yet.",
         "{0} wurde noch nicht heruntergeladen.",
+    ),
+    (
+        "{0} is damaged or incomplete. Please download it again.",
+        "{0} ist beschädigt oder unvollständig. Bitte lade es erneut herunter.",
+    ),
+    (
+        "Model download was incomplete ({0} of {1}). Please try again.",
+        "Modell-Download war unvollständig ({0} von {1}). Bitte versuche es erneut.",
+    ),
+    (
+        "Language model download was incomplete ({0} of {1}). Please try again.",
+        "Sprachmodell-Download war unvollständig ({0} von {1}). Bitte versuche es erneut.",
+    ),
+    (
+        "Downloaded model failed verification: {0}",
+        "Heruntergeladenes Modell hat die Überprüfung nicht bestanden: {0}",
     ),
     ("Download for {0} in progress.", "Download für {0} läuft."),
     ("{0} ({1}) not loaded yet.", "{0} ({1}) noch nicht geladen."),

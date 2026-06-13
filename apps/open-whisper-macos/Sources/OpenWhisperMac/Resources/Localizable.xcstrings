@@ -31,6 +31,16 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Letzte Log-Einträge kopieren" } }
       }
     },
+    "Write diagnostics to log" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Diagnose ins Protokoll schreiben" } }
+      }
+    },
+    "Diagnostics could not be written." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Diagnose konnte nicht geschrieben werden." } }
+      }
+    },
     "Check accessibility access" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Zugriff prüfen" } }
@@ -406,6 +416,11 @@
     "Download" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Herunterladen" } }
+      }
+    },
+    "Download again" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Erneut herunterladen" } }
       }
     },
     "Download URL (.gguf)" : {

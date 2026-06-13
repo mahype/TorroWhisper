@@ -58,13 +58,13 @@ impl LlmModelDownloadManager {
             started_at: Instant::now(),
         };
 
-        thread::spawn(move || {
-            let result = download_model_file(&download_url, &download_path, &temp_path, &tx);
-            if let Err(err) = result {
-                let _ = cleanup_temp_file(&temp_path);
-                let _ = tx.send(DownloadEvent::Failed(err));
-            }
-        });
+        log::info!(
+            target: "models",
+            "llm download started: {} from {download_url} (expected {})",
+            preset.default_filename(),
+            human_readable_size(preset.download_size_bytes())
+        );
+        spawn_logged_download(download_url, download_path, temp_path, tx);
 
         Ok(format!("Download for {} started.", preset.display_label()))
     }
@@ -106,13 +106,11 @@ impl LlmModelDownloadManager {
             started_at: Instant::now(),
         };
 
-        thread::spawn(move || {
-            let result = download_model_file(&download_url, &download_path, &temp_path, &tx);
-            if let Err(err) = result {
-                let _ = cleanup_temp_file(&temp_path);
-                let _ = tx.send(DownloadEvent::Failed(err));
-            }
-        });
+        log::info!(
+            target: "models",
+            "llm download started: custom '{display_name}' from {download_url}"
+        );
+        spawn_logged_download(download_url, download_path, temp_path, tx);
 
         Ok(format!("Download for {} started.", display_name))
     }
@@ -418,12 +416,47 @@ pub fn default_custom_llm_path(id: &str) -> Result<PathBuf, String> {
         .join(format!("{trimmed}.gguf")))
 }
 
+/// Runs the download on a worker thread and logs outcome plus duration/speed.
+fn spawn_logged_download(
+    download_url: String,
+    download_path: PathBuf,
+    temp_path: PathBuf,
+    tx: mpsc::Sender<DownloadEvent>,
+) {
+    thread::spawn(move || {
+        let started = Instant::now();
+        let result = download_model_file(&download_url, &download_path, &temp_path, &tx);
+        let elapsed = started.elapsed();
+        match result {
+            Ok(downloaded_bytes) => log::info!(
+                target: "models",
+                "llm download finished: {} ({} in {}, {}/s)",
+                download_path.display(),
+                human_readable_size(downloaded_bytes),
+                human_readable_duration(elapsed),
+                human_readable_size(per_second(downloaded_bytes, elapsed))
+            ),
+            Err(err) => {
+                log::error!(
+                    target: "models",
+                    "llm download failed: {} after {} — {err}",
+                    download_path.display(),
+                    human_readable_duration(elapsed)
+                );
+                let _ = cleanup_temp_file(&temp_path);
+                let _ = tx.send(DownloadEvent::Failed(err));
+            }
+        }
+    });
+}
+
+/// Returns the number of downloaded bytes on success.
 fn download_model_file(
     url: &str,
     target_path: &Path,
     temp_path: &Path,
     tx: &mpsc::Sender<DownloadEvent>,
-) -> Result<(), String> {
+) -> Result<u64, String> {
     if let Some(parent) = target_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("Language model directory could not be created: {err}"))?;
@@ -471,6 +504,18 @@ fn download_model_file(
 
     file.sync_all()
         .map_err(|err| format!("Language model file could not be finalized: {err}"))?;
+    drop(file);
+
+    if let Some(total) = total_bytes
+        && downloaded_bytes != total
+    {
+        return Err(format!(
+            "Language model download was incomplete ({} of {}). Please try again.",
+            human_readable_size(downloaded_bytes),
+            human_readable_size(total)
+        ));
+    }
+
     fs::rename(temp_path, target_path)
         .map_err(|err| format!("Language model file could not be activated: {err}"))?;
 
@@ -479,7 +524,69 @@ fn download_model_file(
         downloaded_bytes,
     });
 
-    Ok(())
+    Ok(downloaded_bytes)
+}
+
+/// Average bytes per second; saturates to the total on sub-second downloads.
+fn per_second(bytes: u64, elapsed: Duration) -> u64 {
+    let secs = elapsed.as_secs_f64();
+    if secs < 0.001 {
+        bytes
+    } else {
+        (bytes as f64 / secs) as u64
+    }
+}
+
+/// Writes an inventory of local language model files to the log.
+pub fn log_llm_inventory(settings: &AppSettings) {
+    for preset in LlmPreset::ALL {
+        let filename = preset.default_filename();
+        let Ok(path) = default_llm_model_path(preset) else {
+            continue;
+        };
+        match fs::metadata(&path) {
+            Ok(metadata) if metadata.len() == preset.download_size_bytes() => {
+                log::info!(
+                    target: "models",
+                    "llm inventory: {filename} — OK ({})",
+                    human_readable_size(metadata.len())
+                );
+            }
+            Ok(metadata) => log::warn!(
+                target: "models",
+                "llm inventory: {filename} — size {} but {} expected",
+                human_readable_size(metadata.len()),
+                human_readable_size(preset.download_size_bytes())
+            ),
+            Err(_) => {
+                log::info!(target: "models", "llm inventory: {filename} — not downloaded");
+            }
+        }
+    }
+
+    for entry in &settings.custom_llm_models {
+        let location = match &entry.source {
+            open_whisper_core::CustomLlmSource::LocalPath { path } => {
+                if Path::new(path).exists() {
+                    format!("local file present ({path})")
+                } else {
+                    format!("local file MISSING ({path})")
+                }
+            }
+            open_whisper_core::CustomLlmSource::DownloadUrl { .. } => {
+                match default_custom_llm_path(&entry.id) {
+                    Ok(path) if path.exists() => format!("downloaded ({})", path.display()),
+                    Ok(_) => "not downloaded".to_owned(),
+                    Err(err) => format!("path not resolvable: {err}"),
+                }
+            }
+        };
+        log::info!(
+            target: "models",
+            "llm inventory: custom '{}' — {location}",
+            entry.name
+        );
+    }
 }
 
 fn temporary_download_path(target_path: &Path) -> PathBuf {
