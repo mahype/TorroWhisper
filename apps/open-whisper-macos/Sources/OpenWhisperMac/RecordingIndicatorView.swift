@@ -9,6 +9,9 @@ enum IndicatorPhase: Equatable {
     /// error, worker crash, insertion failure) so the bubble doesn't just
     /// vanish without explanation.
     case error(message: String)
+    /// Shown briefly (~1s) after a successful dictation so a fast completion
+    /// reads as "finished" instead of the bubble silently disappearing.
+    case done
 }
 
 @MainActor
@@ -131,9 +134,9 @@ struct RecordingIndicatorView: View {
     @ViewBuilder
     private var content: some View {
         switch phase {
-        case .recording, .transcribing, .postProcessing, .error:
+        case .recording, .transcribing, .postProcessing, .error, .done:
             // Identical layout across every active phase (including the failure
-            // state) so the box never jumps: the dark waveform area stays up top
+            // and done states) so the box never jumps: the dark waveform area stays up top
             // (flat while not recording) and the status line stays put — only the
             // leading dot color and the title/hint text swap out.
             VStack(spacing: 8 * scale) {
@@ -157,10 +160,14 @@ struct RecordingIndicatorView: View {
         return nil
     }
 
+    private var isDonePhase: Bool { phase == .done }
+
     /// Title line in the status row: "Dictation failed" in the error phase,
-    /// otherwise the model name.
+    /// "Done" in the done phase, otherwise the model name.
     private var primaryLineText: String {
-        errorMessage != nil ? L("Dictation failed", locale: locale) : modelName
+        if errorMessage != nil { return L("Dictation failed", locale: locale) }
+        if isDonePhase { return L("Done", locale: locale) }
+        return modelName
     }
 
     /// Detail line: the error message in the error phase, otherwise the phase hint.
@@ -183,7 +190,7 @@ struct RecordingIndicatorView: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
-                if errorMessage == nil, let modeName, !modeName.isEmpty {
+                if errorMessage == nil, !isDonePhase, let modeName, !modeName.isEmpty {
                     Text(modeName)
                         .font(scaledFont(10))
                         .foregroundStyle(subtleTextStyle)
@@ -234,7 +241,7 @@ struct RecordingIndicatorView: View {
             return isCancelling
                 ? L("Cancelling — saving to history…", locale: locale)
                 : L("Post-processing in progress", locale: locale)
-        case .modelNotReady, .error:
+        case .modelNotReady, .error, .done:
             return ""
         }
     }
@@ -269,13 +276,14 @@ struct RecordingIndicatorView: View {
         case .postProcessing: return .yellow
         case .modelNotReady: return .orange
         case .error: return .red
+        case .done: return .green
         }
     }
 
     private var isBlinkPhase: Bool {
         switch phase {
         case .transcribing, .postProcessing: return true
-        case .recording, .modelNotReady, .error: return false
+        case .recording, .modelNotReady, .error, .done: return false
         }
     }
 

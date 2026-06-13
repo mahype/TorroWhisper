@@ -4,7 +4,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use open_whisper_core::{AppSettings, CustomLlmSource, PostProcessingChoice};
@@ -31,6 +31,20 @@ pub fn process_text(
 
     let mode = settings.active_mode();
     let choice = settings.effective_post_processing_choice(mode);
+
+    let backend_label = match &choice {
+        PostProcessingChoice::LocalPreset { .. } => "local model".to_owned(),
+        PostProcessingChoice::LocalCustom { .. } => "local custom model".to_owned(),
+        PostProcessingChoice::Ollama { model_name } => format!("Ollama ({model_name})"),
+        PostProcessingChoice::LmStudio { model_name } => format!("LM Studio ({model_name})"),
+    };
+    let started = Instant::now();
+    log::info!(
+        target: "post_processing",
+        "post-processing '{}' via {backend_label} ({} chars in)",
+        mode.name,
+        raw_transcript.chars().count()
+    );
 
     let text = match choice {
         PostProcessingChoice::LocalPreset { preset } => local_llm::generate_with_shared_runtime(
@@ -105,6 +119,13 @@ pub fn process_text(
     if trimmed.is_empty() {
         return Err("Post-processing returned no text.".to_owned());
     }
+
+    log::info!(
+        target: "post_processing",
+        "post-processing via {backend_label} done in {:.1}s ({} chars out)",
+        started.elapsed().as_secs_f32(),
+        trimmed.chars().count()
+    );
 
     Ok(trimmed.to_owned())
 }

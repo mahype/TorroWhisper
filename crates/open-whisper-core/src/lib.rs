@@ -940,6 +940,11 @@ pub struct RuntimeStatusDto {
     /// Bumped on every dictation failure; the app compares it against the
     /// last seen value to drive the error state of the recording bubble.
     pub dictation_error_count: u64,
+    /// Bumped on every successfully delivered dictation (transcript inserted or
+    /// readied with auto-insert off). The app compares it against the last seen
+    /// value to flash a brief green "done" state in the recording bubble so a
+    /// fast completion doesn't look like the bubble crashing.
+    pub dictation_success_count: u64,
     pub dictation_trigger_count: u64,
     pub hotkey_registered: bool,
     pub hotkey_text: String,
