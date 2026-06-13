@@ -629,6 +629,15 @@ impl From<PostProcessingChoice> for LlmModelRef {
     }
 }
 
+/// Whether a cloud backend currently has an API key stored in the Keychain.
+/// Returned by the FFI key-status endpoint — only the boolean crosses the
+/// boundary, never the secret itself.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ApiKeyStatusDto {
+    pub backend: LlmBackendKind,
+    pub has_key: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct ProcessingMode {

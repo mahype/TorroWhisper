@@ -23,6 +23,7 @@ mp3lame-encoder = "0.2.1"
 open-whisper-core = { path = "../open-whisper-core" }
 regex = "1.11"
 reqwest = { version = "0.13.2", features = ["blocking", "json", "rustls"] }
+security-framework = "2"
 serde.workspace = true
 serde_json = "1.0.149"
 sys-locale = "0.3"

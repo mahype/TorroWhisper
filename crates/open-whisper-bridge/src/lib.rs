@@ -1336,6 +1336,17 @@ struct LogMessageRequest {
     message: String,
 }
 
+#[derive(Deserialize)]
+struct ApiKeySetRequest {
+    backend: open_whisper_core::LlmBackendKind,
+    key: String,
+}
+
+#[derive(Deserialize)]
+struct ApiKeyBackendRequest {
+    backend: open_whisper_core::LlmBackendKind,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_log_path() -> *mut c_char {
     logging::init();
@@ -1368,6 +1379,47 @@ pub extern "C" fn ow_write_diagnostics_log() -> *mut c_char {
     response_ok(with_runtime_value(
         BridgeRuntime::write_diagnostics_snapshot,
     ))
+}
+
+/// Stores a cloud-provider API key in the macOS Keychain. The secret crosses
+/// the FFI boundary only on this explicit set; it is never read back out.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_set_llm_api_key(request_json: *const c_char) -> *mut c_char {
+    let result =
+        parse_json_arg::<ApiKeySetRequest>(request_json, "ApiKeySetRequest").and_then(|req| {
+            llm::keychain::set_api_key(req.backend, &req.key).map(|()| "ok".to_owned())
+        });
+    response_from_result(result)
+}
+
+/// Removes a cloud-provider API key from the Keychain.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_delete_llm_api_key(request_json: *const c_char) -> *mut c_char {
+    let result = parse_json_arg::<ApiKeyBackendRequest>(request_json, "ApiKeyBackendRequest")
+        .and_then(|req| llm::keychain::delete_api_key(req.backend).map(|()| "ok".to_owned()));
+    response_from_result(result)
+}
+
+/// Reports which cloud backends currently have a key stored — booleans only,
+/// never the secrets themselves.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_get_llm_api_key_status() -> *mut c_char {
+    use open_whisper_core::{ApiKeyStatusDto, LlmBackendKind};
+    let statuses: Vec<ApiKeyStatusDto> = [
+        LlmBackendKind::OpenAi,
+        LlmBackendKind::Mistral,
+        LlmBackendKind::DeepSeek,
+        LlmBackendKind::Grok,
+        LlmBackendKind::Anthropic,
+        LlmBackendKind::Gemini,
+    ]
+    .into_iter()
+    .map(|backend| ApiKeyStatusDto {
+        backend,
+        has_key: llm::keychain::has_api_key(backend),
+    })
+    .collect();
+    response_ok(statuses)
 }
 
 #[unsafe(no_mangle)]

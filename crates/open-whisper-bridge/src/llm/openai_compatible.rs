@@ -1,0 +1,128 @@
+//! OpenAI-compatible Chat-Completions backend.
+//!
+//! One implementation for every vendor that speaks the OpenAI Chat-Completions
+//! wire format — OpenAI, Mistral, DeepSeek and Grok (xAI). They differ only in
+//! base URL and which Keychain key authenticates the `Authorization: Bearer`
+//! header.
+
+use std::sync::{Arc, atomic::AtomicBool};
+
+use open_whisper_core::OpenAiCompatibleProvider;
+use serde_json::{Value, json};
+
+use super::{LlmProvider, USER_AGENT, build_http_client, build_system_prompt};
+
+pub(super) struct OpenAiCompatibleProviderImpl {
+    provider: OpenAiCompatibleProvider,
+    model_name: String,
+    api_key: String,
+}
+
+impl OpenAiCompatibleProviderImpl {
+    pub(super) fn new(
+        provider: OpenAiCompatibleProvider,
+        model_name: String,
+        api_key: String,
+    ) -> Self {
+        Self {
+            provider,
+            model_name,
+            api_key,
+        }
+    }
+}
+
+/// Base URL (without the trailing `/chat/completions`) for each vendor.
+fn base_url(provider: OpenAiCompatibleProvider) -> &'static str {
+    match provider {
+        OpenAiCompatibleProvider::OpenAi => "https://api.openai.com/v1",
+        OpenAiCompatibleProvider::Mistral => "https://api.mistral.ai/v1",
+        OpenAiCompatibleProvider::DeepSeek => "https://api.deepseek.com/v1",
+        OpenAiCompatibleProvider::Grok => "https://api.x.ai/v1",
+    }
+}
+
+impl LlmProvider for OpenAiCompatibleProviderImpl {
+    fn generate(
+        &self,
+        role_prompt: &str,
+        user_text: &str,
+        _cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        let client = build_http_client()?;
+        let system_prompt = build_system_prompt(role_prompt);
+        let url = format!("{}/chat/completions", base_url(self.provider));
+
+        let response = client
+            .post(&url)
+            .header(reqwest::header::USER_AGENT, USER_AGENT)
+            .bearer_auth(&self.api_key)
+            .json(&json!({
+                "model": self.model_name,
+                "temperature": 0.1,
+                "messages": [
+                    { "role": "system", "content": system_prompt },
+                    { "role": "user", "content": user_text },
+                ]
+            }))
+            .send()
+            .map_err(|err| format!("Cloud post-processing could not be started: {err}"))?;
+
+        let status = response.status();
+        let value: Value = response
+            .json()
+            .map_err(|err| format!("Cloud response could not be read: {err}"))?;
+        if !status.is_success() {
+            return Err(format!(
+                "{} returned HTTP {status} during post-processing.",
+                self.provider.backend_kind().label()
+            ));
+        }
+
+        parse_chat_completion(&value)
+    }
+}
+
+/// Extracts the assistant text from an OpenAI Chat-Completions response body.
+fn parse_chat_completion(value: &Value) -> Result<String, String> {
+    value
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .and_then(|message| message.get("content"))
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| "Cloud response contained no processed text.".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_assistant_content() {
+        let body = json!({
+            "choices": [{ "message": { "role": "assistant", "content": "cleaned up text" } }]
+        });
+        assert_eq!(parse_chat_completion(&body).unwrap(), "cleaned up text");
+    }
+
+    #[test]
+    fn errors_on_missing_content() {
+        let body = json!({ "choices": [] });
+        assert!(parse_chat_completion(&body).is_err());
+    }
+
+    #[test]
+    fn base_urls_are_https() {
+        for provider in [
+            OpenAiCompatibleProvider::OpenAi,
+            OpenAiCompatibleProvider::Mistral,
+            OpenAiCompatibleProvider::DeepSeek,
+            OpenAiCompatibleProvider::Grok,
+        ] {
+            assert!(base_url(provider).starts_with("https://"));
+        }
+    }
+}

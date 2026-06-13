@@ -7,8 +7,12 @@
 //! subprocess (ggml symbol-collision workaround); remote backends are blocking
 //! HTTP calls.
 
+mod anthropic;
+mod gemini;
+pub(crate) mod keychain;
 mod lm_studio;
 mod ollama;
+mod openai_compatible;
 
 use std::{
     path::PathBuf,
@@ -16,7 +20,7 @@ use std::{
     time::Duration,
 };
 
-use open_whisper_core::{AppSettings, CustomLlmSource, LlmModelRef, LlmPreset};
+use open_whisper_core::{AppSettings, CustomLlmSource, LlmBackendKind, LlmModelRef, LlmPreset};
 use reqwest::blocking::Client;
 
 use crate::{llm_model_manager, local_llm};
@@ -81,16 +85,40 @@ pub fn provider_for(
             settings.lm_studio.endpoint.clone(),
             model_name.clone(),
         ))),
-        // Cloud providers are introduced in a follow-up slice (Keychain-backed
-        // OpenAI-compatible / Anthropic / Gemini). Until then a clear error
-        // beats a silent failure.
-        LlmModelRef::OpenAiCompatible { .. }
-        | LlmModelRef::Anthropic { .. }
-        | LlmModelRef::Gemini { .. } => Err(format!(
-            "{} models are not configured yet.",
-            model.backend_kind().label()
-        )),
+        LlmModelRef::OpenAiCompatible {
+            provider,
+            model_name,
+        } => {
+            let api_key = require_api_key(provider.backend_kind())?;
+            Ok(Box::new(
+                openai_compatible::OpenAiCompatibleProviderImpl::new(
+                    *provider,
+                    model_name.clone(),
+                    api_key,
+                ),
+            ))
+        }
+        LlmModelRef::Anthropic { model_name } => {
+            let api_key = require_api_key(LlmBackendKind::Anthropic)?;
+            Ok(Box::new(anthropic::AnthropicProvider::new(
+                model_name.clone(),
+                api_key,
+            )))
+        }
+        LlmModelRef::Gemini { model_name } => {
+            let api_key = require_api_key(LlmBackendKind::Gemini)?;
+            Ok(Box::new(gemini::GeminiProvider::new(
+                model_name.clone(),
+                api_key,
+            )))
+        }
     }
+}
+
+/// Fetches a cloud backend's Keychain API key, or a clear error if unset.
+fn require_api_key(kind: LlmBackendKind) -> Result<String, String> {
+    keychain::get_api_key(kind)
+        .ok_or_else(|| format!("API key for {} is not configured.", kind.label()))
 }
 
 /// Local GGUF backend, backed by the shared llama-helper subprocess.
