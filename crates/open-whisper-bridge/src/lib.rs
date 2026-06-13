@@ -2,6 +2,7 @@
 mod audio_export;
 #[allow(dead_code)]
 mod autostart;
+mod chat;
 #[allow(dead_code)]
 mod dictation;
 mod dictionary;
@@ -42,9 +43,9 @@ use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey:
 use llm_model_manager::LlmModelDownloadManager;
 use model_manager::ModelDownloadManager;
 use open_whisper_core::{
-    AppSettings, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto, HistoryEntry,
-    LlmModelStatusDto, LlmPreset, LlmRegistryEntryDto, ModelPreset, ModelStatusDto,
-    RecordingLevelsDto, RemoteModelBackend, RemoteModelDto, RuntimeStatusDto,
+    AppSettings, ChatStateDto, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto,
+    HistoryEntry, LlmModelRef, LlmModelStatusDto, LlmPreset, LlmRegistryEntryDto, ModelPreset,
+    ModelStatusDto, RecordingLevelsDto, RemoteModelBackend, RemoteModelDto, RuntimeStatusDto,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -67,6 +68,11 @@ struct BridgeRuntime {
     last_dictation_error: String,
     dictation_error_count: u64,
     dictation_success_count: u64,
+    /// Chat plugin session. Reuses the dictation capture: while `chat_capture`
+    /// is set, the next finished transcript is routed to the chat instead of
+    /// being inserted.
+    chat: chat::ChatController,
+    chat_capture: bool,
     cancelled: Arc<AtomicBool>,
     history: Vec<HistoryEntry>,
     history_revision: u64,
@@ -175,6 +181,8 @@ impl BridgeRuntime {
             last_dictation_error: String::new(),
             dictation_error_count: 0,
             dictation_success_count: 0,
+            chat: chat::ChatController::new(),
+            chat_capture: false,
             cancelled: Arc::new(AtomicBool::new(false)),
             history: history_store::load().unwrap_or_default(),
             history_revision: 0,
@@ -222,6 +230,39 @@ impl BridgeRuntime {
     /// Builds the unified local + cloud model registry (see `llm::registry`).
     fn llm_registry(&self) -> Vec<LlmRegistryEntryDto> {
         llm::registry::build(&self.settings, &self.llm_downloads)
+    }
+
+    // --- chat plugin (#17) ---
+
+    fn chat_start_listening(&mut self) -> Result<String, String> {
+        self.reset_cancellation();
+        let message = self.dictation.start_recording(&self.settings)?;
+        self.chat_capture = true;
+        Ok(message)
+    }
+
+    fn chat_stop_listening(&mut self) -> Result<String, String> {
+        let outcomes = self.dictation.stop_recording_and_transcribe(
+            &self.settings,
+            "chat",
+            dictation::RecordingCue::Stop,
+        )?;
+        self.apply_dictation_outcomes(outcomes);
+        Ok("Listening stopped.".to_owned())
+    }
+
+    fn chat_state(&self) -> ChatStateDto {
+        let listening = self.chat_capture && self.dictation.is_recording();
+        let transcribing = self.chat_capture && self.dictation.is_transcribing();
+        self.chat.state(listening, transcribing)
+    }
+
+    fn chat_reset(&mut self) {
+        self.chat.reset();
+    }
+
+    fn chat_set_model(&mut self, model_ref: Option<LlmModelRef>) {
+        self.chat.set_model(model_ref);
     }
 
     /// True when `path` points at one of the preset default model filenames —
@@ -339,6 +380,7 @@ impl BridgeRuntime {
         let previous_input_device = self.settings.input_device_name.clone();
         let outcomes = self.dictation.poll(&mut self.settings);
         self.apply_dictation_outcomes(outcomes);
+        self.chat.poll();
         if self.settings.input_device_name != previous_input_device {
             let _ = settings_store::save(&self.settings);
         }
@@ -357,6 +399,12 @@ impl BridgeRuntime {
                 }
                 DictationOutcome::PendingTranscriptSave(base) => {
                     self.pending_transcript_save = Some(base);
+                }
+                DictationOutcome::TranscriptReady(transcript) if self.chat_capture => {
+                    self.chat_capture = false;
+                    if !self.cancelled.load(Ordering::Relaxed) {
+                        self.chat.on_transcript(transcript, &self.settings);
+                    }
                 }
                 DictationOutcome::TranscriptReady(transcript) => {
                     let was_cancelled = self.cancelled.load(Ordering::Relaxed);
@@ -1368,6 +1416,12 @@ struct ApiKeyBackendRequest {
     backend: open_whisper_core::LlmBackendKind,
 }
 
+#[derive(Deserialize)]
+struct ChatModelRequest {
+    #[serde(default)]
+    model_ref: Option<LlmModelRef>,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_log_path() -> *mut c_char {
     logging::init();
@@ -1455,6 +1509,39 @@ pub extern "C" fn ow_get_llm_registry() -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_list_pipeline_stages() -> *mut c_char {
     response_ok(pipeline::StageRegistry::with_builtins().catalog())
+}
+
+// --- chat plugin FFI (#17) ---
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_chat_start_listening() -> *mut c_char {
+    response_from_result(with_runtime_value(BridgeRuntime::chat_start_listening))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_chat_stop_listening() -> *mut c_char {
+    response_from_result(with_runtime_value(BridgeRuntime::chat_stop_listening))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_chat_get_state() -> *mut c_char {
+    response_ok(with_runtime_value(|runtime| runtime.chat_state()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_chat_reset() -> *mut c_char {
+    with_runtime_value(|runtime| runtime.chat_reset());
+    response_ok("ok".to_owned())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_chat_set_model(request_json: *const c_char) -> *mut c_char {
+    let result =
+        parse_json_arg::<ChatModelRequest>(request_json, "ChatModelRequest").map(|request| {
+            with_runtime_value(|runtime| runtime.chat_set_model(request.model_ref));
+            "ok".to_owned()
+        });
+    response_from_result(result)
 }
 
 #[unsafe(no_mangle)]

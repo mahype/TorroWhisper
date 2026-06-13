@@ -786,6 +786,47 @@ pub struct StageCatalogEntryDto {
     pub is_plugin: bool,
 }
 
+// --- Chat plugin (#17) -------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatRole {
+    System,
+    User,
+    Assistant,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatMessageDto {
+    pub role: ChatRole,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatPhase {
+    /// Awaiting input.
+    Idle,
+    /// Recording the user's speech.
+    Listening,
+    /// Whisper is transcribing.
+    Transcribing,
+    /// The LLM is producing an answer.
+    Generating,
+}
+
+/// Snapshot of the chat session for the chat window's poll.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatStateDto {
+    pub phase: ChatPhase,
+    pub messages: Vec<ChatMessageDto>,
+    /// Bumped whenever the transcript or phase changes, so the UI only reloads
+    /// when something actually happened.
+    pub revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct DictionaryEntry {
