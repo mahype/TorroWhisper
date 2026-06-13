@@ -461,6 +461,218 @@ pub enum PostProcessingChoice {
     LmStudio { model_name: String },
 }
 
+/// The concrete cloud vendor behind an OpenAI-compatible Chat-Completions API.
+/// All four speak the same wire format and differ only in base URL and which
+/// Keychain API key they use.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenAiCompatibleProvider {
+    OpenAi,
+    Mistral,
+    DeepSeek,
+    Grok,
+}
+
+/// Which backend serves a given model. Distinguishes the individual cloud
+/// vendors (not just "OpenAI-compatible") because each one has its own API key
+/// in the Keychain.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmBackendKind {
+    LocalGguf,
+    Ollama,
+    LmStudio,
+    OpenAi,
+    Mistral,
+    DeepSeek,
+    Grok,
+    Anthropic,
+    Gemini,
+}
+
+impl LlmBackendKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::LocalGguf => "local model",
+            Self::Ollama => "Ollama",
+            Self::LmStudio => "LM Studio",
+            Self::OpenAi => "OpenAI",
+            Self::Mistral => "Mistral",
+            Self::DeepSeek => "DeepSeek",
+            Self::Grok => "Grok (xAI)",
+            Self::Anthropic => "Anthropic",
+            Self::Gemini => "Gemini",
+        }
+    }
+
+    /// Cloud backends require an API key (stored in the Keychain).
+    pub fn is_cloud(self) -> bool {
+        matches!(
+            self,
+            Self::OpenAi
+                | Self::Mistral
+                | Self::DeepSeek
+                | Self::Grok
+                | Self::Anthropic
+                | Self::Gemini
+        )
+    }
+}
+
+impl OpenAiCompatibleProvider {
+    pub fn backend_kind(self) -> LlmBackendKind {
+        match self {
+            Self::OpenAi => LlmBackendKind::OpenAi,
+            Self::Mistral => LlmBackendKind::Mistral,
+            Self::DeepSeek => LlmBackendKind::DeepSeek,
+            Self::Grok => LlmBackendKind::Grok,
+        }
+    }
+}
+
+/// Backend-independent identity of a language model that any feature
+/// (post-processing today, chat later) can reference. Replaces the scattered
+/// [`PostProcessingChoice`] dispatch with a single typed reference that the
+/// provider layer (`bridge::llm::provider_for`) turns into a runnable provider.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LlmModelRef {
+    LocalPreset {
+        preset: LlmPreset,
+    },
+    LocalCustom {
+        id: String,
+    },
+    Ollama {
+        model_name: String,
+    },
+    LmStudio {
+        model_name: String,
+    },
+    /// OpenAI / Mistral / DeepSeek / Grok — one wire format, different vendor.
+    OpenAiCompatible {
+        provider: OpenAiCompatibleProvider,
+        model_name: String,
+    },
+    Anthropic {
+        model_name: String,
+    },
+    Gemini {
+        model_name: String,
+    },
+}
+
+impl LlmModelRef {
+    pub fn backend_kind(&self) -> LlmBackendKind {
+        match self {
+            Self::LocalPreset { .. } | Self::LocalCustom { .. } => LlmBackendKind::LocalGguf,
+            Self::Ollama { .. } => LlmBackendKind::Ollama,
+            Self::LmStudio { .. } => LlmBackendKind::LmStudio,
+            Self::OpenAiCompatible { provider, .. } => provider.backend_kind(),
+            Self::Anthropic { .. } => LlmBackendKind::Anthropic,
+            Self::Gemini { .. } => LlmBackendKind::Gemini,
+        }
+    }
+
+    pub fn is_cloud(&self) -> bool {
+        self.backend_kind().is_cloud()
+    }
+
+    pub fn requires_api_key(&self) -> bool {
+        self.is_cloud()
+    }
+
+    /// Stable, human-readable identifier used as a UI selection token and as the
+    /// registry key, e.g. `local_preset:medium`, `ollama:llama3.1`,
+    /// `openai:gpt-4o-mini`, `anthropic:claude-opus-4-8`.
+    pub fn stable_id(&self) -> String {
+        match self {
+            Self::LocalPreset { preset } => format!("local_preset:{}", preset.label()),
+            Self::LocalCustom { id } => format!("local_custom:{id}"),
+            Self::Ollama { model_name } => format!("ollama:{model_name}"),
+            Self::LmStudio { model_name } => format!("lmstudio:{model_name}"),
+            Self::OpenAiCompatible {
+                provider,
+                model_name,
+            } => format!("{}:{model_name}", provider.backend_kind().label_id()),
+            Self::Anthropic { model_name } => format!("anthropic:{model_name}"),
+            Self::Gemini { model_name } => format!("gemini:{model_name}"),
+        }
+    }
+}
+
+impl LlmBackendKind {
+    /// Lowercase token form used in [`LlmModelRef::stable_id`].
+    fn label_id(self) -> &'static str {
+        match self {
+            Self::LocalGguf => "local",
+            Self::Ollama => "ollama",
+            Self::LmStudio => "lmstudio",
+            Self::OpenAi => "openai",
+            Self::Mistral => "mistral",
+            Self::DeepSeek => "deepseek",
+            Self::Grok => "grok",
+            Self::Anthropic => "anthropic",
+            Self::Gemini => "gemini",
+        }
+    }
+}
+
+impl From<PostProcessingChoice> for LlmModelRef {
+    fn from(choice: PostProcessingChoice) -> Self {
+        match choice {
+            PostProcessingChoice::LocalPreset { preset } => Self::LocalPreset { preset },
+            PostProcessingChoice::LocalCustom { id } => Self::LocalCustom { id },
+            PostProcessingChoice::Ollama { model_name } => Self::Ollama { model_name },
+            PostProcessingChoice::LmStudio { model_name } => Self::LmStudio { model_name },
+        }
+    }
+}
+
+/// Whether a cloud backend currently has an API key stored in the Keychain.
+/// Returned by the FFI key-status endpoint — only the boolean crosses the
+/// boundary, never the secret itself.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ApiKeyStatusDto {
+    pub backend: LlmBackendKind,
+    pub has_key: bool,
+}
+
+/// Availability of a model in the unified registry.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmAvailability {
+    /// Local file present + valid, or cloud key present.
+    Ready,
+    /// Local preset/custom not on disk yet (can be downloaded).
+    Downloadable,
+    /// A download is in progress.
+    Downloading,
+    /// Local file failed the GGUF integrity check.
+    Corrupt,
+    /// Cloud backend with no API key configured.
+    NeedsApiKey,
+}
+
+/// One entry in the unified model registry that the UI and plugins query. Both
+/// post-processing and (later) chat pick a model from this single list, so a
+/// model that is already downloaded is offered once and reused — never
+/// re-downloaded.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LlmRegistryEntryDto {
+    /// Canonical selection token ([`LlmModelRef::stable_id`]).
+    pub stable_id: String,
+    pub model_ref: LlmModelRef,
+    pub backend_kind: LlmBackendKind,
+    pub display_name: String,
+    /// Secondary line: size / quant / "Cloud · needs API key".
+    pub detail: String,
+    pub availability: LlmAvailability,
+    /// Download progress in basis points (0..=10000) when downloading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress_basis_points: Option<u16>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct ProcessingMode {
@@ -592,6 +804,11 @@ pub struct AppSettings {
     pub active_post_processing_backend: PostProcessingBackend,
     pub active_custom_llm_id: String,
     pub custom_llm_models: Vec<CustomLlmModel>,
+    /// Registry-selected post-processing model. When set, it overrides the
+    /// legacy `PostProcessingChoice` resolution and is the path through which
+    /// cloud models become selectable. `None` keeps the legacy behaviour.
+    #[serde(default)]
+    pub active_post_processing_model: Option<LlmModelRef>,
     pub ollama: ExternalProviderSettings,
     pub lm_studio: ExternalProviderSettings,
     pub post_processing_enabled: bool,
@@ -798,6 +1015,7 @@ impl Default for AppSettings {
             active_provider: ProviderKind::default(),
             active_post_processing_backend: PostProcessingBackend::default(),
             active_custom_llm_id: String::new(),
+            active_post_processing_model: None,
             custom_llm_models: Vec::new(),
             ollama: ExternalProviderSettings::ollama_defaults(),
             lm_studio: ExternalProviderSettings::lm_studio_defaults(),

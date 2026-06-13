@@ -15,6 +15,75 @@ const USER_AGENT: &str = "open-whisper/0.1";
 const DOWNLOAD_BUFFER_SIZE: usize = 256 * 1024;
 const DOWNLOAD_PROGRESS_INTERVAL: Duration = Duration::from_millis(200);
 
+/// GGUF files start with the ASCII magic "GGUF" — `0x4655_4747` little-endian.
+/// Mirrors the ggml magic check the whisper models use in
+/// [`crate::model_manager::model_file_integrity`].
+const GGUF_FILE_MAGIC: u32 = 0x4655_4747;
+
+/// Result of verifying a language-model file on disk.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LlmModelIntegrity {
+    Missing,
+    Valid,
+    Corrupt { reason: String },
+}
+
+/// Validates that `path` exists, matches `expected_size` when known and starts
+/// with the GGUF magic header. The size is only known for bundled presets;
+/// custom models pass `None` and are checked by magic only — the same split the
+/// whisper integrity check uses for preset vs. custom paths.
+pub fn gguf_file_integrity(path: &Path, expected_size: Option<u64>) -> LlmModelIntegrity {
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(_) => return LlmModelIntegrity::Missing,
+    };
+
+    if let Some(expected) = expected_size
+        && metadata.len() != expected
+    {
+        return LlmModelIntegrity::Corrupt {
+            reason: format!(
+                "file size is {} but {} was expected",
+                human_readable_size(metadata.len()),
+                human_readable_size(expected)
+            ),
+        };
+    }
+
+    let mut magic_bytes = [0_u8; 4];
+    match fs::File::open(path).and_then(|mut file| file.read_exact(&mut magic_bytes)) {
+        Ok(()) => {
+            if u32::from_le_bytes(magic_bytes) != GGUF_FILE_MAGIC {
+                return LlmModelIntegrity::Corrupt {
+                    reason: "file does not start with the GGUF magic header".to_owned(),
+                };
+            }
+        }
+        Err(err) => {
+            return LlmModelIntegrity::Corrupt {
+                reason: format!("file header could not be read: {err}"),
+            };
+        }
+    }
+
+    LlmModelIntegrity::Valid
+}
+
+/// Removes stale `.part` files left behind by interrupted language-model
+/// downloads, in both the preset and custom directories. Mirrors the whisper
+/// [`crate::model_manager::cleanup_partial_downloads`] call at startup.
+pub fn cleanup_partial_downloads() -> usize {
+    let Ok(model_path) = default_llm_model_path(LlmPreset::default()) else {
+        return 0;
+    };
+    let Some(dir) = model_path.parent() else {
+        return 0;
+    };
+    let mut removed = crate::model_manager::cleanup_partial_downloads_in(dir);
+    removed += crate::model_manager::cleanup_partial_downloads_in(&dir.join("custom"));
+    removed
+}
+
 pub struct LlmModelDownloadManager {
     state: LlmDownloadState,
     download_rx: Option<Receiver<DownloadEvent>>,
@@ -38,11 +107,22 @@ impl LlmModelDownloadManager {
         }
 
         let target_path = default_llm_model_path(preset)?;
-        if target_path.exists() {
-            self.state = LlmDownloadState::Ready {
-                path: target_path.clone(),
-            };
-            return Ok(format!("{} is already present.", preset.display_label()));
+        match gguf_file_integrity(&target_path, Some(preset.download_size_bytes())) {
+            LlmModelIntegrity::Valid => {
+                self.state = LlmDownloadState::Ready {
+                    path: target_path.clone(),
+                };
+                return Ok(format!("{} is already present.", preset.display_label()));
+            }
+            LlmModelIntegrity::Corrupt { reason } => {
+                log::warn!(
+                    target: "models",
+                    "{} on disk is corrupt ({reason}); re-downloading",
+                    preset.display_label()
+                );
+                let _ = fs::remove_file(&target_path);
+            }
+            LlmModelIntegrity::Missing => {}
         }
 
         let download_url = preset.download_url().to_owned();
@@ -80,11 +160,21 @@ impl LlmModelDownloadManager {
         }
 
         let target_path = default_custom_llm_path(id)?;
-        if target_path.exists() {
-            self.state = LlmDownloadState::Ready {
-                path: target_path.clone(),
-            };
-            return Ok(format!("{} is already present.", display_name));
+        match gguf_file_integrity(&target_path, None) {
+            LlmModelIntegrity::Valid => {
+                self.state = LlmDownloadState::Ready {
+                    path: target_path.clone(),
+                };
+                return Ok(format!("{} is already present.", display_name));
+            }
+            LlmModelIntegrity::Corrupt { reason } => {
+                log::warn!(
+                    target: "models",
+                    "custom language model '{display_name}' on disk is corrupt ({reason}); re-downloading"
+                );
+                let _ = fs::remove_file(&target_path);
+            }
+            LlmModelIntegrity::Missing => {}
         }
 
         let download_url = url.trim().to_owned();
@@ -516,6 +606,17 @@ fn download_model_file(
         ));
     }
 
+    // Verify the freshly downloaded file is a real GGUF before activating it, so
+    // a truncated/HTML-error response never gets renamed into place and later
+    // crashes the llama helper. Size was already checked against Content-Length
+    // above, so a magic-only check is enough here.
+    if let LlmModelIntegrity::Corrupt { reason } = gguf_file_integrity(temp_path, None) {
+        let _ = fs::remove_file(temp_path);
+        return Err(format!(
+            "Downloaded language model failed verification ({reason}). Please try again."
+        ));
+    }
+
     fs::rename(temp_path, target_path)
         .map_err(|err| format!("Language model file could not be activated: {err}"))?;
 
@@ -714,5 +815,45 @@ mod tests {
             started_at: Instant::now(),
         };
         assert_eq!(manager.progress_basis_points(), Some(5_000));
+    }
+
+    #[test]
+    fn gguf_integrity_missing_for_absent_file() {
+        let path =
+            std::env::temp_dir().join(format!("ow-gguf-missing-{}.gguf", std::process::id()));
+        let _ = fs::remove_file(&path);
+        assert_eq!(gguf_file_integrity(&path, None), LlmModelIntegrity::Missing);
+    }
+
+    #[test]
+    fn gguf_integrity_valid_for_magic_header() {
+        let path = std::env::temp_dir().join(format!("ow-gguf-valid-{}.gguf", std::process::id()));
+        // "GGUF" magic followed by arbitrary padding.
+        fs::write(&path, [0x47, 0x47, 0x55, 0x46, 0x00, 0x01, 0x02, 0x03]).unwrap();
+        assert_eq!(gguf_file_integrity(&path, None), LlmModelIntegrity::Valid);
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn gguf_integrity_corrupt_for_wrong_magic() {
+        let path = std::env::temp_dir().join(format!("ow-gguf-bad-{}.gguf", std::process::id()));
+        // An HTML error page, not a GGUF file.
+        fs::write(&path, b"<html>error</html>").unwrap();
+        assert!(matches!(
+            gguf_file_integrity(&path, None),
+            LlmModelIntegrity::Corrupt { .. }
+        ));
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn gguf_integrity_corrupt_for_size_mismatch() {
+        let path = std::env::temp_dir().join(format!("ow-gguf-size-{}.gguf", std::process::id()));
+        fs::write(&path, [0x47, 0x47, 0x55, 0x46, 0x00]).unwrap();
+        assert!(matches!(
+            gguf_file_integrity(&path, Some(999_999)),
+            LlmModelIntegrity::Corrupt { .. }
+        ));
+        let _ = fs::remove_file(&path);
     }
 }

@@ -632,6 +632,160 @@ struct PreferredDevice: Codable, Equatable, Identifiable {
     var id: String { uid ?? name }
 }
 
+// MARK: - Unified LLM registry (Issue #14)
+
+/// Cloud vendor behind the OpenAI-compatible Chat-Completions API.
+/// Raw values match the Rust `OpenAiCompatibleProvider` snake_case wire form.
+enum OpenAiCompatibleProviderDTO: String, Codable, Hashable {
+    case openAi = "open_ai"
+    case mistral
+    case deepSeek = "deep_seek"
+    case grok
+}
+
+/// Which backend serves a model. Raw values match Rust `LlmBackendKind`.
+enum LlmBackendKind: String, Codable, Hashable {
+    case localGguf = "local_gguf"
+    case ollama
+    case lmStudio = "lm_studio"
+    case openAi = "open_ai"
+    case mistral
+    case deepSeek = "deep_seek"
+    case grok
+    case anthropic
+    case gemini
+
+    var displayName: String {
+        switch self {
+        case .localGguf: return "Local model"
+        case .ollama: return "Ollama"
+        case .lmStudio: return "LM Studio"
+        case .openAi: return "OpenAI"
+        case .mistral: return "Mistral"
+        case .deepSeek: return "DeepSeek"
+        case .grok: return "Grok (xAI)"
+        case .anthropic: return "Anthropic"
+        case .gemini: return "Gemini"
+        }
+    }
+
+    /// Cloud backends that need an API key (have a Keychain slot).
+    var isCloud: Bool {
+        switch self {
+        case .openAi, .mistral, .deepSeek, .grok, .anthropic, .gemini: return true
+        case .localGguf, .ollama, .lmStudio: return false
+        }
+    }
+}
+
+enum LlmAvailability: String, Codable, Hashable {
+    case ready
+    case downloadable
+    case downloading
+    case corrupt
+    case needsApiKey = "needs_api_key"
+}
+
+/// Backend-independent model identity. Tagged-enum mirror of Rust `LlmModelRef`
+/// (same `{ "kind": ... }` wire form as `PostProcessingChoice`).
+enum LlmModelRefDTO: Codable, Hashable {
+    case localPreset(LlmPreset)
+    case localCustom(id: String)
+    case ollama(String)
+    case lmStudio(String)
+    case openAiCompatible(provider: OpenAiCompatibleProviderDTO, modelName: String)
+    case anthropic(String)
+    case gemini(String)
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case preset
+        case id
+        case modelName
+        case provider
+    }
+
+    private enum Kind: String, Codable {
+        case localPreset = "local_preset"
+        case localCustom = "local_custom"
+        case ollama
+        case lmStudio = "lm_studio"
+        case openAiCompatible = "open_ai_compatible"
+        case anthropic
+        case gemini
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .kind) {
+        case .localPreset:
+            self = .localPreset(try container.decode(LlmPreset.self, forKey: .preset))
+        case .localCustom:
+            self = .localCustom(id: try container.decode(String.self, forKey: .id))
+        case .ollama:
+            self = .ollama(try container.decode(String.self, forKey: .modelName))
+        case .lmStudio:
+            self = .lmStudio(try container.decode(String.self, forKey: .modelName))
+        case .openAiCompatible:
+            self = .openAiCompatible(
+                provider: try container.decode(OpenAiCompatibleProviderDTO.self, forKey: .provider),
+                modelName: try container.decode(String.self, forKey: .modelName)
+            )
+        case .anthropic:
+            self = .anthropic(try container.decode(String.self, forKey: .modelName))
+        case .gemini:
+            self = .gemini(try container.decode(String.self, forKey: .modelName))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .localPreset(let preset):
+            try container.encode(Kind.localPreset, forKey: .kind)
+            try container.encode(preset, forKey: .preset)
+        case .localCustom(let id):
+            try container.encode(Kind.localCustom, forKey: .kind)
+            try container.encode(id, forKey: .id)
+        case .ollama(let name):
+            try container.encode(Kind.ollama, forKey: .kind)
+            try container.encode(name, forKey: .modelName)
+        case .lmStudio(let name):
+            try container.encode(Kind.lmStudio, forKey: .kind)
+            try container.encode(name, forKey: .modelName)
+        case .openAiCompatible(let provider, let modelName):
+            try container.encode(Kind.openAiCompatible, forKey: .kind)
+            try container.encode(provider, forKey: .provider)
+            try container.encode(modelName, forKey: .modelName)
+        case .anthropic(let name):
+            try container.encode(Kind.anthropic, forKey: .kind)
+            try container.encode(name, forKey: .modelName)
+        case .gemini(let name):
+            try container.encode(Kind.gemini, forKey: .kind)
+            try container.encode(name, forKey: .modelName)
+        }
+    }
+}
+
+struct LlmRegistryEntryDTO: Codable, Hashable, Identifiable {
+    var stableId: String
+    var modelRef: LlmModelRefDTO
+    var backendKind: LlmBackendKind
+    var displayName: String
+    var detail: String
+    var availability: LlmAvailability
+    var progressBasisPoints: UInt16?
+
+    var id: String { stableId }
+}
+
+struct ApiKeyStatusDTO: Codable, Hashable, Identifiable {
+    var backend: LlmBackendKind
+    var hasKey: Bool
+
+    var id: LlmBackendKind { backend }
+}
+
 struct AppSettings: Codable, Equatable {
     var onboardingCompleted: Bool
     var startupBehavior: StartupBehavior
@@ -665,6 +819,9 @@ struct AppSettings: Codable, Equatable {
     var activePostProcessingBackend: PostProcessingBackend
     var activeCustomLlmId: String
     var customLlmModels: [CustomLlmModel]
+    /// Registry-selected post-processing model (incl. cloud). nil = legacy
+    /// PostProcessingChoice resolution.
+    var activePostProcessingModel: LlmModelRefDTO?
     var ollama: ExternalProviderSettings
     var lmStudio: ExternalProviderSettings
     var postProcessingEnabled: Bool
@@ -708,6 +865,7 @@ struct AppSettings: Codable, Equatable {
         activePostProcessingBackend: .local,
         activeCustomLlmId: "",
         customLlmModels: [],
+        activePostProcessingModel: nil,
         ollama: ExternalProviderSettings(endpoint: "http://127.0.0.1:11434", modelName: "whisper"),
         lmStudio: ExternalProviderSettings(endpoint: "http://127.0.0.1:1234", modelName: "openai/whisper-small"),
         postProcessingEnabled: false,

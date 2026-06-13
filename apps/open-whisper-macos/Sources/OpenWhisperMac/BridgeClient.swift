@@ -81,6 +81,26 @@ final class BridgeClient {
         try encodeAndCall(["backend": backend.rawValue], function: ow_list_remote_models)
     }
 
+    /// Unified local + cloud model registry. Remote Ollama/LM Studio models are
+    /// fetched separately via `listRemoteModels` and merged by the caller.
+    func getLlmRegistry() throws -> [LlmRegistryEntryDTO] {
+        try decodeResponse(from: ow_get_llm_registry())
+    }
+
+    /// Stores a cloud-provider API key in the macOS Keychain.
+    func setLlmApiKey(backend: LlmBackendKind, key: String) throws -> String {
+        try encodeAndCall(["backend": backend.rawValue, "key": key], function: ow_set_llm_api_key)
+    }
+
+    func deleteLlmApiKey(backend: LlmBackendKind) throws -> String {
+        try encodeAndCall(["backend": backend.rawValue], function: ow_delete_llm_api_key)
+    }
+
+    /// Which cloud backends currently have a key stored (booleans only).
+    func getLlmApiKeyStatus() throws -> [ApiKeyStatusDTO] {
+        try decodeResponse(from: ow_get_llm_api_key_status())
+    }
+
     func runPermissionDiagnostics() throws -> DiagnosticsDTO {
         try decodeResponse(from: ow_run_permission_diagnostics())
     }

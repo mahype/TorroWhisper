@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var isEditingMode: Bool = false
     @State private var isManagingLanguageModels: Bool = false
     @State private var managerTab: LanguageModelsManagerTab = .transcription
+    @State private var isManagingCloudModels: Bool = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isConfirmingHistoryClear: Bool = false
     @State private var isConfirmingAccessibilityReset: Bool = false
@@ -45,6 +46,11 @@ struct SettingsView: View {
                     selectedTab: $managerTab
                 ) {
                     isManagingLanguageModels = false
+                }
+            }
+            .sheet(isPresented: $isManagingCloudModels) {
+                CloudModelsSheet(model: model) {
+                    isManagingCloudModels = false
                 }
             }
             .alert(
@@ -454,6 +460,12 @@ struct SettingsView: View {
                 isManagingLanguageModels = true
             } label: {
                 Text("Manage language models…", bundle: .module)
+            }
+
+            Button {
+                isManagingCloudModels = true
+            } label: {
+                Text("Cloud models & API keys…", bundle: .module)
             }
         } header: {
             Text("Post-processing", bundle: .module)

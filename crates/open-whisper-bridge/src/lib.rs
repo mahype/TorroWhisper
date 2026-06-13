@@ -7,6 +7,7 @@ mod dictation;
 mod dictionary;
 mod history_store;
 mod i18n;
+mod llm;
 #[allow(dead_code)]
 mod llm_model_manager;
 #[allow(dead_code)]
@@ -38,8 +39,8 @@ use llm_model_manager::LlmModelDownloadManager;
 use model_manager::ModelDownloadManager;
 use open_whisper_core::{
     AppSettings, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto, HistoryEntry,
-    LlmModelStatusDto, LlmPreset, ModelPreset, ModelStatusDto, RecordingLevelsDto,
-    RemoteModelBackend, RemoteModelDto, RuntimeStatusDto,
+    LlmModelStatusDto, LlmPreset, LlmRegistryEntryDto, ModelPreset, ModelStatusDto,
+    RecordingLevelsDto, RemoteModelBackend, RemoteModelDto, RuntimeStatusDto,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -114,7 +115,8 @@ impl BridgeRuntime {
             }
         }
 
-        let removed_partials = model_manager::cleanup_partial_downloads();
+        let removed_partials = model_manager::cleanup_partial_downloads()
+            + llm_model_manager::cleanup_partial_downloads();
         if removed_partials > 0 {
             log::info!(
                 target: "bridge",
@@ -211,6 +213,11 @@ impl BridgeRuntime {
         log::info!(target: "diag", "---- end diagnostics snapshot ----");
 
         i18n::translate(i18n::lang(&self.settings), "Diagnostics written to log.")
+    }
+
+    /// Builds the unified local + cloud model registry (see `llm::registry`).
+    fn llm_registry(&self) -> Vec<LlmRegistryEntryDto> {
+        llm::registry::build(&self.settings, &self.llm_downloads)
     }
 
     /// True when `path` points at one of the preset default model filenames —
@@ -1347,6 +1354,17 @@ struct LogMessageRequest {
     message: String,
 }
 
+#[derive(Deserialize)]
+struct ApiKeySetRequest {
+    backend: open_whisper_core::LlmBackendKind,
+    key: String,
+}
+
+#[derive(Deserialize)]
+struct ApiKeyBackendRequest {
+    backend: open_whisper_core::LlmBackendKind,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_log_path() -> *mut c_char {
     logging::init();
@@ -1379,6 +1397,54 @@ pub extern "C" fn ow_write_diagnostics_log() -> *mut c_char {
     response_ok(with_runtime_value(
         BridgeRuntime::write_diagnostics_snapshot,
     ))
+}
+
+/// Stores a cloud-provider API key in the macOS Keychain. The secret crosses
+/// the FFI boundary only on this explicit set; it is never read back out.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_set_llm_api_key(request_json: *const c_char) -> *mut c_char {
+    let result =
+        parse_json_arg::<ApiKeySetRequest>(request_json, "ApiKeySetRequest").and_then(|req| {
+            llm::keychain::set_api_key(req.backend, &req.key).map(|()| "ok".to_owned())
+        });
+    response_from_result(result)
+}
+
+/// Removes a cloud-provider API key from the Keychain.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_delete_llm_api_key(request_json: *const c_char) -> *mut c_char {
+    let result = parse_json_arg::<ApiKeyBackendRequest>(request_json, "ApiKeyBackendRequest")
+        .and_then(|req| llm::keychain::delete_api_key(req.backend).map(|()| "ok".to_owned()));
+    response_from_result(result)
+}
+
+/// Reports which cloud backends currently have a key stored — booleans only,
+/// never the secrets themselves.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_get_llm_api_key_status() -> *mut c_char {
+    use open_whisper_core::{ApiKeyStatusDto, LlmBackendKind};
+    let statuses: Vec<ApiKeyStatusDto> = [
+        LlmBackendKind::OpenAi,
+        LlmBackendKind::Mistral,
+        LlmBackendKind::DeepSeek,
+        LlmBackendKind::Grok,
+        LlmBackendKind::Anthropic,
+        LlmBackendKind::Gemini,
+    ]
+    .into_iter()
+    .map(|backend| ApiKeyStatusDto {
+        backend,
+        has_key: llm::keychain::has_api_key(backend),
+    })
+    .collect();
+    response_ok(statuses)
+}
+
+/// Returns the unified local + cloud model registry. Remote Ollama / LM Studio
+/// models are fetched separately via `ow_list_remote_models` and merged in the UI.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_get_llm_registry() -> *mut c_char {
+    response_ok(with_runtime_value(|runtime| runtime.llm_registry()))
 }
 
 #[unsafe(no_mangle)]
