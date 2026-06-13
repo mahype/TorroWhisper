@@ -16,7 +16,11 @@ mod logging;
 #[allow(dead_code)]
 mod model_manager;
 mod permission_diagnostics;
-mod post_processing;
+// Several pipeline types are scaffolding for plugins (#15) and chat (#17):
+// `StageRegistry::register`, the diagnostic `StageRecord`/context fields, the
+// `Stop` short-circuit outcome. Allow until those consumers land.
+#[allow(dead_code)]
+mod pipeline;
 mod remote_models;
 #[allow(dead_code)]
 mod settings_store;
@@ -356,42 +360,41 @@ impl BridgeRuntime {
                 }
                 DictationOutcome::TranscriptReady(transcript) => {
                     let was_cancelled = self.cancelled.load(Ordering::Relaxed);
-                    let mode = self.settings.active_mode().clone();
-                    let transcript = if mode.dictionary_enabled {
-                        dictionary::apply(&self.settings.dictionary, &transcript)
-                    } else {
-                        transcript
-                    };
-                    if !was_cancelled && self.settings.active_mode_post_processing_enabled() {
+                    if was_cancelled {
+                        self.finish_transcript(transcript, "Transcript ready.", true);
+                    } else if self.settings.active_mode_post_processing_enabled() {
+                        // The pipeline includes a (slow) LLM step — run off-thread.
                         let provider_label = self
                             .settings
                             .active_post_processing_backend
                             .label()
                             .to_owned();
-                        let mode_name = mode.name.clone();
-                        let raw_transcript = transcript.clone();
+                        let mode_name = self.settings.active_mode_name().to_owned();
                         let settings = self.settings.clone();
-                        let (tx, rx) = std::sync::mpsc::channel();
+                        let raw_transcript = transcript.clone();
                         let cancelled = self.cancelled.clone();
+                        let (tx, rx) = std::sync::mpsc::channel();
                         std::thread::spawn(move || {
-                            let result = post_processing::process_text(
-                                &settings,
-                                &raw_transcript,
-                                &cancelled,
-                            );
+                            let registry = pipeline::StageRegistry::with_builtins();
+                            let result =
+                                pipeline::run(&registry, &settings, &raw_transcript, &cancelled);
                             let _ = tx.send(result);
                         });
                         self.post_processing_rx = Some(rx);
+                        let status = format!("Whisper transcript ready. Processing '{mode_name}'.");
                         self.pending_post_processing = Some(PendingPostProcessing {
                             raw_transcript: transcript,
-                            mode_name: mode_name.clone(),
+                            mode_name,
                             provider_label,
                         });
-                        self.last_status = format!(
-                            "Whisper transcript ready. Post-processing '{mode_name}' running."
-                        );
+                        self.last_status = status;
                     } else {
-                        self.finish_transcript(transcript, "Transcript ready.", was_cancelled);
+                        // No LLM step — run the fast dictionary/auto-correct pipeline inline.
+                        let registry = pipeline::StageRegistry::with_builtins();
+                        let processed =
+                            pipeline::run(&registry, &self.settings, &transcript, &self.cancelled)
+                                .unwrap_or(transcript);
+                        self.finish_transcript(processed, "Transcript ready.", false);
                     }
                 }
             }
@@ -1445,6 +1448,13 @@ pub extern "C" fn ow_get_llm_api_key_status() -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_llm_registry() -> *mut c_char {
     response_ok(with_runtime_value(|runtime| runtime.llm_registry()))
+}
+
+/// Lists the available post-processing pipeline stages (built-in plus, later,
+/// plugin-contributed) for the per-mode pipeline editor.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_list_pipeline_stages() -> *mut c_char {
+    response_ok(pipeline::StageRegistry::with_builtins().catalog())
 }
 
 #[unsafe(no_mangle)]

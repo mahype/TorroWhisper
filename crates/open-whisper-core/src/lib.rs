@@ -673,6 +673,43 @@ pub struct LlmRegistryEntryDto {
     pub progress_basis_points: Option<u16>,
 }
 
+/// Built-in pipeline stage identifiers. Plugin stages use `plugin:<id>.<name>`.
+pub const STAGE_DICTIONARY: &str = "dictionary";
+pub const STAGE_AUTO_CORRECT: &str = "auto_correct";
+pub const STAGE_LLM: &str = "llm";
+
+/// What a mode does with the transcript: insert it (dictation) or feed it to a
+/// chat LLM (chat). Introduced now so the chat plugin (#17) is non-breaking.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ModeKind {
+    #[default]
+    Dictation,
+    Chat,
+}
+
+/// One ordered step in a mode's post-processing pipeline. `config` is opaque
+/// per-stage JSON (e.g. `{"mode":"llm"}` for auto-correct); plugin stages use
+/// it freely.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct PipelineStepConfig {
+    pub stage_id: String,
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub config: serde_json::Value,
+}
+
+impl Default for PipelineStepConfig {
+    fn default() -> Self {
+        Self {
+            stage_id: String::new(),
+            enabled: true,
+            config: serde_json::Value::Null,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct ProcessingMode {
@@ -683,6 +720,14 @@ pub struct ProcessingMode {
     pub post_processing_choice: Option<PostProcessingChoice>,
     #[serde(default = "default_dictionary_enabled")]
     pub dictionary_enabled: bool,
+    /// dictation | chat. Drives whether the result is inserted or sent to the
+    /// chat LLM (chat is wired in #17).
+    #[serde(default)]
+    pub kind: ModeKind,
+    /// Ordered post-processing pipeline. Empty = synthesized from the legacy
+    /// `dictionary_enabled` + post-processing settings in `normalize()`.
+    #[serde(default)]
+    pub pipeline: Vec<PipelineStepConfig>,
 }
 
 fn default_dictionary_enabled() -> bool {
@@ -697,7 +742,32 @@ impl ProcessingMode {
             prompt: "Fix punctuation, capitalization, and obvious recognition errors in the dictated text without changing its content. Return only the cleaned-up text.".to_owned(),
             post_processing_choice: None,
             dictionary_enabled: true,
+            kind: ModeKind::Dictation,
+            pipeline: Vec::new(),
         }
+    }
+
+    /// Synthesizes the default pipeline from the legacy fields when none is set,
+    /// preserving the established order: dictionary → auto-correct(off) → LLM.
+    /// Keeps existing users on identical behaviour while exposing the steps.
+    pub fn synthesized_pipeline(&self, post_processing_enabled: bool) -> Vec<PipelineStepConfig> {
+        vec![
+            PipelineStepConfig {
+                stage_id: STAGE_DICTIONARY.to_owned(),
+                enabled: self.dictionary_enabled,
+                config: serde_json::Value::Null,
+            },
+            PipelineStepConfig {
+                stage_id: STAGE_AUTO_CORRECT.to_owned(),
+                enabled: false,
+                config: serde_json::json!({ "mode": "off" }),
+            },
+            PipelineStepConfig {
+                stage_id: STAGE_LLM.to_owned(),
+                enabled: post_processing_enabled,
+                config: serde_json::Value::Null,
+            },
+        ]
     }
 }
 
@@ -705,6 +775,15 @@ impl Default for ProcessingMode {
     fn default() -> Self {
         Self::cleanup()
     }
+}
+
+/// A stage available to the per-mode pipeline editor (built-in or plugin).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StageCatalogEntryDto {
+    pub stage_id: String,
+    pub display_name: String,
+    pub is_configurable: bool,
+    pub is_plugin: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1232,6 +1311,7 @@ mod tests {
             prompt: "Arbeite wie ein Entwickler.".to_owned(),
             post_processing_choice: None,
             dictionary_enabled: true,
+            ..ProcessingMode::default()
         });
         settings.active_mode_id = "dev".to_owned();
 
@@ -1323,6 +1403,7 @@ mod tests {
                     prompt: String::new(),
                     post_processing_choice: None,
                     dictionary_enabled: true,
+                    ..ProcessingMode::default()
                 },
                 ProcessingMode::cleanup(),
             ],
@@ -1348,6 +1429,7 @@ mod tests {
                     prompt: String::new(),
                     post_processing_choice: None,
                     dictionary_enabled: true,
+                    ..ProcessingMode::default()
                 },
                 ProcessingMode::cleanup(),
             ],
@@ -1416,6 +1498,7 @@ mod tests {
             prompt: "Formatiere als Email.".to_owned(),
             post_processing_choice: None,
             dictionary_enabled: true,
+            ..ProcessingMode::default()
         });
         settings.active_mode_id = "email".to_owned();
 
