@@ -411,6 +411,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             if let errorMessage = model.currentDictationErrorMessage {
                 return .error(message: errorMessage)
             }
+            if model.isShowingDictationDone {
+                return .done
+            }
             return nil
         }()
 
@@ -445,7 +448,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 return model.selectedModelDisplayName
             case .postProcessing:
                 return model.selectedPostProcessingDisplayName
-            case .modelNotReady, .error:
+            case .modelNotReady, .error, .done:
                 return nil
             }
         }()

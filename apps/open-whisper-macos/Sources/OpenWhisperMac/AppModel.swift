@@ -41,6 +41,12 @@ final class AppModel: ObservableObject {
     private var dictationErrorOccurredAt: Date?
     /// How long the red error bubble stays visible after a dictation failure.
     private static let dictationErrorDisplaySeconds: TimeInterval = 6
+    private var lastSeenDictationSuccessCount: UInt64 = 0
+    private var dictationSuccessOccurredAt: Date?
+    /// How long the brief green "done" bubble stays visible after a successful
+    /// dictation. Short on purpose — just enough that a fast completion reads as
+    /// "finished" instead of the bubble silently vanishing.
+    private static let dictationDoneDisplaySeconds: TimeInterval = 1.2
 
     /// Message of a recent dictation failure while it should still be shown
     /// in the recording bubble; nil once the display window has elapsed.
@@ -52,6 +58,14 @@ final class AppModel: ObservableObject {
             return nil
         }
         return runtime.lastDictationError
+    }
+
+    /// True for a short window right after a dictation completed successfully,
+    /// so the recording bubble can flash a green "done" state instead of just
+    /// disappearing (which on fast machines looked like a crash).
+    var isShowingDictationDone: Bool {
+        guard let dictationSuccessOccurredAt else { return false }
+        return Date().timeIntervalSince(dictationSuccessOccurredAt) < Self.dictationDoneDisplaySeconds
     }
 
     init() {
@@ -572,6 +586,7 @@ final class AppModel: ObservableObject {
             runtime = try bridge.getRuntimeStatus()
             lastSeenMicSwitchEventCount = runtime.micSwitchEventCount
             lastSeenDictationErrorCount = runtime.dictationErrorCount
+            lastSeenDictationSuccessCount = runtime.dictationSuccessCount
             history = (try? bridge.loadHistory()) ?? []
             lastSeenHistoryRevision = runtime.historyRevision
             bridgeError = nil
@@ -601,6 +616,7 @@ final class AppModel: ObservableObject {
             }
             checkMicSwitchEvent()
             checkDictationErrorEvent()
+            checkDictationSuccessEvent()
             if runtime.historyRevision != lastSeenHistoryRevision {
                 history = (try? bridge.loadHistory()) ?? []
                 lastSeenHistoryRevision = runtime.historyRevision
@@ -616,6 +632,12 @@ final class AppModel: ObservableObject {
         guard runtime.dictationErrorCount != lastSeenDictationErrorCount else { return }
         lastSeenDictationErrorCount = runtime.dictationErrorCount
         dictationErrorOccurredAt = Date()
+    }
+
+    private func checkDictationSuccessEvent() {
+        guard runtime.dictationSuccessCount != lastSeenDictationSuccessCount else { return }
+        lastSeenDictationSuccessCount = runtime.dictationSuccessCount
+        dictationSuccessOccurredAt = Date()
     }
 
     private func checkMicSwitchEvent() {
