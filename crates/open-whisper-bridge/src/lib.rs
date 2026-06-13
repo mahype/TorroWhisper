@@ -39,8 +39,8 @@ use llm_model_manager::LlmModelDownloadManager;
 use model_manager::ModelDownloadManager;
 use open_whisper_core::{
     AppSettings, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto, HistoryEntry,
-    LlmModelStatusDto, LlmPreset, ModelPreset, ModelStatusDto, RecordingLevelsDto,
-    RemoteModelBackend, RemoteModelDto, RuntimeStatusDto,
+    LlmModelStatusDto, LlmPreset, LlmRegistryEntryDto, ModelPreset, ModelStatusDto,
+    RecordingLevelsDto, RemoteModelBackend, RemoteModelDto, RuntimeStatusDto,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -211,6 +211,11 @@ impl BridgeRuntime {
         log::info!(target: "diag", "---- end diagnostics snapshot ----");
 
         i18n::translate(i18n::lang(&self.settings), "Diagnostics written to log.")
+    }
+
+    /// Builds the unified local + cloud model registry (see `llm::registry`).
+    fn llm_registry(&self) -> Vec<LlmRegistryEntryDto> {
+        llm::registry::build(&self.settings, &self.llm_downloads)
     }
 
     /// True when `path` points at one of the preset default model filenames —
@@ -1421,6 +1426,13 @@ pub extern "C" fn ow_get_llm_api_key_status() -> *mut c_char {
     })
     .collect();
     response_ok(statuses)
+}
+
+/// Returns the unified local + cloud model registry. Remote Ollama / LM Studio
+/// models are fetched separately via `ow_list_remote_models` and merged in the UI.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_get_llm_registry() -> *mut c_char {
+    response_ok(with_runtime_value(|runtime| runtime.llm_registry()))
 }
 
 #[unsafe(no_mangle)]

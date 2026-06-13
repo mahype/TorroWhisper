@@ -27,7 +27,12 @@ pub fn process_text(
     }
 
     let mode = settings.active_mode();
-    let model_ref = LlmModelRef::from(settings.effective_post_processing_choice(mode));
+    // A registry-selected model (incl. cloud) takes precedence; otherwise fall
+    // back to the legacy PostProcessingChoice resolution.
+    let model_ref = settings
+        .active_post_processing_model
+        .clone()
+        .unwrap_or_else(|| LlmModelRef::from(settings.effective_post_processing_choice(mode)));
     let backend_label = model_ref.backend_kind().label();
 
     let started = Instant::now();

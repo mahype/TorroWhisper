@@ -13,6 +13,7 @@ pub(crate) mod keychain;
 mod lm_studio;
 mod ollama;
 mod openai_compatible;
+pub(crate) mod registry;
 
 use std::{
     path::PathBuf,

@@ -638,6 +638,41 @@ pub struct ApiKeyStatusDto {
     pub has_key: bool,
 }
 
+/// Availability of a model in the unified registry.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LlmAvailability {
+    /// Local file present + valid, or cloud key present.
+    Ready,
+    /// Local preset/custom not on disk yet (can be downloaded).
+    Downloadable,
+    /// A download is in progress.
+    Downloading,
+    /// Local file failed the GGUF integrity check.
+    Corrupt,
+    /// Cloud backend with no API key configured.
+    NeedsApiKey,
+}
+
+/// One entry in the unified model registry that the UI and plugins query. Both
+/// post-processing and (later) chat pick a model from this single list, so a
+/// model that is already downloaded is offered once and reused — never
+/// re-downloaded.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LlmRegistryEntryDto {
+    /// Canonical selection token ([`LlmModelRef::stable_id`]).
+    pub stable_id: String,
+    pub model_ref: LlmModelRef,
+    pub backend_kind: LlmBackendKind,
+    pub display_name: String,
+    /// Secondary line: size / quant / "Cloud · needs API key".
+    pub detail: String,
+    pub availability: LlmAvailability,
+    /// Download progress in basis points (0..=10000) when downloading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress_basis_points: Option<u16>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct ProcessingMode {
@@ -769,6 +804,11 @@ pub struct AppSettings {
     pub active_post_processing_backend: PostProcessingBackend,
     pub active_custom_llm_id: String,
     pub custom_llm_models: Vec<CustomLlmModel>,
+    /// Registry-selected post-processing model. When set, it overrides the
+    /// legacy `PostProcessingChoice` resolution and is the path through which
+    /// cloud models become selectable. `None` keeps the legacy behaviour.
+    #[serde(default)]
+    pub active_post_processing_model: Option<LlmModelRef>,
     pub ollama: ExternalProviderSettings,
     pub lm_studio: ExternalProviderSettings,
     pub post_processing_enabled: bool,
@@ -975,6 +1015,7 @@ impl Default for AppSettings {
             active_provider: ProviderKind::default(),
             active_post_processing_backend: PostProcessingBackend::default(),
             active_custom_llm_id: String::new(),
+            active_post_processing_model: None,
             custom_llm_models: Vec::new(),
             ollama: ExternalProviderSettings::ollama_defaults(),
             lm_studio: ExternalProviderSettings::lm_studio_defaults(),
