@@ -113,7 +113,8 @@ impl BridgeRuntime {
             }
         }
 
-        let removed_partials = model_manager::cleanup_partial_downloads();
+        let removed_partials = model_manager::cleanup_partial_downloads()
+            + llm_model_manager::cleanup_partial_downloads();
         if removed_partials > 0 {
             log::info!(
                 target: "bridge",
