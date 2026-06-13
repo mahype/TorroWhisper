@@ -7,6 +7,7 @@ mod dictation;
 mod dictionary;
 mod history_store;
 mod i18n;
+mod llm;
 #[allow(dead_code)]
 mod llm_model_manager;
 #[allow(dead_code)]
