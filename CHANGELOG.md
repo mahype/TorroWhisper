@@ -4,8 +4,18 @@ All notable changes to Open Whisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-06-13
+
+### Added
+- **Model file integrity checks** — a model now only counts as "downloaded" when its file passes a size and ggml-magic-header check, validated on recording start, before loading the Whisper context, and in the status views, so both ends of the pipeline agree. Downloads are verified end-to-end (byte count against Content-Length and expected size plus header) before activation; incomplete or damaged files fail and clean up instead of being kept.
+- **Corruption recovery** — a damaged model surfaces a *Corrupt* state with a warning and a *Download again* action that removes the damaged file first. Leftover `*.part` files from interrupted downloads are cleaned up on launch.
+- **Diagnostics logging for support** — a *Write diagnostics to log* button in Settings → Diagnostics appends a full snapshot (bridge version, settings summary, hotkey and dictation state, last error, and the Whisper + language-model inventories), and the `models`/`diag` log targets now reach the log file, with download lifecycle and free-disk reporting.
+
 ### Changed
 - **Relicensed from MIT to GPL-3.0-or-later.** The project is still in early development with no released users beyond a couple of testers, and copyleft better fits the goal of keeping derivatives open. A practical upside: a GPL application may incorporate the LGPL-3.0 LAME encoder, so MP3 export stays as-is without the licensing friction it had under MIT.
+
+### Fixed
+- **Stale model-path pin** — an older version pinned the active preset's absolute default path into `local_model_path`; after a preset switch that pin pointed at a never-downloaded file, so the UI reported the model present while dictation failed with "has not been downloaded yet". The bridge and the Swift preset switch no longer pin preset defaults, and existing stale pins migrate away on launch, so affected machines self-heal.
 
 ## [0.4.1] — 2026-06-11
 
