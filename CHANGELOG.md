@@ -4,6 +4,9 @@ All notable changes to Open Whisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Changed
+- **Relicensed from MIT to GPL-3.0-or-later.** The project is still in early development with no released users beyond a couple of testers, and copyleft better fits the goal of keeping derivatives open. A practical upside: a GPL application may incorporate the LGPL-3.0 LAME encoder, so MP3 export stays as-is without the licensing friction it had under MIT.
+
 ## [0.4.1] — 2026-06-11
 
 ### Added

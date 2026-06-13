@@ -18,8 +18,19 @@ allow = [
     "BSL-1.0",
     "CDLA-Permissive-2.0",
     "Unlicense",
+    # Open Whisper itself is GPL-3.0-or-later; the workspace crates declare it.
+    "GPL-3.0-or-later",
 ]
-exceptions = []
+
+# mp3lame-encoder / mp3lame-sys wrap LAME (LGPL-3.0) for MP3 export. A
+# GPL-3.0 application may incorporate an LGPL-3.0 library, and shipping the
+# full app source under GPL inherently satisfies the LGPL relinking duty, so
+# the exception is scoped to exactly those two crates rather than allowing
+# LGPL workspace-wide.
+exceptions = [
+    { name = "mp3lame-encoder", allow = ["LGPL-3.0"] },
+    { name = "mp3lame-sys", allow = ["LGPL-3.0"] },
+]
 
 [advisories]
 yanked = "warn"

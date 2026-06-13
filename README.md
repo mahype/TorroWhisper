@@ -145,4 +145,14 @@ Larger feature ideas under discussion — chat / voice-assistant mode, custom di
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Copyright (C) 2026 Sven Wagener.
+
+Open Whisper is free software: you can redistribute it and/or modify it under
+the terms of the **GNU General Public License** as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See [LICENSE](LICENSE) for the full text.
+
+It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. The MP3 export uses LAME via `mp3lame-encoder` (LGPL-3.0); all other
+dependencies are permissively licensed and GPL-compatible.
