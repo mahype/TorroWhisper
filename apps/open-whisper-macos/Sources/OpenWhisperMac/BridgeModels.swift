@@ -819,6 +819,7 @@ struct RuntimeStatusDTO: Codable {
     var lastTranscript: String
     var lastDictationError: String
     var dictationErrorCount: UInt64
+    var dictationSuccessCount: UInt64
     var dictationTriggerCount: UInt64
     var hotkeyRegistered: Bool
     var hotkeyText: String
@@ -844,6 +845,7 @@ struct RuntimeStatusDTO: Codable {
         lastTranscript: "",
         lastDictationError: "",
         dictationErrorCount: 0,
+        dictationSuccessCount: 0,
         dictationTriggerCount: 0,
         hotkeyRegistered: false,
         hotkeyText: "Ctrl+Shift+Space",

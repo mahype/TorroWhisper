@@ -61,6 +61,7 @@ struct BridgeRuntime {
     last_transcript: String,
     last_dictation_error: String,
     dictation_error_count: u64,
+    dictation_success_count: u64,
     cancelled: Arc<AtomicBool>,
     history: Vec<HistoryEntry>,
     history_revision: u64,
@@ -167,6 +168,7 @@ impl BridgeRuntime {
             last_transcript: String::new(),
             last_dictation_error: String::new(),
             dictation_error_count: 0,
+            dictation_success_count: 0,
             cancelled: Arc::new(AtomicBool::new(false)),
             history: history_store::load().unwrap_or_default(),
             history_revision: 0,
@@ -405,6 +407,13 @@ impl BridgeRuntime {
         }
     }
 
+    /// Marks a dictation as successfully delivered so the recording bubble can
+    /// flash a brief green "done" state. Called only from the success branches
+    /// of `finish_transcript` (never on cancel or insertion failure).
+    fn note_dictation_success(&mut self) {
+        self.dictation_success_count = self.dictation_success_count.wrapping_add(1);
+    }
+
     fn cancel_dictation(&mut self) -> Result<String, String> {
         let was_recording = self.dictation.is_recording();
         let was_transcribing = self.dictation.is_transcribing();
@@ -489,6 +498,7 @@ impl BridgeRuntime {
             match text_inserter::insert_text_into_active_app(&transcript, &self.settings) {
                 Ok(message) => {
                     log::info!(target: "bridge", "transcript inserted ({} chars)", transcript.chars().count());
+                    self.note_dictation_success();
                     if ready_status.is_empty() {
                         self.last_status = message;
                     } else {
@@ -510,6 +520,7 @@ impl BridgeRuntime {
                 },
             }
         } else {
+            self.note_dictation_success();
             self.last_status = ready_status.to_owned();
         }
     }
@@ -1011,6 +1022,7 @@ impl BridgeRuntime {
         RuntimeStatusDto {
             last_dictation_error: i18n::translate(lang, &self.last_dictation_error),
             dictation_error_count: self.dictation_error_count,
+            dictation_success_count: self.dictation_success_count,
             is_recording: self.dictation.is_recording(),
             is_transcribing,
             is_post_processing,
