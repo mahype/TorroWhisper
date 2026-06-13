@@ -1,6 +1,52 @@
 # Open Whisper — Roadmap
 
-Sammlung geplanter Features und Ideen. Reihenfolge ist nicht final priorisiert.
+Sammlung geplanter Features und Ideen. Der Abschnitt **Umsetzungs-Roadmap** unten
+legt die Reihenfolge der größeren Arbeitspakete fest; darunter folgen die
+detaillierten Feature-Konzepte.
+
+---
+
+## Umsetzungs-Roadmap (Phasen)
+
+Reihenfolge und Abhängigkeiten der großen Arbeitspakete. Jedes Paket ist als
+GitHub-Issue ausformuliert. Status: ☐ offen · ◐ in Arbeit · ☑ erledigt.
+
+| Phase | Paket | Issues | Status |
+|---|---|---|---|
+| **0 — Stabilität & Logging** | Bug-Fixes + Logging-Infrastruktur, bevor die großen Refactors starten | [#11](https://github.com/mahype/open-whisper/issues/11), [#12](https://github.com/mahype/open-whisper/issues/12) | ◐ (PR [#18](https://github.com/mahype/open-whisper/pull/18)) |
+| **1 — LLM-Fundament** | Zentrales LLM-Modell-Management (Provider-Abstraktion, Cloud, Registry) **+** Ollama/LM-Studio-Modelle wiederverwenden | [#14](https://github.com/mahype/open-whisper/issues/14) + [#6](https://github.com/mahype/open-whisper/issues/6) | ☐ |
+| **2 — Nachbearbeitungs-Pipeline** | Geordnete, konfigurierbare Stages mit Context (Laravel-Style) | [#16](https://github.com/mahype/open-whisper/issues/16) | ☐ |
+| **3 — Plugin-System** | Extension-Points, Plugin-Übersicht & Konfig-Dialoge (Phase 1 intern) | [#15](https://github.com/mahype/open-whisper/issues/15) | ☐ |
+| **4 — Chat-Plugin** | KI-Voice-Chat (Sprache → LLM → TTS, Streaming) — erstes Plugin | [#17](https://github.com/mahype/open-whisper/issues/17) | ☐ |
+| **Querschnitt** | Accessibility / WCAG 2.1 (A/AA) — separat einplanbar, blockiert nichts | [#10](https://github.com/mahype/open-whisper/issues/10) | ☐ |
+
+### Abhängigkeiten
+
+```
+Phase 0 ─ Stabilität/Logging   (#11, #12)            unabhängig, zuerst
+   │
+Phase 1 ─ LLM-Fundament        (#14 + #6) ──┐
+Phase 2 ─ Pipeline             (#16) ───────┼─► Phase 4 ─ Chat (#17)
+Phase 3 ─ Plugin-System        (#15) ───────┘
+```
+
+- **#14 + #6** gehören zusammen: die zentrale Modell-Registry surfac't und teilt
+  bereits vorhandene Modelle (lokale Presets, Ollama, LM Studio) → kein
+  Doppel-Download. #6 ist die Auto-Detect-/Reuse-Facette von #14.
+- **#16 (Pipeline)** nutzt die Provider-Schicht aus #14 (LLM-Stage) und nimmt von
+  #15 Plugin-Stages entgegen — landet aber eigenständig (läuft mit 0 Plugins).
+- **#15 (Plugin-System)** konsumiert die `StageRegistry` aus #16; beide können sich
+  teilweise überlappen (#16 leicht voraus).
+- **#17 (Chat)** baut auf #14 + #15 + #16 auf und kommt zuletzt.
+
+### Begründung der Reihenfolge
+
+- **Phase 0 zuerst:** stumm verschluckte Fehler + fehlende Logs machen die großen
+  Refactors riskant. Erst Sicht & Stabilität, dann Umbau.
+- **#14 als Wurzel:** Provider/Registry ist die gemeinsame Basis, auf der Pipeline
+  (#16) und Chat (#17) aufsetzen.
+- **Accessibility (#10)** ist orthogonal und kann zwischen den Phasen eingeschoben
+  werden, sobald UI-Teile stabil sind.
 
 ---
 
