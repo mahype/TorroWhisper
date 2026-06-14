@@ -280,28 +280,11 @@ struct ChatSettingsSheet: View {
 
     // MARK: - Hermes agents (#agent)
 
+    @ViewBuilder
     private var agentsSection: some View {
         Section {
             if model.settings.hermesAgents.isEmpty {
                 Text("No Hermes agents added yet.", bundle: .module)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(model.settings.hermesAgents) { agent in
-                    agentRow(agent)
-                }
-            }
-
-            Button {
-                let id = model.addHermesAgent()
-                hermesKeyInputs[id] = ""
-                refreshHermesKeyStatus()
-            } label: {
-                Text("+ Add Hermes agent", bundle: .module)
-            }
-
-            if !hermesStatusLine.isEmpty {
-                Text(hermesStatusLine)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -313,33 +296,76 @@ struct ChatSettingsSheet: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+
+        // One grouped card per agent, so each is clearly its own editable unit.
+        ForEach(model.settings.hermesAgents) { agent in
+            Section {
+                agentFields(agent)
+            } header: {
+                Text(agent.name.isEmpty ? L("New agent", locale: locale) : agent.name)
+            }
+        }
+
+        Section {
+            Button {
+                let id = model.addHermesAgent()
+                hermesKeyInputs[id] = ""
+                refreshHermesKeyStatus()
+            } label: {
+                Text("+ Add Hermes agent", bundle: .module)
+            }
+            if !hermesStatusLine.isEmpty {
+                Text(hermesStatusLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
+    /// The editable fields for one agent. Each input is a bordered field with its
+    /// label above it (the default Form row renders fields borderless + right
+    /// aligned, which reads as static text); the API key sits on its own row.
     @ViewBuilder
-    private func agentRow(_ agent: HermesAgent) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            TextField(text: agentBinding(agent.id, \.name)) {
-                Text("Name", bundle: .module)
-            }
-            TextField(text: agentBinding(agent.id, \.baseUrl), prompt: Text(verbatim: "http://localhost:8642/v1")) {
-                Text("Address", bundle: .module)
-            }
-            TextField(text: agentBinding(agent.id, \.modelName), prompt: Text(verbatim: "hermes-agent")) {
-                Text("Model id", bundle: .module)
-            }
+    private func agentFields(_ agent: HermesAgent) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Name", bundle: .module).font(.caption).foregroundStyle(.secondary)
+            TextField("Name", text: agentBinding(agent.id, \.name), prompt: Text(verbatim: "Hermes (Server)"))
+                .textFieldStyle(.roundedBorder)
+                .labelsHidden()
+        }
 
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Address", bundle: .module).font(.caption).foregroundStyle(.secondary)
+            TextField("Address", text: agentBinding(agent.id, \.baseUrl), prompt: Text(verbatim: "http://localhost:8642/v1"))
+                .textFieldStyle(.roundedBorder)
+                .labelsHidden()
+                .autocorrectionDisabled(true)
+        }
+
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Model id", bundle: .module).font(.caption).foregroundStyle(.secondary)
+            TextField("Model id", text: agentBinding(agent.id, \.modelName), prompt: Text(verbatim: "hermes-agent"))
+                .textFieldStyle(.roundedBorder)
+                .labelsHidden()
+                .autocorrectionDisabled(true)
+        }
+
+        VStack(alignment: .leading, spacing: 3) {
+            Text("API key (optional)", bundle: .module).font(.caption).foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 SecureField(
-                    hermesKeyStored[agent.id] == true ? "••••••••" : L("API key (optional)", locale: locale),
-                    text: hermesKeyBinding(agent.id)
+                    "API key (optional)",
+                    text: hermesKeyBinding(agent.id),
+                    prompt: Text(verbatim: hermesKeyStored[agent.id] == true ? "••••••••" : "")
                 )
+                .textFieldStyle(.roundedBorder)
+                .labelsHidden()
                 Button {
                     saveHermesKey(agent.id)
                 } label: {
                     Text("Save", bundle: .module)
                 }
                 .disabled((hermesKeyInputs[agent.id] ?? "").trimmingCharacters(in: .whitespaces).isEmpty)
-
                 if hermesKeyStored[agent.id] == true {
                     Button(role: .destructive) {
                         deleteHermesKey(agent.id)
@@ -348,48 +374,44 @@ struct ChatSettingsSheet: View {
                     }
                     .help(L("Remove stored key", locale: locale))
                 }
-
-                Spacer()
-
-                Button(role: .destructive) {
-                    removeAgent(agent.id)
-                } label: {
-                    Text("Remove", bundle: .module)
-                }
             }
-
             if hermesKeyStored[agent.id] == true {
                 Text("Key stored", bundle: .module)
                     .font(.caption2)
                     .foregroundStyle(.green)
             }
+        }
 
-            HStack(spacing: 8) {
-                Button {
-                    testConnection(agent)
-                } label: {
-                    Text("Test connection", bundle: .module)
-                }
-                .disabled(
-                    hermesTesting.contains(agent.id)
-                        || agent.baseUrl.trimmingCharacters(in: .whitespaces).isEmpty
+        HStack(spacing: 8) {
+            Button {
+                testConnection(agent)
+            } label: {
+                Text("Test connection", bundle: .module)
+            }
+            .disabled(
+                hermesTesting.contains(agent.id)
+                    || agent.baseUrl.trimmingCharacters(in: .whitespaces).isEmpty
+            )
+            if hermesTesting.contains(agent.id) {
+                ProgressView().controlSize(.small)
+            }
+            if let result = hermesTestResult[agent.id] {
+                Label(
+                    result.message,
+                    systemImage: result.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
                 )
-                if hermesTesting.contains(agent.id) {
-                    ProgressView().controlSize(.small)
-                }
-                if let result = hermesTestResult[agent.id] {
-                    Label(
-                        result.message,
-                        systemImage: result.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(result.ok ? Color.green : Color.orange)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
+                .font(.caption)
+                .foregroundStyle(result.ok ? Color.green : Color.orange)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Button(role: .destructive) {
+                removeAgent(agent.id)
+            } label: {
+                Text("Remove", bundle: .module)
             }
         }
-        .padding(.vertical, 4)
     }
 
     private func agentBinding(
