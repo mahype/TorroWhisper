@@ -14,6 +14,7 @@ final class ChatViewModel: ObservableObject {
 
     private let bridge = BridgeClient()
     private let tts = ChatTtsPlayer()
+    private let thinking = ChatThinkingSound()
     private var timer: Timer?
     private var spokenAssistantCount = 0
     private var loadedOnce = false
@@ -60,6 +61,7 @@ final class ChatViewModel: ObservableObject {
         timer?.invalidate()
         timer = nil
         tts.stop()
+        thinking.stop()
         levelFeed.stop()
     }
 
@@ -132,12 +134,19 @@ final class ChatViewModel: ObservableObject {
         guard changed else { return }
 
         // Drive the waveform only on the listening edge — calling start() every
-        // poll would tear down its 30 Hz timer and flat-line the bars.
+        // poll would tear down its 30 Hz timer and flat-line the bars. The
+        // "thinking" cue runs for the whole generating phase to mask the wait.
         if phaseChanged {
-            if fresh.phase == .listening {
+            switch fresh.phase {
+            case .listening:
                 levelFeed.start()
-            } else {
+                thinking.stop()
+            case .generating:
                 levelFeed.stop()
+                thinking.start()
+            case .transcribing, .idle:
+                levelFeed.stop()
+                thinking.stop()
             }
         }
         loadedOnce = true
