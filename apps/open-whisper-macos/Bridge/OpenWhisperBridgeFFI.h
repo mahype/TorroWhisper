@@ -25,6 +25,7 @@ char *ow_get_llm_api_key_status(void);
 char *ow_set_hermes_api_key(const char *request_json);
 char *ow_delete_hermes_api_key(const char *request_json);
 char *ow_get_hermes_api_key_status(void);
+char *ow_test_hermes_agent(const char *request_json);
 char *ow_list_pipeline_stages(void);
 char *ow_get_plugin_catalog(void);
 char *ow_chat_start_listening(void);

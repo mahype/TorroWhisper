@@ -73,6 +73,9 @@ struct ChatSettingsSheet: View {
     @State private var hermesKeyInputs: [String: String] = [:]
     @State private var hermesKeyStored: [String: Bool] = [:]
     @State private var hermesStatusLine = ""
+    /// Per-agent "Test connection" in-flight set + last result.
+    @State private var hermesTesting: Set<String> = []
+    @State private var hermesTestResult: [String: HermesTestState] = [:]
 
     /// OpenAI's published TTS voices.
     private let openAiVoices = [
@@ -360,6 +363,31 @@ struct ChatSettingsSheet: View {
                     .font(.caption2)
                     .foregroundStyle(.green)
             }
+
+            HStack(spacing: 8) {
+                Button {
+                    testConnection(agent)
+                } label: {
+                    Text("Test connection", bundle: .module)
+                }
+                .disabled(
+                    hermesTesting.contains(agent.id)
+                        || agent.baseUrl.trimmingCharacters(in: .whitespaces).isEmpty
+                )
+                if hermesTesting.contains(agent.id) {
+                    ProgressView().controlSize(.small)
+                }
+                if let result = hermesTestResult[agent.id] {
+                    Label(
+                        result.message,
+                        systemImage: result.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(result.ok ? Color.green : Color.orange)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
         .padding(.vertical, 4)
     }
@@ -409,6 +437,35 @@ struct ChatSettingsSheet: View {
     private func removeAgent(_ id: String) {
         model.removeHermesAgent(id: id)
         hermesKeyInputs[id] = nil
+        hermesTestResult[id] = nil
         refreshHermesKeyStatus()
     }
+
+    /// Tests the agent's address + stored token on a background thread (the call
+    /// can block up to ~15s), then reports the result inline.
+    private func testConnection(_ agent: HermesAgent) {
+        let id = agent.id
+        let baseUrl = agent.baseUrl
+        hermesTesting.insert(id)
+        hermesTestResult[id] = nil
+        let bridge = self.bridge
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result: HermesTestState
+            do {
+                result = HermesTestState(ok: true, message: try bridge.testHermesAgent(id: id, baseUrl: baseUrl))
+            } catch {
+                result = HermesTestState(ok: false, message: error.localizedDescription)
+            }
+            DispatchQueue.main.async {
+                hermesTesting.remove(id)
+                hermesTestResult[id] = result
+            }
+        }
+    }
+}
+
+/// Result of a Hermes "Test connection" attempt, shown inline in the agent row.
+private struct HermesTestState {
+    var ok: Bool
+    var message: String
 }

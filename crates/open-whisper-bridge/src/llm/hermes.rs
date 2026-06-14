@@ -131,6 +131,47 @@ fn sanitize_session_key(session_key: Option<&str>) -> Option<String> {
     }
 }
 
+/// Lightweight reachability/auth check for the "Test connection" button.
+/// Does `GET {base}/v1/models` with the optional bearer — this validates the
+/// address, port and key without running an agent turn. Returns a short,
+/// human-readable status string.
+pub(super) fn test_connection(base_url: &str, api_key: Option<&str>) -> Result<String, String> {
+    let base = base_url.trim();
+    if base.is_empty() {
+        return Err("No address configured.".to_owned());
+    }
+    let client = build_http_client_with_timeout(Duration::from_secs(15))?;
+    let url = join_base_url(base, "/v1/models");
+
+    let mut request = client
+        .get(&url)
+        .header(reqwest::header::USER_AGENT, USER_AGENT);
+    if let Some(key) = api_key.filter(|key| !key.is_empty()) {
+        request = request.bearer_auth(key);
+    }
+
+    let response = request
+        .send()
+        .map_err(|err| format!("Not reachable: {err}"))?;
+    let status = response.status();
+    if status.is_success() {
+        let count = response
+            .json::<Value>()
+            .ok()
+            .and_then(|body| body.get("data").and_then(Value::as_array).map(|models| models.len()));
+        return Ok(match count {
+            Some(n) => format!("Connected — {n} model(s) available."),
+            None => "Connected.".to_owned(),
+        });
+    }
+    if status.as_u16() == 401 || status.as_u16() == 403 {
+        return Err(format!(
+            "Reachable, but authentication failed (HTTP {status}). Check the API key."
+        ));
+    }
+    Err(format!("Server returned HTTP {status}."))
+}
+
 /// Extracts the assistant text from an OpenAI Chat-Completions response body.
 fn parse_chat_completion(value: &Value) -> Result<String, String> {
     value

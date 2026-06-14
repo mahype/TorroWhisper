@@ -117,6 +117,13 @@ final class BridgeClient {
         try decodeResponse(from: ow_get_hermes_api_key_status())
     }
 
+    /// Tests reachability + auth of a Hermes agent (GET /v1/models with its
+    /// stored token). Blocking network call — invoke off the main thread.
+    /// Returns a short status string; throws with the failure reason.
+    func testHermesAgent(id: String, baseUrl: String) throws -> String {
+        try encodeAndCall(["id": id, "base_url": baseUrl], function: ow_test_hermes_agent)
+    }
+
     /// Available post-processing pipeline stages (built-in + plugin) for the
     /// per-mode pipeline editor.
     func listPipelineStages() throws -> [StageCatalogEntry] {

@@ -1582,6 +1582,12 @@ struct HermesKeyIdRequest {
 }
 
 #[derive(Deserialize)]
+struct HermesTestRequest {
+    id: String,
+    base_url: String,
+}
+
+#[derive(Deserialize)]
 struct ChatModelRequest {
     #[serde(default)]
     model_ref: Option<LlmModelRef>,
@@ -1724,6 +1730,20 @@ pub extern "C" fn ow_delete_hermes_api_key(request_json: *const c_char) -> *mut 
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_hermes_api_key_status() -> *mut c_char {
     response_ok(with_runtime_value(|runtime| runtime.hermes_key_status()))
+}
+
+/// Tests reachability + auth of a Hermes agent (the settings "Test connection"
+/// button): `GET {base_url}/v1/models` with the agent's stored Keychain token.
+/// Deliberately does NOT touch the thread-local `BridgeRuntime`, so Swift can
+/// call it from a background thread without blocking the poll loop.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_test_hermes_agent(request_json: *const c_char) -> *mut c_char {
+    let result =
+        parse_json_arg::<HermesTestRequest>(request_json, "HermesTestRequest").and_then(|req| {
+            let key = llm::keychain::get_hermes_api_key(&req.id);
+            llm::test_hermes_connection(&req.base_url, key.as_deref())
+        });
+    response_from_result(result)
 }
 
 /// Returns the unified local + cloud model registry. Remote Ollama / LM Studio

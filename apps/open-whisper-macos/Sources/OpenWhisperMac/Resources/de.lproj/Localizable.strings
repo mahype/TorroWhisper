@@ -366,6 +366,7 @@
 "Hermes agents" = "Hermes-Agenten";
 "No Hermes agents added yet." = "Noch keine Hermes-Agenten hinzugefügt.";
 "+ Add Hermes agent" = "+ Hermes-Agent hinzufügen";
+"Test connection" = "Verbindung testen";
 "Address" = "Adresse";
 "Model id" = "Modell-ID";
 "API key (optional)" = "API-Schlüssel (optional)";

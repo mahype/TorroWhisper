@@ -155,6 +155,15 @@ pub fn provider_for(
     }
 }
 
+/// Connection test for a Hermes agent (the settings "Test connection" button).
+/// Thin wrapper so the FFI layer can reach the otherwise-private hermes module.
+pub(crate) fn test_hermes_connection(
+    base_url: &str,
+    api_key: Option<&str>,
+) -> Result<String, String> {
+    hermes::test_connection(base_url, api_key)
+}
+
 /// Fetches a cloud backend's Keychain API key, or a clear error if unset.
 fn require_api_key(kind: LlmBackendKind) -> Result<String, String> {
     keychain::get_api_key(kind)
