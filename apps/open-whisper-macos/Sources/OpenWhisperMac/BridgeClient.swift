@@ -150,6 +150,23 @@ final class BridgeClient {
         let _: String? = try? encodeAndCall(["id": id], function: ow_chat_delete_session)
     }
 
+    /// Synthesizes chat TTS audio in Rust (reads the OpenAI key from the
+    /// Keychain there) and returns the MP3 bytes. Safe to call off the main
+    /// thread — it does not touch the bridge runtime.
+    func chatTtsSynthesize(text: String, voice: String, rate: Float) throws -> Data {
+        struct Request: Encodable {
+            var text: String
+            var voice: String
+            var rate: Float
+        }
+        struct Response: Decodable { var audio: [UInt8] }
+        let response: Response = try encodeAndCall(
+            Request(text: text, voice: voice, rate: rate),
+            function: ow_chat_tts_synthesize
+        )
+        return Data(response.audio)
+    }
+
     func runPermissionDiagnostics() throws -> DiagnosticsDTO {
         try decodeResponse(from: ow_run_permission_diagnostics())
     }

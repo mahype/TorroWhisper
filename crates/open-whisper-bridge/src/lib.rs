@@ -17,6 +17,7 @@ mod logging;
 #[allow(dead_code)]
 mod model_manager;
 mod permission_diagnostics;
+pub mod plugin_api;
 pub mod plugin_log;
 mod sessions_store;
 // Several pipeline types are scaffolding for plugins (#15) and chat (#17):
@@ -29,6 +30,7 @@ mod remote_models;
 mod settings_store;
 #[allow(dead_code)]
 mod text_inserter;
+mod tts;
 
 use std::{
     cell::RefCell,
@@ -1566,6 +1568,19 @@ struct ChatSessionRequest {
     id: String,
 }
 
+#[derive(Deserialize)]
+struct ChatTtsRequest {
+    text: String,
+    voice: String,
+    #[serde(default)]
+    rate: f32,
+}
+
+#[derive(Serialize)]
+struct ChatTtsResponse {
+    audio: Vec<u8>,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_log_path() -> *mut c_char {
     logging::init();
@@ -1741,6 +1756,17 @@ pub extern "C" fn ow_chat_delete_session(request_json: *const c_char) -> *mut c_
             with_runtime_value(|runtime| runtime.chat_delete_session(&request.id));
             "ok".to_owned()
         });
+    response_from_result(result)
+}
+
+/// Synthesizes chat TTS audio in Rust (OpenAI). Deliberately does NOT touch the
+/// thread-local `BridgeRuntime`, so Swift can call it from a background thread
+/// without blocking the poll loop. Returns the MP3 bytes as a JSON byte array.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_chat_tts_synthesize(request_json: *const c_char) -> *mut c_char {
+    let result = parse_json_arg::<ChatTtsRequest>(request_json, "ChatTtsRequest").and_then(|req| {
+        tts::openai_speech(&req.text, &req.voice, req.rate).map(|audio| ChatTtsResponse { audio })
+    });
     response_from_result(result)
 }
 

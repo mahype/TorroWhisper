@@ -32,6 +32,7 @@ char *ow_chat_set_model(const char *request_json);
 char *ow_chat_new_session(void);
 char *ow_chat_switch_session(const char *request_json);
 char *ow_chat_delete_session(const char *request_json);
+char *ow_chat_tts_synthesize(const char *request_json);
 char *ow_run_permission_diagnostics(void);
 char *ow_start_dictation(void);
 char *ow_stop_dictation(void);

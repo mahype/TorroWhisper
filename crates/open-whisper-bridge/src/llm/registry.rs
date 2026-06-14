@@ -21,30 +21,45 @@ use super::keychain;
 use crate::llm_model_manager::{self, LlmModelDownloadManager, LlmModelIntegrity};
 
 /// Assembles the local + cloud registry. Cheap and synchronous — safe to call
-/// from the FFI/poll path.
+/// from the FFI/poll path. Reflects live download progress.
 pub(crate) fn build(
     settings: &AppSettings,
     downloads: &LlmModelDownloadManager,
 ) -> Vec<LlmRegistryEntryDto> {
+    build_inner(settings, Some(downloads))
+}
+
+/// Same registry without a live download manager: nothing is reported as
+/// `Downloading`, everything else (Ready / Downloadable / Corrupt / NeedsApiKey)
+/// is resolved from settings + disk. Dependency-free variant the plugin host
+/// hands to plugins ([`crate::plugin_api`]).
+pub(crate) fn build_static(settings: &AppSettings) -> Vec<LlmRegistryEntryDto> {
+    build_inner(settings, None)
+}
+
+fn build_inner(
+    settings: &AppSettings,
+    downloads: Option<&LlmModelDownloadManager>,
+) -> Vec<LlmRegistryEntryDto> {
     let mut entries = Vec::new();
 
     for preset in LlmPreset::ALL {
-        let (availability, progress) = if downloads.is_downloading_preset(preset) {
-            (
-                LlmAvailability::Downloading,
-                downloads.progress_basis_points(),
-            )
-        } else {
-            let Ok(path) = llm_model_manager::default_llm_model_path(preset) else {
-                continue;
-            };
-            (
-                integrity_to_availability(llm_model_manager::gguf_file_integrity(
-                    &path,
-                    Some(preset.download_size_bytes()),
-                )),
-                None,
-            )
+        let (availability, progress) = match downloads {
+            Some(d) if d.is_downloading_preset(preset) => {
+                (LlmAvailability::Downloading, d.progress_basis_points())
+            }
+            _ => {
+                let Ok(path) = llm_model_manager::default_llm_model_path(preset) else {
+                    continue;
+                };
+                (
+                    integrity_to_availability(llm_model_manager::gguf_file_integrity(
+                        &path,
+                        Some(preset.download_size_bytes()),
+                    )),
+                    None,
+                )
+            }
         };
         entries.push(entry(
             LlmModelRef::LocalPreset { preset },
@@ -57,25 +72,25 @@ pub(crate) fn build(
     }
 
     for custom in &settings.custom_llm_models {
-        let (availability, progress) = if downloads.is_downloading_custom(&custom.id) {
-            (
-                LlmAvailability::Downloading,
-                downloads.progress_basis_points(),
-            )
-        } else {
-            let path = match &custom.source {
-                CustomLlmSource::LocalPath { path } => PathBuf::from(path),
-                CustomLlmSource::DownloadUrl { .. } => {
-                    match llm_model_manager::default_custom_llm_path(&custom.id) {
-                        Ok(path) => path,
-                        Err(_) => continue,
+        let (availability, progress) = match downloads {
+            Some(d) if d.is_downloading_custom(&custom.id) => {
+                (LlmAvailability::Downloading, d.progress_basis_points())
+            }
+            _ => {
+                let path = match &custom.source {
+                    CustomLlmSource::LocalPath { path } => PathBuf::from(path),
+                    CustomLlmSource::DownloadUrl { .. } => {
+                        match llm_model_manager::default_custom_llm_path(&custom.id) {
+                            Ok(path) => path,
+                            Err(_) => continue,
+                        }
                     }
-                }
-            };
-            (
-                integrity_to_availability(llm_model_manager::gguf_file_integrity(&path, None)),
-                None,
-            )
+                };
+                (
+                    integrity_to_availability(llm_model_manager::gguf_file_integrity(&path, None)),
+                    None,
+                )
+            }
         };
         entries.push(entry(
             LlmModelRef::LocalCustom {

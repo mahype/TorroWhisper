@@ -7,9 +7,9 @@ use std::time::Instant;
 use open_whisper_core::{AppSettings, LlmModelRef, STAGE_LLM};
 use serde_json::json;
 
-use crate::llm;
 use crate::pipeline::PipelineStage;
 use crate::pipeline::context::{PipelineContext, StageError, StageOutcome};
+use crate::plugin_api::{BridgeHost, PluginHost};
 
 pub(crate) struct LlmStage {
     settings: AppSettings,
@@ -48,10 +48,16 @@ impl PipelineStage for LlmStage {
             ctx.text.chars().count()
         );
 
-        let provider = llm::provider_for(&self.model_ref, &self.settings)
-            .map_err(|err| StageError::new(STAGE_LLM, err))?;
-        let output = provider
-            .generate(&self.role_prompt, &ctx.text, ctx.cancel_flag())
+        // Route through the shared plugin host so post-processing and plugins
+        // resolve + run models the same way.
+        let host = BridgeHost::new("post_processing", self.settings.clone());
+        let output = host
+            .generate(
+                &self.model_ref,
+                &self.role_prompt,
+                &ctx.text,
+                ctx.cancel_flag(),
+            )
             .map_err(|err| StageError::new(STAGE_LLM, err))?;
 
         let trimmed = output.trim();

@@ -80,6 +80,25 @@ struct ChatSettingsSheet: View {
             .sorted { ($0.language, $0.name) < ($1.language, $1.name) }
     }
 
+    /// Ready-to-run models first, the rest after — so the usable picks sit at
+    /// the top. Order within each group is preserved (presets, custom, cloud).
+    private var sortedRegistry: [LlmRegistryEntryDTO] {
+        registry.filter { $0.availability == .ready }
+            + registry.filter { $0.availability != .ready }
+    }
+
+    /// Short reason a model is not ready, appended to its picker row. `nil` for
+    /// ready models (shown by name alone).
+    private func availabilityNote(_ availability: LlmAvailability) -> String? {
+        switch availability {
+        case .ready: return nil
+        case .downloadable: return L("not downloaded", locale: locale)
+        case .downloading: return L("downloading…", locale: locale)
+        case .corrupt: return L("file damaged", locale: locale)
+        case .needsApiKey: return L("needs API key", locale: locale)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -165,13 +184,15 @@ struct ChatSettingsSheet: View {
         Section {
             Picker(selection: model.binding(for: \.chat.defaultModelRef)) {
                 Text("Local default", bundle: .module).tag(LlmModelRefDTO?.none)
-                ForEach(registry) { entry in
-                    Text(entry.displayName).tag(LlmModelRefDTO?.some(entry.modelRef))
+                ForEach(sortedRegistry) { entry in
+                    let note = availabilityNote(entry.availability)
+                    Text(note.map { "\(entry.displayName) — \($0)" } ?? entry.displayName)
+                        .tag(LlmModelRefDTO?.some(entry.modelRef))
                 }
             } label: {
                 Text("Default model", bundle: .module)
             }
-            Text("Used for new conversations. A pick in the chat window overrides it for that session.", bundle: .module)
+            Text("Used for new conversations. A pick in the chat window overrides it for that session. Local models, your custom models and cloud models all appear here — entries marked “not downloaded” or “needs API key” aren’t usable until set up under Language models.", bundle: .module)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

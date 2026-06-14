@@ -30,7 +30,8 @@ use open_whisper_core::{
     LlmModelRef, LlmPreset,
 };
 
-use crate::{llm, plugin_log, sessions_store};
+use crate::plugin_api::{BridgeHost, LogLevel, PluginHost};
+use crate::{plugin_log, sessions_store};
 
 const DEFAULT_SYSTEM_PROMPT: &str = "You are a friendly voice assistant. Answer briefly and conversationally, as if speaking aloud. Avoid markdown, lists and code blocks unless explicitly asked.";
 
@@ -335,21 +336,20 @@ impl ChatController {
             .map(|message| message.content.clone())
             .unwrap_or_default();
 
-        plugin_log::info(
-            "chat",
+        // The chat plugin reaches LLMs only through the shared plugin host —
+        // the same versioned surface third-party plugins will use.
+        let host = BridgeHost::new("chat", settings.clone());
+        host.log(
+            LogLevel::Info,
             &format!("generating with {}", describe_model(&model_ref)),
         );
 
-        let settings = settings.clone();
         let cancelled = self.cancelled.clone();
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
-            let result = (|| {
-                let provider = llm::provider_for(&model_ref, &settings)?;
-                provider.chat(&system, &latest_user, &cancelled)
-            })();
+            let result = host.chat(&model_ref, &system, &latest_user, &cancelled);
             if let Err(err) = &result {
-                plugin_log::error("chat", &format!("generation failed: {err}"));
+                host.log(LogLevel::Error, &format!("generation failed: {err}"));
             }
             let _ = tx.send(result);
         });

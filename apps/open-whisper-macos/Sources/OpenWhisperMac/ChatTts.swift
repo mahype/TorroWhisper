@@ -1,11 +1,11 @@
 import AVFoundation
 import Foundation
-import Security
 
 /// Speaks chat answers through the configured backend (#17). v1 is utterance-
-/// at-a-time (whole answer, then spoken); OpenAI audio is queued and played
-/// serially so successive answers don't overlap. Any OpenAI failure (missing
-/// key, network, bad status) silently falls back to the offline system voice.
+/// at-a-time (whole answer, then spoken); OpenAI audio is synthesized in Rust
+/// (which reads the API key) and played serially so successive answers don't
+/// overlap. Any OpenAI failure falls back to the offline system voice, and the
+/// real reason is logged.
 @MainActor
 final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
     private let synthesizer = AVSpeechSynthesizer()
@@ -67,7 +67,7 @@ final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
         return lo + (hi - lo) * clamped
     }
 
-    // MARK: OpenAI voice
+    // MARK: OpenAI voice (synthesized in Rust)
 
     private func speakOpenAi(_ text: String) {
         openAiQueue.append(text)
@@ -83,16 +83,26 @@ final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
         let voice = settings.openaiVoice.isEmpty ? "alloy" : settings.openaiVoice
         let rate = settings.rate
         Task { [weak self] in
-            let audio = await OpenAiTts.synthesize(text: text, voice: voice, rate: rate)
+            // The bridge call blocks on a network request — run it off the main
+            // actor. It does not touch the bridge runtime, so this is safe.
+            let result: Result<Data, Error> = await Task.detached {
+                do {
+                    return .success(try BridgeClient().chatTtsSynthesize(text: text, voice: voice, rate: rate))
+                } catch {
+                    return .failure(error)
+                }
+            }.value
+
             guard let self else { return }
-            if let audio {
+            switch result {
+            case .success(let audio):
                 self.pendingAudio.append(audio)
                 self.playNextIfIdle()
-            } else {
-                // No key / network / API error → keep the answer audible offline.
+            case .failure(let error):
+                let message = (error as? BridgeError)?.message ?? error.localizedDescription
                 self.bridge.pluginLog(
                     pluginId: "chat", level: "warn",
-                    message: "TTS: OpenAI unavailable (no API key, network or API error) — using system voice"
+                    message: "TTS: OpenAI failed (\(message)) — using system voice"
                 )
                 self.speakSystem(text)
             }
@@ -120,72 +130,5 @@ final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
             self?.audioPlayer = nil
             self?.playNextIfIdle()
         }
-    }
-}
-
-/// OpenAI text-to-speech (`/v1/audio/speech`). Returns MP3 bytes, or nil on any
-/// failure so the caller can fall back.
-enum OpenAiTts {
-    static func synthesize(text: String, voice: String, rate: Float) async -> Data? {
-        guard let key = TtsKeychain.openAiKey(),
-              let url = URL(string: "https://api.openai.com/v1/audio/speech")
-        else { return nil }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: Any] = [
-            "model": "gpt-4o-mini-tts",
-            "input": text,
-            "voice": voice,
-            "response_format": "mp3",
-            "speed": speed(for: rate),
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                return nil
-            }
-            return data
-        } catch {
-            return nil
-        }
-    }
-
-    /// Normalized 0–1 rate → OpenAI `speed` (0.25–4.0), centered so 0.5 ≈ 1.0×.
-    private static func speed(for rate: Float) -> Double {
-        let clamped = max(0, min(1, rate))
-        if clamped <= 0.5 {
-            return Double(0.5 + clamped) // 0 → 0.5×, 0.5 → 1.0×
-        }
-        return Double(1.0 + (clamped - 0.5) * 2.0) // 0.5 → 1.0×, 1 → 2.0×
-    }
-}
-
-/// Reads the OpenAI API key straight from the macOS Keychain for the Swift-side
-/// TTS path. Mirrors `crates/open-whisper-bridge/src/llm/keychain.rs` — the
-/// service name and account string MUST stay in sync with that module.
-enum TtsKeychain {
-    private static let service = "dev.awesome.open-whisper.llm"
-    private static let openAiAccount = "openai_api_key"
-
-    static func openAiKey() -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: openAiAccount,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data,
-              let key = String(data: data, encoding: .utf8)
-        else { return nil }
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 }
