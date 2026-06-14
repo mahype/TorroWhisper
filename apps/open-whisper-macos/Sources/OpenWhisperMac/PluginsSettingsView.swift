@@ -65,6 +65,7 @@ struct ChatSettingsSheet: View {
 
     private let bridge = BridgeClient()
     @State private var registry: [LlmRegistryEntryDTO] = []
+    @State private var openAiKeyPresent = false
     @State private var hotkeyCapturing = false
     @State private var hotkeyPreview = ""
     @State private var hotkeyError: String?
@@ -103,7 +104,11 @@ struct ChatSettingsSheet: View {
             .formStyle(.grouped)
         }
         .frame(width: 540, height: 680)
-        .onAppear { registry = (try? bridge.getLlmRegistry()) ?? [] }
+        .onAppear {
+            registry = (try? bridge.getLlmRegistry()) ?? []
+            openAiKeyPresent = (try? bridge.getLlmApiKeyStatus())?
+                .first(where: { $0.backend == .openAi })?.hasKey ?? false
+        }
     }
 
     private var shortcutSection: some View {
@@ -203,10 +208,21 @@ struct ChatSettingsSheet: View {
                 } label: {
                     Text("Voice", bundle: .module)
                 }
-                Text("Uses your OpenAI API key (set it under Language models → Cloud models). Falls back to the system voice if no key is stored.", bundle: .module)
+                if openAiKeyPresent {
+                    Text("Uses your OpenAI API key from Cloud models.", bundle: .module)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Label {
+                        Text("No OpenAI API key — speaking with the system voice instead. Add a key under Language models → Cloud models, or pick the System voice provider above.", bundle: .module)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                    }
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             VStack(alignment: .leading) {

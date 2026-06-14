@@ -193,7 +193,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @objc private func showChat(_ sender: Any?) {
         let window = chatWindow ?? makeWindow(
             title: L("Chat", locale: currentLocale),
-            size: NSSize(width: 480, height: 560),
+            size: NSSize(width: 760, height: 580),
+            resizable: true,
             rootView: ChatWindowView(chat: chatViewModel)
         )
         chatWindow = window
@@ -766,13 +767,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         window.makeKeyAndOrderFront(nil)
     }
 
-    private func makeWindow<Content: View>(title: String, size: NSSize, rootView: Content) -> NSWindow {
+    private func makeWindow<Content: View>(title: String, size: NSSize, resizable: Bool = false, rootView: Content) -> NSWindow {
+        var styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable]
+        if resizable { styleMask.insert(.resizable) }
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.titled, .closable, .miniaturizable],
+            styleMask: styleMask,
             backing: .buffered,
             defer: false
         )
+        if resizable {
+            // Let the green button zoom to a full-screen tile, not just the
+            // default "standard frame".
+            window.collectionBehavior.insert(.fullScreenPrimary)
+        }
         window.title = title
         window.center()
         window.isReleasedWhenClosed = false
