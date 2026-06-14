@@ -267,12 +267,15 @@ fn generate(
             .map_err(|err| format!("LLM decode failed: {err}"))?;
     }
 
-    let trimmed = output.trim().to_owned();
-    if trimmed.is_empty() {
+    let cleaned = match task {
+        HelperTask::Chat => sanitize_chat_output(&output),
+        HelperTask::PostProcessing => output.trim().to_owned(),
+    };
+    if cleaned.is_empty() {
         return Err("The language model returned no text.".to_owned());
     }
 
-    Ok(trimmed)
+    Ok(cleaned)
 }
 
 fn build_gemma_chat_prompt(mode_instruction: &str, transcript: &str) -> String {
@@ -292,10 +295,12 @@ fn build_gemma_chat_prompt(mode_instruction: &str, transcript: &str) -> String {
     format!("<bos><|turn>user\n{body}<turn|>\n<|turn>model\n")
 }
 
-/// Conversational prompt for the chat plugin. Gemma has no system role, so the
-/// system prompt (which already carries any folded history) is prepended to the
-/// user's turn, then the model is asked to respond. Uses Gemma's canonical
-/// `<start_of_turn>` template so the model answers instead of revising the text.
+/// Conversational prompt for the chat plugin. Uses the same `<|turn>` turn
+/// format these models actually use (the post-processing path relies on it, and
+/// `<turn|>` is the stop sequence) — but with a plain conversational framing so
+/// the model *answers* the user instead of revising the text. The system prompt
+/// (which already carries any folded history) has no dedicated role here, so it
+/// is prepended to the user's turn.
 fn build_gemma_conversation_prompt(system_prompt: &str, user_text: &str) -> String {
     let system = system_prompt.trim();
     let user = user_text.trim();
@@ -304,8 +309,58 @@ fn build_gemma_conversation_prompt(system_prompt: &str, user_text: &str) -> Stri
     } else {
         format!("{system}\n\n{user}")
     };
-    // AddBos::Always prepends <bos>, so it is not included literally here.
-    format!("<start_of_turn>user\n{turn}<end_of_turn>\n<start_of_turn>model\n")
+    format!("<bos><|turn>user\n{turn}<turn|>\n<|turn>model\n")
+}
+
+/// Strips chat-template control tokens that "thinking"/channel models leak into
+/// their reply and keeps only the final answer. The channel format is
+/// `<|channel>name<channel|>content` (optionally repeated for thought→final), so
+/// the content of the *last* channel is the answer; any leftover `<|…>` / `<…|>`
+/// control tokens are then removed.
+fn sanitize_chat_output(text: &str) -> String {
+    let body = match text.rfind("<channel|>") {
+        Some(idx) => &text[idx + "<channel|>".len()..],
+        None => text,
+    };
+    strip_control_tokens(body).trim().to_owned()
+}
+
+/// Removes `<|…>`, `<…|>` and `<|…|>` style control tokens (and the known
+/// turn/channel/think/tool markers) while leaving ordinary `<…>` text intact.
+fn strip_control_tokens(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find('<') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start..];
+        let Some(end_rel) = after.find('>') else {
+            out.push_str(after);
+            return out;
+        };
+        let token = &after[..end_rel + 1];
+        let inner = &token[1..token.len() - 1];
+        let is_control = inner.contains('|')
+            || matches!(
+                inner.trim_matches('|'),
+                "turn"
+                    | "channel"
+                    | "think"
+                    | "bos"
+                    | "eos"
+                    | "start_of_turn"
+                    | "end_of_turn"
+                    | "message"
+                    | "tool"
+                    | "tool_call"
+                    | "tool_response"
+            );
+        if !is_control {
+            out.push_str(token);
+        }
+        rest = &after[end_rel + 1..];
+    }
+    out.push_str(rest);
+    out
 }
 
 #[cfg(test)]
@@ -330,14 +385,34 @@ mod tests {
     }
 
     #[test]
-    fn conversation_prompt_is_a_real_turn_not_a_revision() {
+    fn conversation_prompt_uses_turn_format_not_a_revision() {
         let prompt = build_gemma_conversation_prompt("You are a helpful assistant.", "Wie geht's?");
-        assert!(prompt.starts_with("<start_of_turn>user\n"));
+        assert!(prompt.starts_with("<bos><|turn>user\n"));
         assert!(prompt.contains("You are a helpful assistant.\n\nWie geht's?"));
-        assert!(prompt.ends_with("<start_of_turn>model\n"));
+        assert!(prompt.ends_with("<|turn>model\n"));
         // Must NOT carry the post-processing "revise the text" framing.
         assert!(!prompt.contains("bereinig"));
         assert!(!prompt.contains("ueberarbeit"));
+    }
+
+    #[test]
+    fn sanitize_extracts_final_channel_and_strips_control_tokens() {
+        // Single "thought" channel with the reply inside (the observed bug).
+        let raw = "<|channel>thought\n<channel|>Haha, du hast mich erwischt! Was geht?";
+        assert_eq!(
+            sanitize_chat_output(raw),
+            "Haha, du hast mich erwischt! Was geht?"
+        );
+
+        // thought → final: keep only the final channel.
+        let two = "<|channel>thought<channel|>Ich denke nach.<|channel>final<channel|>Die Antwort ist 42.";
+        assert_eq!(sanitize_chat_output(two), "Die Antwort ist 42.");
+
+        // Plain answer with stray turn tokens is left clean.
+        assert_eq!(sanitize_chat_output("Hallo!<turn|>"), "Hallo!");
+
+        // Ordinary text without control tokens is untouched.
+        assert_eq!(sanitize_chat_output("3 < 5 and 5 > 3"), "3 < 5 and 5 > 3");
     }
 
     #[test]
