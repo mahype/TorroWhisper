@@ -376,3 +376,17 @@
 "Key stored" = "Schlüssel gespeichert";
 "Save" = "Speichern";
 "Voice-chat with a Hermes Agent (NousResearch) over its API server. Enter the agent's address (e.g. http://localhost:8642/v1) and, if the server requires one, its API key. Agents appear in the chat window's model picker. Each conversation keeps its own memory via the agent." = "Sprich per Sprache mit einem Hermes-Agenten (NousResearch) über dessen API-Server. Gib die Adresse des Agenten an (z. B. http://localhost:8642/v1) und, falls der Server einen verlangt, dessen API-Schlüssel. Agenten erscheinen im Modell-Auswahlmenü des Chat-Fensters. Jede Unterhaltung behält über den Agenten ihr eigenes Gedächtnis.";
+
+/* Lokale Piper-Sprachausgabe */
+"Piper (local)" = "Piper (lokal)";
+"Voice" = "Stimme";
+"Voice ready" = "Stimme bereit";
+"Download voice" = "Stimme herunterladen";
+"Downloading voice…" = "Stimme wird geladen…";
+"Speech output (local Piper)" = "Sprachausgabe (lokal, Piper)";
+"Speed" = "Geschwindigkeit";
+"very low" = "sehr niedrig";
+"low" = "niedrig";
+"medium" = "mittel";
+"high" = "hoch";
+"Answers are spoken by a fast, fully-local neural voice (Piper). Pick a language and voice; it downloads once (~25–115 MB). Until a voice is downloaded, the offline system voice is used as a fallback." = "Antworten werden von einer schnellen, komplett lokalen neuronalen Stimme (Piper) gesprochen. Wähle Sprache und Stimme; sie wird einmalig heruntergeladen (~25–115 MB). Bis eine Stimme geladen ist, dient die Offline-Systemstimme als Rückfall.";

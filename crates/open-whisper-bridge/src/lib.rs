@@ -1611,6 +1611,16 @@ struct ChatTtsResponse {
     audio: Vec<u8>,
 }
 
+#[derive(Deserialize)]
+struct TtsVoiceRequest {
+    voice: String,
+}
+
+#[derive(Serialize)]
+struct TtsReadyResponse {
+    ready: bool,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_log_path() -> *mut c_char {
     logging::init();
@@ -1829,14 +1839,47 @@ pub extern "C" fn ow_chat_delete_session(request_json: *const c_char) -> *mut c_
     response_from_result(result)
 }
 
-/// Synthesizes chat TTS audio in Rust (OpenAI). Deliberately does NOT touch the
-/// thread-local `BridgeRuntime`, so Swift can call it from a background thread
-/// without blocking the poll loop. Returns the MP3 bytes as a JSON byte array.
+/// Synthesizes chat TTS audio locally with Piper (sherpa-onnx subprocess).
+/// Deliberately does NOT touch the thread-local `BridgeRuntime`, so Swift can
+/// call it from a background thread without blocking the poll loop. `voice` is a
+/// Piper voice id; returns the WAV bytes as a JSON byte array.
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_chat_tts_synthesize(request_json: *const c_char) -> *mut c_char {
     let result = parse_json_arg::<ChatTtsRequest>(request_json, "ChatTtsRequest").and_then(|req| {
-        tts::openai_speech(&req.text, &req.voice, req.rate).map(|audio| ChatTtsResponse { audio })
+        tts::piper_speech(&req.text, &req.voice, req.rate).map(|audio| ChatTtsResponse { audio })
     });
+    response_from_result(result)
+}
+
+/// Lists the curated downloadable Piper voice ids (the UI parses them into
+/// language / voice / quality pickers).
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_tts_piper_voices() -> *mut c_char {
+    let voices: Vec<String> = open_whisper_core::PIPER_VOICE_IDS
+        .iter()
+        .map(|id| (*id).to_owned())
+        .collect();
+    response_ok(voices)
+}
+
+/// True once a Piper voice (and the shared CLI) is downloaded and ready. Off the
+/// runtime — safe to call from a background thread.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_tts_local_ready(request_json: *const c_char) -> *mut c_char {
+    let result = parse_json_arg::<TtsVoiceRequest>(request_json, "TtsVoiceRequest")
+        .map(|req| TtsReadyResponse {
+            ready: tts::piper_ready(&req.voice),
+        });
+    response_from_result(result)
+}
+
+/// Downloads + extracts the Piper CLI and the requested voice if missing.
+/// Blocking (large download) but off the runtime — Swift calls it off the main
+/// thread with progress UI.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_tts_local_prepare(request_json: *const c_char) -> *mut c_char {
+    let result = parse_json_arg::<TtsVoiceRequest>(request_json, "TtsVoiceRequest")
+        .and_then(|req| tts::prepare_piper(&req.voice).map(|()| "ok".to_owned()));
     response_from_result(result)
 }
 

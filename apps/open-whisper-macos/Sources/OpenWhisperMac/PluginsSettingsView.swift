@@ -65,7 +65,6 @@ struct ChatSettingsSheet: View {
 
     private let bridge = BridgeClient()
     @State private var registry: [LlmRegistryEntryDTO] = []
-    @State private var openAiKeyPresent = false
     @State private var hotkeyCapturing = false
     @State private var hotkeyPreview = ""
     @State private var hotkeyError: String?
@@ -76,16 +75,12 @@ struct ChatSettingsSheet: View {
     /// Per-agent "Test connection" in-flight set + last result.
     @State private var hermesTesting: Set<String> = []
     @State private var hermesTestResult: [String: HermesTestState] = [:]
-
-    /// OpenAI's published TTS voices.
-    private let openAiVoices = [
-        "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer",
-    ]
-
-    private var systemVoices: [AVSpeechSynthesisVoice] {
-        AVSpeechSynthesisVoice.speechVoices()
-            .sorted { ($0.language, $0.name) < ($1.language, $1.name) }
-    }
+    /// Local Piper TTS: available voice ids, selected language, download state.
+    @State private var piperVoices: [String] = []
+    @State private var piperLanguage = "de_DE"
+    @State private var piperReady = false
+    @State private var piperPreparing = false
+    @State private var piperStatus = ""
 
     /// Ready-to-run models first, the rest after — so the usable picks sit at
     /// the top. Order within each group is preserved (presets, custom, cloud).
@@ -133,9 +128,8 @@ struct ChatSettingsSheet: View {
         .frame(width: 540, height: 680)
         .onAppear {
             registry = (try? bridge.getLlmRegistry()) ?? []
-            openAiKeyPresent = (try? bridge.getLlmApiKeyStatus())?
-                .first(where: { $0.backend == .openAi })?.hasKey ?? false
             refreshHermesKeyStatus()
+            loadPiperVoices()
         }
     }
 
@@ -212,46 +206,46 @@ struct ChatSettingsSheet: View {
 
     private var voiceSection: some View {
         Section {
-            Picker(selection: model.binding(for: \.chat.tts.provider)) {
-                ForEach(ChatTtsProvider.allCases) { provider in
-                    Text(provider.label(locale: locale)).tag(provider)
+            Picker(selection: piperLanguageBinding) {
+                ForEach(piperLanguages, id: \.self) { lang in
+                    Text(languageLabel(lang)).tag(lang)
                 }
             } label: {
-                Text("Voice provider", bundle: .module)
+                Text("Language", bundle: .module)
             }
 
-            switch model.settings.chat.tts.provider {
-            case .system:
-                Picker(selection: model.binding(for: \.chat.tts.systemVoice)) {
-                    Text("System default", bundle: .module).tag("")
-                    ForEach(systemVoices, id: \.identifier) { voice in
-                        Text("\(voice.name) (\(voice.language))").tag(voice.identifier)
-                    }
-                } label: {
-                    Text("Voice", bundle: .module)
+            Picker(selection: model.binding(for: \.chat.tts.piperVoice)) {
+                ForEach(voicesForSelectedLanguage, id: \.self) { id in
+                    Text(voiceLabel(id)).tag(id)
                 }
-            case .openAi:
-                Picker(selection: model.binding(for: \.chat.tts.openaiVoice)) {
-                    ForEach(openAiVoices, id: \.self) { voice in
-                        Text(voice.capitalized).tag(voice)
-                    }
-                } label: {
-                    Text("Voice", bundle: .module)
-                }
-                if openAiKeyPresent {
-                    Text("Uses your OpenAI API key from Cloud models.", bundle: .module)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
+            } label: {
+                Text("Voice", bundle: .module)
+            }
+            .onChange(of: model.settings.chat.tts.piperVoice) { _, _ in refreshPiperReady() }
+
+            HStack(spacing: 8) {
+                if piperReady {
                     Label {
-                        Text("No OpenAI API key — speaking with the system voice instead. Add a key under Language models → Cloud models, or pick the System voice provider above.", bundle: .module)
+                        Text("Voice ready", bundle: .module)
                     } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill")
+                        Image(systemName: "checkmark.circle.fill")
                     }
                     .font(.caption)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.green)
+                } else {
+                    Button {
+                        preparePiper()
+                    } label: {
+                        Text("Download voice", bundle: .module)
+                    }
+                    .disabled(piperPreparing)
+                    if piperPreparing { ProgressView().controlSize(.small) }
+                }
+                if !piperStatus.isEmpty {
+                    Text(piperStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
             }
 
@@ -260,7 +254,109 @@ struct ChatSettingsSheet: View {
                 Slider(value: model.binding(for: \.chat.tts.rate), in: 0...1)
             }
         } header: {
-            Text("Speech output", bundle: .module)
+            Text("Speech output (local Piper)", bundle: .module)
+        } footer: {
+            Text("Answers are spoken by a fast, fully-local neural voice (Piper). Pick a language and voice; it downloads once (~25–115 MB). Until a voice is downloaded, the offline system voice is used as a fallback.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Piper voice helpers
+
+    /// Distinct languages (e.g. `de_DE`) from the available voice ids, original order.
+    private var piperLanguages: [String] {
+        var seen: [String] = []
+        for id in piperVoices {
+            let lang = String(id.split(separator: "-").first ?? "")
+            if !lang.isEmpty, !seen.contains(lang) { seen.append(lang) }
+        }
+        return seen
+    }
+
+    private var voicesForSelectedLanguage: [String] {
+        piperVoices.filter { $0.hasPrefix(piperLanguage + "-") }
+    }
+
+    private var piperLanguageBinding: Binding<String> {
+        Binding(
+            get: { piperLanguage },
+            set: { newLang in
+                piperLanguage = newLang
+                // Move the selection to the first voice of the new language.
+                if !model.settings.chat.tts.piperVoice.hasPrefix(newLang + "-"),
+                   let first = piperVoices.first(where: { $0.hasPrefix(newLang + "-") }) {
+                    model.settings.chat.tts.piperVoice = first
+                    model.requestAutoSave()
+                }
+                refreshPiperReady()
+            }
+        )
+    }
+
+    /// `de_DE` → "Deutsch"; disambiguates English regions (US/UK).
+    private func languageLabel(_ lang: String) -> String {
+        let code = String(lang.prefix(2))
+        let base = locale.localizedString(forLanguageCode: code)?.capitalized(with: locale) ?? lang
+        let region = lang.split(separator: "_").count > 1 ? String(lang.split(separator: "_")[1]) : ""
+        if code == "en", !region.isEmpty { return "\(base) (\(region))" }
+        return base
+    }
+
+    /// `de_DE-thorsten_emotional-medium` → "Thorsten emotional — medium".
+    private func voiceLabel(_ id: String) -> String {
+        let parts = id.split(separator: "-")
+        let voice = parts.count > 1 ? String(parts[1]).replacingOccurrences(of: "_", with: " ") : id
+        let quality = parts.count > 2 ? qualityLabel(String(parts[2])) : ""
+        return quality.isEmpty ? voice.capitalized : "\(voice.capitalized) — \(quality)"
+    }
+
+    private func qualityLabel(_ quality: String) -> String {
+        switch quality {
+        case "x_low": return L("very low", locale: locale)
+        case "low": return L("low", locale: locale)
+        case "medium": return L("medium", locale: locale)
+        case "high": return L("high", locale: locale)
+        default: return quality
+        }
+    }
+
+    private func loadPiperVoices() {
+        piperVoices = (try? bridge.ttsPiperVoices()) ?? []
+        let current = model.settings.chat.tts.piperVoice
+        piperLanguage = String(current.split(separator: "-").first ?? "de_DE")
+        refreshPiperReady()
+    }
+
+    private func refreshPiperReady() {
+        let voice = model.settings.chat.tts.piperVoice
+        piperReady = (try? bridge.ttsLocalReady(voice: voice)) ?? false
+        piperStatus = ""
+    }
+
+    /// Downloads the selected voice (+ shared CLI) off the main thread, with a
+    /// spinner + inline status.
+    private func preparePiper() {
+        let voice = model.settings.chat.tts.piperVoice
+        piperPreparing = true
+        piperStatus = L("Downloading voice…", locale: locale)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let ok: Bool
+            let message: String
+            do {
+                _ = try BridgeClient().ttsLocalPrepare(voice: voice)
+                ok = true
+                message = ""
+            } catch {
+                ok = false
+                message = (error as? BridgeError)?.message ?? error.localizedDescription
+            }
+            DispatchQueue.main.async {
+                piperPreparing = false
+                piperReady = ok
+                piperStatus = message
+            }
         }
     }
 
@@ -470,11 +566,10 @@ struct ChatSettingsSheet: View {
         let baseUrl = agent.baseUrl
         hermesTesting.insert(id)
         hermesTestResult[id] = nil
-        let bridge = self.bridge
         DispatchQueue.global(qos: .userInitiated).async {
             let result: HermesTestState
             do {
-                result = HermesTestState(ok: true, message: try bridge.testHermesAgent(id: id, baseUrl: baseUrl))
+                result = HermesTestState(ok: true, message: try BridgeClient().testHermesAgent(id: id, baseUrl: baseUrl))
             } catch {
                 result = HermesTestState(ok: false, message: error.localizedDescription)
             }

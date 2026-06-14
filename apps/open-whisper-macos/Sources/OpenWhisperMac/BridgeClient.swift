@@ -190,6 +190,26 @@ final class BridgeClient {
         return Data(response.audio)
     }
 
+    // MARK: Local Piper TTS
+
+    /// Curated downloadable Piper voice ids (`{lang}-{voice}-{quality}`).
+    func ttsPiperVoices() throws -> [String] {
+        try decodeResponse(from: ow_tts_piper_voices())
+    }
+
+    /// Whether a Piper voice (and the shared CLI) is downloaded and ready.
+    func ttsLocalReady(voice: String) throws -> Bool {
+        struct Response: Decodable { var ready: Bool }
+        let response: Response = try encodeAndCall(["voice": voice], function: ow_tts_local_ready)
+        return response.ready
+    }
+
+    /// Downloads + extracts the Piper CLI and the given voice if missing.
+    /// Blocking (large download) — invoke off the main thread.
+    func ttsLocalPrepare(voice: String) throws -> String {
+        try encodeAndCall(["voice": voice], function: ow_tts_local_prepare)
+    }
+
     func runPermissionDiagnostics() throws -> DiagnosticsDTO {
         try decodeResponse(from: ow_run_permission_diagnostics())
     }

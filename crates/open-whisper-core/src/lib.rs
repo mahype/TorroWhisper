@@ -1027,17 +1027,62 @@ pub fn builtin_plugin_catalog() -> Vec<PluginDescriptorDto> {
 
 // --- Chat plugin settings (#17) ----------------------------------------------
 
-/// Which backend speaks the chat answers. `System` is the offline macOS voice
-/// (`AVSpeechSynthesizer`); `OpenAi` uses OpenAI's `/v1/audio/speech` and reuses
-/// the OpenAI key from the Keychain. (ElevenLabs is a planned follow-up — it
-/// needs a non-LLM Keychain slot.)
+/// Which backend speaks the chat answers. `Piper` is the default: a fast,
+/// fully-local neural voice (run via the sherpa-onnx subprocess). `System` is
+/// the offline macOS voice (`AVSpeechSynthesizer`), kept as an automatic
+/// fallback when the Piper model isn't downloaded yet. `OpenAi` is retained only
+/// so old settings still deserialize — it is migrated to `Piper` in `normalize`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ChatTtsProvider {
-    #[default]
     System,
     OpenAi,
+    #[default]
+    Piper,
 }
+
+/// Default local Piper voice (German, highest quality). Shared by the settings
+/// default and the bridge's synthesizer.
+pub const DEFAULT_PIPER_VOICE: &str = "de_DE-thorsten-high";
+
+/// Curated set of downloadable Piper voices (those packaged by sherpa-onnx).
+/// Ids follow `{lang}-{voice}-{quality}`; the UI parses them into
+/// language → voice → quality pickers. German is covered fully; a representative
+/// set of other languages is included. Extend as needed.
+pub const PIPER_VOICE_IDS: &[&str] = &[
+    // German
+    "de_DE-thorsten-high",
+    "de_DE-thorsten-medium",
+    "de_DE-thorsten-low",
+    "de_DE-thorsten_emotional-medium",
+    "de_DE-eva_k-x_low",
+    "de_DE-karlsson-low",
+    "de_DE-kerstin-low",
+    "de_DE-pavoque-low",
+    "de_DE-ramona-low",
+    "de_DE-miro-high",
+    // English (US)
+    "en_US-amy-medium",
+    "en_US-ryan-high",
+    "en_US-lessac-high",
+    "en_US-hfc_female-medium",
+    "en_US-libritts_r-medium",
+    // English (UK)
+    "en_GB-alan-medium",
+    "en_GB-cori-high",
+    "en_GB-jenny_dioco-medium",
+    "en_GB-northern_english_male-medium",
+    // French
+    "fr_FR-siwis-medium",
+    "fr_FR-tom-medium",
+    "fr_FR-upmc-medium",
+    // Spanish
+    "es_ES-davefx-medium",
+    "es_ES-sharvard-medium",
+    // Italian
+    "it_IT-paola-medium",
+    "it_IT-riccardo-x_low",
+];
 
 /// How chat answers are spoken. Voices are kept per provider so switching back
 /// and forth preserves each choice.
@@ -1045,22 +1090,31 @@ pub enum ChatTtsProvider {
 #[serde(default)]
 pub struct ChatTtsSettings {
     pub provider: ChatTtsProvider,
-    /// `AVSpeechSynthesisVoice` identifier for the system backend. Empty = the
-    /// OS default voice for the utterance language.
+    /// `AVSpeechSynthesisVoice` identifier for the system fallback backend.
+    /// Empty = the OS default voice for the utterance language.
     pub system_voice: String,
-    /// OpenAI voice name (e.g. `alloy`, `nova`).
+    /// OpenAI voice name — vestigial (cloud TTS was removed); kept so old
+    /// settings still deserialize.
     pub openai_voice: String,
-    /// Speaking rate, normalized 0.0–1.0. Swift maps it onto each backend's
-    /// native range (system: AVSpeechUtterance min…max; OpenAI: 0.25–4.0).
+    /// Selected local Piper voice id (`{lang}-{voice}-{quality}`).
+    #[serde(default = "default_piper_voice")]
+    pub piper_voice: String,
+    /// Speaking rate, normalized 0.0–1.0. Swift maps it onto the backend's native
+    /// range; the bridge maps it onto Piper's length-scale.
     pub rate: f32,
+}
+
+fn default_piper_voice() -> String {
+    DEFAULT_PIPER_VOICE.to_owned()
 }
 
 impl Default for ChatTtsSettings {
     fn default() -> Self {
         Self {
-            provider: ChatTtsProvider::System,
+            provider: ChatTtsProvider::Piper,
             system_voice: String::new(),
             openai_voice: "alloy".to_owned(),
+            piper_voice: default_piper_voice(),
             rate: 0.5,
         }
     }
@@ -1235,6 +1289,14 @@ impl AppSettings {
         self.history_max_entries = self
             .history_max_entries
             .clamp(HISTORY_MAX_ENTRIES_MIN, HISTORY_MAX_ENTRIES_LIMIT);
+
+        // Cloud TTS was removed — migrate any saved OpenAI choice to local Piper.
+        if self.chat.tts.provider == ChatTtsProvider::OpenAi {
+            self.chat.tts.provider = ChatTtsProvider::Piper;
+        }
+        if self.chat.tts.piper_voice.trim().is_empty() {
+            self.chat.tts.piper_voice = DEFAULT_PIPER_VOICE.to_owned();
+        }
 
         // Seed enable entries for built-in plugins; drop config for plugins that
         // no longer exist (downgrade-safe — unknown ids just vanish).

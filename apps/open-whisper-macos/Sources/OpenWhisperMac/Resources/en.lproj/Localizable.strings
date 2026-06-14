@@ -376,3 +376,17 @@
 "Key stored" = "Key stored";
 "Save" = "Save";
 "Voice-chat with a Hermes Agent (NousResearch) over its API server. Enter the agent's address (e.g. http://localhost:8642/v1) and, if the server requires one, its API key. Agents appear in the chat window's model picker. Each conversation keeps its own memory via the agent." = "Voice-chat with a Hermes Agent (NousResearch) over its API server. Enter the agent's address (e.g. http://localhost:8642/v1) and, if the server requires one, its API key. Agents appear in the chat window's model picker. Each conversation keeps its own memory via the agent.";
+
+/* Local Piper TTS */
+"Piper (local)" = "Piper (local)";
+"Voice" = "Voice";
+"Voice ready" = "Voice ready";
+"Download voice" = "Download voice";
+"Downloading voice…" = "Downloading voice…";
+"Speech output (local Piper)" = "Speech output (local Piper)";
+"Speed" = "Speed";
+"very low" = "very low";
+"low" = "low";
+"medium" = "medium";
+"high" = "high";
+"Answers are spoken by a fast, fully-local neural voice (Piper). Pick a language and voice; it downloads once (~25–115 MB). Until a voice is downloaded, the offline system voice is used as a fallback." = "Answers are spoken by a fast, fully-local neural voice (Piper). Pick a language and voice; it downloads once (~25–115 MB). Until a voice is downloaded, the offline system voice is used as a fallback.";

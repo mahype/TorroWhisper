@@ -944,6 +944,7 @@ struct PluginDescriptorDTO: Codable, Equatable, Hashable, Identifiable {
 enum ChatTtsProvider: String, Codable, Hashable, CaseIterable, Identifiable {
     case system
     case openAi = "open_ai"
+    case piper
 
     var id: String { rawValue }
 
@@ -951,6 +952,7 @@ enum ChatTtsProvider: String, Codable, Hashable, CaseIterable, Identifiable {
         switch self {
         case .system: return L("System voice (offline)", locale: locale)
         case .openAi: return L("OpenAI (cloud)", locale: locale)
+        case .piper: return L("Piper (local)", locale: locale)
         }
     }
 }
@@ -960,6 +962,7 @@ struct ChatTtsSettingsDTO: Codable, Equatable, Hashable {
     var provider: ChatTtsProvider
     var systemVoice: String
     var openaiVoice: String
+    var piperVoice: String
     var rate: Float
 }
 
@@ -973,7 +976,7 @@ struct ChatSettingsDTO: Codable, Equatable, Hashable {
     static let `default` = ChatSettingsDTO(
         defaultModelRef: nil,
         systemPrompt: "",
-        tts: ChatTtsSettingsDTO(provider: .system, systemVoice: "", openaiVoice: "alloy", rate: 0.5),
+        tts: ChatTtsSettingsDTO(provider: .piper, systemVoice: "", openaiVoice: "alloy", piperVoice: "de_DE-thorsten-high", rate: 0.5),
         chatHotkey: ""
     )
 }

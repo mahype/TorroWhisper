@@ -12,7 +12,7 @@ final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
     private let bridge = BridgeClient()
     private var audioPlayer: AVAudioPlayer?
     private var pendingAudio: [Data] = []
-    private var openAiQueue: [String] = []
+    private var synthQueue: [String] = []
     private var synthesizing = false
     private var settings: ChatTtsSettingsDTO = ChatSettingsDTO.default.tts
 
@@ -30,12 +30,13 @@ final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
                 message: "TTS: system voice '\(settings.systemVoice.isEmpty ? "default" : settings.systemVoice)'"
             )
             speakSystem(trimmed)
-        case .openAi:
+        case .piper, .openAi:
+            // .openAi is migrated to Piper (cloud TTS removed).
             bridge.pluginLog(
                 pluginId: "chat", level: "info",
-                message: "TTS: OpenAI voice '\(settings.openaiVoice)'"
+                message: "TTS: Piper voice '\(settings.piperVoice)'"
             )
-            speakOpenAi(trimmed)
+            speakLocal(trimmed)
         }
     }
 
@@ -44,7 +45,7 @@ final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
         audioPlayer?.stop()
         audioPlayer = nil
         pendingAudio.removeAll()
-        openAiQueue.removeAll()
+        synthQueue.removeAll()
     }
 
     // MARK: System voice
@@ -67,24 +68,27 @@ final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
         return lo + (hi - lo) * clamped
     }
 
-    // MARK: OpenAI voice (synthesized in Rust)
+    // MARK: Local Piper voice (synthesized in Rust)
 
-    private func speakOpenAi(_ text: String) {
-        openAiQueue.append(text)
-        pumpOpenAi()
+    private func speakLocal(_ text: String) {
+        synthQueue.append(text)
+        pumpLocal()
     }
 
-    /// Synthesizes queued OpenAI answers strictly one at a time, so playback
-    /// order matches answer order even if several answers arrive in one tick.
-    private func pumpOpenAi() {
-        guard !synthesizing, !openAiQueue.isEmpty else { return }
+    /// Synthesizes queued answers strictly one at a time, so playback order
+    /// matches answer order even if several answers arrive in one tick. Falls
+    /// back to the offline system voice if local synthesis fails (e.g. the model
+    /// isn't downloaded yet).
+    private func pumpLocal() {
+        guard !synthesizing, !synthQueue.isEmpty else { return }
         synthesizing = true
-        let text = openAiQueue.removeFirst()
-        let voice = settings.openaiVoice.isEmpty ? "alloy" : settings.openaiVoice
+        let text = synthQueue.removeFirst()
+        let voice = settings.piperVoice.isEmpty ? "de_DE-thorsten-high" : settings.piperVoice
         let rate = settings.rate
         Task { [weak self] in
-            // The bridge call blocks on a network request — run it off the main
-            // actor. It does not touch the bridge runtime, so this is safe.
+            // The bridge call blocks while the Piper subprocess runs (and on the
+            // first call, while the model downloads) — run it off the main actor.
+            // It does not touch the bridge runtime, so this is safe.
             let result: Result<Data, Error> = await Task.detached {
                 do {
                     return .success(try BridgeClient().chatTtsSynthesize(text: text, voice: voice, rate: rate))
@@ -102,12 +106,12 @@ final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
                 let message = (error as? BridgeError)?.message ?? error.localizedDescription
                 self.bridge.pluginLog(
                     pluginId: "chat", level: "warn",
-                    message: "TTS: OpenAI failed (\(message)) — using system voice"
+                    message: "TTS: Piper failed (\(message)) — using system voice"
                 )
                 self.speakSystem(text)
             }
             self.synthesizing = false
-            self.pumpOpenAi()
+            self.pumpLocal()
         }
     }
 
