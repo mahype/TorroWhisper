@@ -869,13 +869,26 @@ enum ChatPhase: String, Codable, Hashable {
     case generating
 }
 
+/// Mirror of Rust `ChatSessionDto` — a sidebar entry (no message bodies).
+struct ChatSessionDTO: Codable, Hashable, Identifiable {
+    var id: String
+    var title: String
+    var updatedAt: Int64
+    var messageCount: Int
+}
+
 struct ChatStateDTO: Codable, Hashable {
     var phase: ChatPhase
     var messages: [ChatMessageDTO]
     var revision: UInt64
     var error: String?
+    var sessions: [ChatSessionDTO]
+    var activeSessionId: String
 
-    static let empty = ChatStateDTO(phase: .idle, messages: [], revision: 0, error: nil)
+    static let empty = ChatStateDTO(
+        phase: .idle, messages: [], revision: 0, error: nil,
+        sessions: [], activeSessionId: ""
+    )
 }
 
 // MARK: - Plugin system (#15)

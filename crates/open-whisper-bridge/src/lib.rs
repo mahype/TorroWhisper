@@ -18,6 +18,7 @@ mod logging;
 mod model_manager;
 mod permission_diagnostics;
 pub mod plugin_log;
+mod sessions_store;
 // Several pipeline types are scaffolding for plugins (#15) and chat (#17):
 // `StageRegistry::register`, the diagnostic `StageRecord`/context fields, the
 // `Stop` short-circuit outcome. Allow until those consumers land.
@@ -271,6 +272,18 @@ impl BridgeRuntime {
 
     fn chat_set_model(&mut self, model_ref: Option<LlmModelRef>) {
         self.chat.set_model(model_ref);
+    }
+
+    fn chat_new_session(&mut self) {
+        self.chat.new_session();
+    }
+
+    fn chat_switch_session(&mut self, id: &str) {
+        self.chat.switch_session(id);
+    }
+
+    fn chat_delete_session(&mut self, id: &str) {
+        self.chat.delete_session(id);
     }
 
     /// True when `path` points at one of the preset default model filenames —
@@ -1548,6 +1561,11 @@ struct ChatModelRequest {
     model_ref: Option<LlmModelRef>,
 }
 
+#[derive(Deserialize)]
+struct ChatSessionRequest {
+    id: String,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_log_path() -> *mut c_char {
     logging::init();
@@ -1695,6 +1713,32 @@ pub extern "C" fn ow_chat_set_model(request_json: *const c_char) -> *mut c_char 
     let result =
         parse_json_arg::<ChatModelRequest>(request_json, "ChatModelRequest").map(|request| {
             with_runtime_value(|runtime| runtime.chat_set_model(request.model_ref));
+            "ok".to_owned()
+        });
+    response_from_result(result)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_chat_new_session() -> *mut c_char {
+    with_runtime_value(|runtime| runtime.chat_new_session());
+    response_ok("ok".to_owned())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_chat_switch_session(request_json: *const c_char) -> *mut c_char {
+    let result =
+        parse_json_arg::<ChatSessionRequest>(request_json, "ChatSessionRequest").map(|request| {
+            with_runtime_value(|runtime| runtime.chat_switch_session(&request.id));
+            "ok".to_owned()
+        });
+    response_from_result(result)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_chat_delete_session(request_json: *const c_char) -> *mut c_char {
+    let result =
+        parse_json_arg::<ChatSessionRequest>(request_json, "ChatSessionRequest").map(|request| {
+            with_runtime_value(|runtime| runtime.chat_delete_session(&request.id));
             "ok".to_owned()
         });
     response_from_result(result)

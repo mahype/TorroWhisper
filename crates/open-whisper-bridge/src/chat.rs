@@ -3,51 +3,86 @@
 //! The chat reuses the main [`crate::dictation::DictationController`] for audio
 //! capture + Whisper (already mic/device-initialized) — when a chat turn is
 //! listening, the bridge routes the finished transcript here instead of
-//! inserting it. This controller owns only the conversation + LLM generation.
+//! inserting it. This controller owns the conversation(s) + LLM generation.
 //!
-//! v1 is blocking (the whole answer is produced, then spoken). Streaming
-//! sentence-by-sentence TTS is a follow-up. Multi-turn context is flattened
-//! into the system prompt for now; true per-provider message arrays come later.
+//! Conversations are persisted as multiple [`ChatSession`]s (the sidebar
+//! history); one is active at a time. v1 generation is blocking (the whole
+//! answer is produced, then spoken). Multi-turn context is flattened into the
+//! system prompt for now; true per-provider message arrays come later.
 
 use std::{
+    cmp::Reverse,
     sync::{
         Arc,
-        atomic::AtomicBool,
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{self, Receiver, TryRecvError},
     },
     thread,
+    time::{SystemTime, UNIX_EPOCH},
 };
+
+/// Monotonic suffix so two sessions created in the same nanosecond never share
+/// an id.
+static SESSION_SEQ: AtomicU64 = AtomicU64::new(0);
 
 use open_whisper_core::{
-    AppSettings, ChatMessageDto, ChatPhase, ChatRole, ChatStateDto, LlmModelRef, LlmPreset,
+    AppSettings, ChatMessageDto, ChatPhase, ChatRole, ChatSession, ChatSessionDto, ChatStateDto,
+    LlmModelRef, LlmPreset,
 };
 
-use crate::{llm, plugin_log};
+use crate::{llm, plugin_log, sessions_store};
 
 const DEFAULT_SYSTEM_PROMPT: &str = "You are a friendly voice assistant. Answer briefly and conversationally, as if speaking aloud. Avoid markdown, lists and code blocks unless explicitly asked.";
 
+/// Max characters of the first user message kept as a session title.
+const TITLE_MAX_CHARS: usize = 40;
+
 pub struct ChatController {
-    messages: Vec<ChatMessageDto>,
+    sessions: Vec<ChatSession>,
+    active_id: String,
     /// Session-only model override (a pick in the chat window). When `None`, the
     /// persisted `settings.chat.default_model_ref` is used.
     model_ref: Option<LlmModelRef>,
     generation_rx: Option<Receiver<Result<String, String>>>,
     generating: bool,
+    /// Session the in-flight answer belongs to, so it lands in the right place
+    /// even if the user switches sessions while it generates.
+    generating_session_id: String,
     cancelled: Arc<AtomicBool>,
     revision: u64,
     error: Option<String>,
+    /// Disabled in tests so unit tests never touch the on-disk sessions file.
+    persist_enabled: bool,
 }
 
 impl ChatController {
     pub fn new() -> Self {
+        let mut sessions = sessions_store::load().unwrap_or_default();
+        sessions.sort_by_key(|s| Reverse(s.updated_at));
+        Self::with_sessions(sessions, true)
+    }
+
+    fn with_sessions(mut sessions: Vec<ChatSession>, persist_enabled: bool) -> Self {
+        let active_id = match sessions.first() {
+            Some(first) => first.id.clone(),
+            None => {
+                let session = new_empty_session();
+                let id = session.id.clone();
+                sessions.push(session);
+                id
+            }
+        };
         Self {
-            messages: Vec::new(),
+            sessions,
+            active_id,
             model_ref: None,
             generation_rx: None,
             generating: false,
+            generating_session_id: String::new(),
             cancelled: Arc::new(AtomicBool::new(false)),
             revision: 0,
             error: None,
+            persist_enabled,
         }
     }
 
@@ -61,20 +96,97 @@ impl ChatController {
         self.generating
     }
 
-    /// Clears the conversation and cancels any in-flight generation.
-    pub fn reset(&mut self) {
+    fn active_index(&self) -> Option<usize> {
+        self.sessions.iter().position(|s| s.id == self.active_id)
+    }
+
+    fn persist(&self) {
+        if !self.persist_enabled {
+            return;
+        }
+        if let Err(err) = sessions_store::save(&self.sessions) {
+            plugin_log::warn("chat", &format!("could not save sessions: {err}"));
+        }
+    }
+
+    fn cancel_generation(&mut self) {
         self.cancelled
             .store(true, std::sync::atomic::Ordering::Relaxed);
-        self.messages.clear();
         self.generation_rx = None;
         self.generating = false;
-        self.error = None;
         self.cancelled = Arc::new(AtomicBool::new(false));
+    }
+
+    /// Clears the active conversation's messages (keeps the session entry).
+    pub fn reset(&mut self) {
+        self.cancel_generation();
+        self.error = None;
+        if let Some(index) = self.active_index() {
+            self.sessions[index].messages.clear();
+            self.sessions[index].title.clear();
+            self.sessions[index].updated_at = now_unix();
+        }
+        self.persist();
+        self.revision += 1;
+    }
+
+    /// Starts a fresh conversation. If the active one is already empty, stays on
+    /// it; otherwise the current session is kept in the list and a new empty one
+    /// becomes active.
+    pub fn new_session(&mut self) {
+        let active_empty = self
+            .active_index()
+            .map(|index| self.sessions[index].messages.is_empty())
+            .unwrap_or(true);
+        if !active_empty {
+            self.cancel_generation();
+            let session = new_empty_session();
+            self.active_id = session.id.clone();
+            self.sessions.insert(0, session);
+            self.persist();
+        }
+        self.error = None;
+        self.revision += 1;
+    }
+
+    /// Switches the active session to an existing one.
+    pub fn switch_session(&mut self, id: &str) {
+        if self.sessions.iter().any(|s| s.id == id) {
+            self.active_id = id.to_owned();
+            self.error = None;
+            self.revision += 1;
+        }
+    }
+
+    /// Deletes a session. If it was active, falls back to the newest remaining
+    /// session (or a fresh empty one).
+    pub fn delete_session(&mut self, id: &str) {
+        // If the deleted session is the one currently generating, cancel it —
+        // its answer can no longer land anywhere, and a stuck `generating` flag
+        // would lock out the chat shortcut.
+        if self.generating && self.generating_session_id == id {
+            self.cancel_generation();
+        }
+        self.sessions.retain(|s| s.id != id);
+        if self.active_id == id {
+            self.cancel_generation();
+            self.sessions.sort_by_key(|s| Reverse(s.updated_at));
+            match self.sessions.first() {
+                Some(first) => self.active_id = first.id.clone(),
+                None => {
+                    let session = new_empty_session();
+                    self.active_id = session.id.clone();
+                    self.sessions.push(session);
+                }
+            }
+            self.error = None;
+        }
+        self.persist();
         self.revision += 1;
     }
 
     /// Called by the bridge when a chat-turn transcript is ready. Appends the
-    /// user message and kicks off generation.
+    /// user message to the active session and kicks off generation.
     pub fn on_transcript(&mut self, transcript: String, settings: &AppSettings) {
         let text = transcript.trim().to_owned();
         if text.is_empty() {
@@ -85,11 +197,23 @@ impl ChatController {
             "chat",
             &format!("user turn received ({} chars)", text.chars().count()),
         );
+        let Some(index) = self.active_index() else {
+            plugin_log::warn(
+                "chat",
+                "transcript arrived with no active session — dropped",
+            );
+            return;
+        };
         self.error = None;
-        self.messages.push(ChatMessageDto {
+        if self.sessions[index].title.is_empty() {
+            self.sessions[index].title = derive_title(&text);
+        }
+        self.sessions[index].messages.push(ChatMessageDto {
             role: ChatRole::User,
             content: text,
         });
+        self.sessions[index].updated_at = now_unix();
+        self.persist();
         self.revision += 1;
         self.start_generation(settings);
     }
@@ -112,10 +236,19 @@ impl ChatController {
                         "chat",
                         &format!("answer received ({} chars)", trimmed.chars().count()),
                     );
-                    self.messages.push(ChatMessageDto {
-                        role: ChatRole::Assistant,
-                        content: trimmed,
-                    });
+                    // Route to the session this answer was generated for.
+                    if let Some(index) = self
+                        .sessions
+                        .iter()
+                        .position(|s| s.id == self.generating_session_id)
+                    {
+                        self.sessions[index].messages.push(ChatMessageDto {
+                            role: ChatRole::Assistant,
+                            content: trimmed,
+                        });
+                        self.sessions[index].updated_at = now_unix();
+                        self.persist();
+                    }
                 }
                 self.revision += 1;
             }
@@ -138,24 +271,48 @@ impl ChatController {
     /// Builds the snapshot for the UI. `listening`/`transcribing` come from the
     /// shared dictation controller (chat reuses it).
     pub fn state(&self, listening: bool, transcribing: bool) -> ChatStateDto {
+        // Only show "generating" when the *active* session is the one being
+        // generated — switching to another session must not look busy.
         let phase = if listening {
             ChatPhase::Listening
         } else if transcribing {
             ChatPhase::Transcribing
-        } else if self.generating {
+        } else if self.generating && self.generating_session_id == self.active_id {
             ChatPhase::Generating
         } else {
             ChatPhase::Idle
         };
+        let messages = self
+            .active_index()
+            .map(|index| self.sessions[index].messages.clone())
+            .unwrap_or_default();
+        let mut sessions: Vec<ChatSessionDto> = self
+            .sessions
+            .iter()
+            .map(|s| ChatSessionDto {
+                id: s.id.clone(),
+                title: s.title.clone(),
+                updated_at: s.updated_at,
+                message_count: s.messages.len(),
+            })
+            .collect();
+        sessions.sort_by_key(|s| Reverse(s.updated_at));
         ChatStateDto {
             phase,
-            messages: self.messages.clone(),
+            messages,
             revision: self.revision,
             error: self.error.clone(),
+            sessions,
+            active_session_id: self.active_id.clone(),
         }
     }
 
     fn start_generation(&mut self, settings: &AppSettings) {
+        let messages = self
+            .active_index()
+            .map(|index| self.sessions[index].messages.clone())
+            .unwrap_or_default();
+
         // Session override → persisted default → local preset.
         let model_ref = self
             .model_ref
@@ -170,9 +327,8 @@ impl ChatController {
         } else {
             configured_prompt
         };
-        let system = build_system_with_history(base_prompt, &self.messages);
-        let latest_user = self
-            .messages
+        let system = build_system_with_history(base_prompt, &messages);
+        let latest_user = messages
             .iter()
             .rev()
             .find(|message| message.role == ChatRole::User)
@@ -197,9 +353,41 @@ impl ChatController {
             }
             let _ = tx.send(result);
         });
+        self.generating_session_id = self.active_id.clone();
         self.generation_rx = Some(rx);
         self.generating = true;
     }
+}
+
+fn now_unix() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+fn new_empty_session() -> ChatSession {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let seq = SESSION_SEQ.fetch_add(1, Ordering::Relaxed);
+    ChatSession {
+        id: format!("session-{nanos}-{seq}"),
+        title: String::new(),
+        messages: Vec::new(),
+        updated_at: now_unix(),
+    }
+}
+
+/// First line of the first user message, trimmed to a short sidebar title.
+fn derive_title(text: &str) -> String {
+    let line = text.lines().next().unwrap_or("").trim();
+    if line.chars().count() <= TITLE_MAX_CHARS {
+        return line.to_owned();
+    }
+    let truncated: String = line.chars().take(TITLE_MAX_CHARS).collect();
+    format!("{}…", truncated.trim_end())
 }
 
 /// A short, log-safe label for a model reference (no secrets).
@@ -251,11 +439,54 @@ fn build_system_with_history(system_prompt: &str, messages: &[ChatMessageDto]) -
 mod tests {
     use super::*;
 
+    fn ephemeral() -> ChatController {
+        ChatController::with_sessions(vec![new_empty_session()], false)
+    }
+
     #[test]
     fn empty_transcript_does_not_add_a_turn() {
-        let mut chat = ChatController::new();
+        let mut chat = ephemeral();
         chat.on_transcript("   ".to_owned(), &AppSettings::default());
         assert!(chat.state(false, false).messages.is_empty());
+    }
+
+    #[test]
+    fn first_user_message_seeds_the_session_title() {
+        let mut chat = ephemeral();
+        chat.on_transcript(
+            "Wie ist das Wetter heute?".to_owned(),
+            &AppSettings::default(),
+        );
+        let state = chat.state(false, false);
+        assert_eq!(state.sessions.len(), 1);
+        assert_eq!(state.sessions[0].title, "Wie ist das Wetter heute?");
+        assert_eq!(state.sessions[0].message_count, 1);
+    }
+
+    #[test]
+    fn new_session_archives_a_non_empty_one() {
+        let mut chat = ephemeral();
+        chat.on_transcript("erste Frage".to_owned(), &AppSettings::default());
+        chat.new_session();
+        let state = chat.state(false, false);
+        assert_eq!(state.sessions.len(), 2);
+        assert!(state.messages.is_empty()); // active is the fresh empty one
+        // A second new_session on an empty active does not pile up blanks.
+        chat.new_session();
+        assert_eq!(chat.state(false, false).sessions.len(), 2);
+    }
+
+    #[test]
+    fn switch_session_changes_the_visible_transcript() {
+        let mut chat = ephemeral();
+        chat.on_transcript("erste".to_owned(), &AppSettings::default());
+        let first_id = chat.state(false, false).active_session_id.clone();
+        chat.new_session();
+        chat.on_transcript("zweite".to_owned(), &AppSettings::default());
+        chat.switch_session(&first_id);
+        let state = chat.state(false, false);
+        assert_eq!(state.active_session_id, first_id);
+        assert_eq!(state.messages[0].content, "erste");
     }
 
     #[test]

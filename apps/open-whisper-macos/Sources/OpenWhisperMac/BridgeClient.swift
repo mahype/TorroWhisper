@@ -138,6 +138,18 @@ final class BridgeClient {
         let _: String? = try? encodeAndCall(Payload(modelRef: modelRef), function: ow_chat_set_model)
     }
 
+    func chatNewSession() {
+        let _: String? = try? decodeResponse(from: ow_chat_new_session())
+    }
+
+    func chatSwitchSession(id: String) {
+        let _: String? = try? encodeAndCall(["id": id], function: ow_chat_switch_session)
+    }
+
+    func chatDeleteSession(id: String) {
+        let _: String? = try? encodeAndCall(["id": id], function: ow_chat_delete_session)
+    }
+
     func runPermissionDiagnostics() throws -> DiagnosticsDTO {
         try decodeResponse(from: ow_run_permission_diagnostics())
     }

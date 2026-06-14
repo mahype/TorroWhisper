@@ -815,6 +815,27 @@ pub enum ChatPhase {
     Generating,
 }
 
+/// One persisted chat conversation (#17 history sidebar).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(default)]
+pub struct ChatSession {
+    pub id: String,
+    /// Short title for the sidebar — derived from the first user message.
+    pub title: String,
+    pub messages: Vec<ChatMessageDto>,
+    /// Unix seconds of the last change; the sidebar sorts newest-first on it.
+    pub updated_at: i64,
+}
+
+/// Lightweight session entry for the sidebar list (no message bodies).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatSessionDto {
+    pub id: String,
+    pub title: String,
+    pub updated_at: i64,
+    pub message_count: usize,
+}
+
 /// Snapshot of the chat session for the chat window's poll.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChatStateDto {
@@ -825,6 +846,12 @@ pub struct ChatStateDto {
     pub revision: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// All sessions (newest first) for the sidebar, carried on the same poll.
+    #[serde(default)]
+    pub sessions: Vec<ChatSessionDto>,
+    /// Id of the session currently shown in the transcript.
+    #[serde(default)]
+    pub active_session_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
