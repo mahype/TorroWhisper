@@ -199,6 +199,15 @@ final class BridgeClient {
         let _: String? = try? encodeAndCall(payload, function: ow_log_message)
     }
 
+    /// Central plugin logging: routes a Swift-side plugin's log line through the
+    /// shared `plugin:<id>` log (same place the Rust side logs to).
+    func pluginLog(pluginId: String, level: String, message: String) {
+        let payload: [String: String] = [
+            "plugin_id": pluginId, "level": level, "message": message,
+        ]
+        let _: String? = try? encodeAndCall(payload, function: ow_plugin_log)
+    }
+
     private func encodeAndCall<Input: Encodable, Output: Decodable>(
         _ input: Input,
         function: (UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?

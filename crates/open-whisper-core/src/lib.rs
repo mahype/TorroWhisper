@@ -1429,6 +1429,10 @@ pub struct RuntimeStatusDto {
     /// change. Defaulted for back-compat with older snapshots.
     #[serde(default)]
     pub chat_trigger_count: u64,
+    /// True while a chat turn is recording/transcribing. The UI suppresses the
+    /// normal dictation bubble then — chat shows its own state in its window.
+    #[serde(default)]
+    pub chat_capturing: bool,
     pub hotkey_registered: bool,
     pub hotkey_text: String,
     pub startup_summary: String,

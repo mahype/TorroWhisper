@@ -1133,6 +1133,7 @@ struct RuntimeStatusDTO: Codable {
     var dictationSuccessCount: UInt64
     var dictationTriggerCount: UInt64
     var chatTriggerCount: UInt64
+    var chatCapturing: Bool
     var hotkeyRegistered: Bool
     var hotkeyText: String
     var startupSummary: String
@@ -1160,6 +1161,7 @@ struct RuntimeStatusDTO: Codable {
         dictationSuccessCount: 0,
         dictationTriggerCount: 0,
         chatTriggerCount: 0,
+        chatCapturing: false,
         hotkeyRegistered: false,
         hotkeyText: "Ctrl+Shift+Space",
         startupSummary: "Startup status not synchronized yet.",

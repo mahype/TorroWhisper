@@ -100,6 +100,11 @@ final class ChatViewModel: ObservableObject {
     private func speakNewAnswers() {
         let answers = state.messages.filter { $0.role == .assistant }
         guard answers.count > spokenAssistantCount else { return }
+        // Re-read the TTS config so a provider/voice change in Settings takes
+        // effect without reopening the chat window.
+        if let freshTts = (try? bridge.loadSettings())?.chat.tts {
+            tts.configure(freshTts)
+        }
         for answer in answers[spokenAssistantCount...] {
             tts.speak(answer.content)
         }

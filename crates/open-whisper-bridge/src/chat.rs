@@ -55,6 +55,12 @@ impl ChatController {
         self.model_ref = model_ref;
     }
 
+    /// True while an answer is being generated. The shortcut uses this to avoid
+    /// starting a new recording (which would drop the in-flight answer).
+    pub fn is_generating(&self) -> bool {
+        self.generating
+    }
+
     /// Clears the conversation and cancels any in-flight generation.
     pub fn reset(&mut self) {
         self.cancelled

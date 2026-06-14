@@ -383,8 +383,21 @@ impl BridgeRuntime {
                     self.apply_dictation_outcomes(outcomes);
                 }
                 HotKeyAction::ChatTriggered => {
+                    // The shortcut both opens the window (Swift, via the count
+                    // bump) and toggles the chat recording: press to talk, press
+                    // again to send. Presses while transcribing or generating are
+                    // ignored so a half-finished turn isn't disturbed.
                     self.chat_trigger_count += 1;
-                    plugin_log::info("chat", "chat shortcut pressed — opening window");
+                    if self.chat_capture && self.dictation.is_recording() {
+                        plugin_log::info("chat", "chat shortcut — stopping capture");
+                        let _ = self.chat_stop_listening();
+                    } else if !self.chat_capture
+                        && !self.dictation.is_transcribing()
+                        && !self.chat.is_generating()
+                    {
+                        plugin_log::info("chat", "chat shortcut — starting capture");
+                        let _ = self.chat_start_listening();
+                    }
                 }
             }
         }
@@ -393,6 +406,15 @@ impl BridgeRuntime {
         let outcomes = self.dictation.poll(&mut self.settings);
         self.apply_dictation_outcomes(outcomes);
         self.chat.poll();
+        // A chat capture that ended without yielding a transcript — too short,
+        // empty, cancelled, or a transcription error — emits no TranscriptReady
+        // to clear `chat_capture`. Reconcile here so the shortcut toggle and the
+        // suppressed dictation bubble both recover. (`start_recording` sets the
+        // recording state synchronously, so this never fires mid-start.)
+        if self.chat_capture && !self.dictation.is_recording() && !self.dictation.is_transcribing()
+        {
+            self.chat_capture = false;
+        }
         if self.settings.input_device_name != previous_input_device {
             let _ = settings_store::save(&self.settings);
         }
@@ -1102,6 +1124,7 @@ impl BridgeRuntime {
             last_transcript: self.last_transcript.clone(),
             dictation_trigger_count: self.dictation_trigger_count,
             chat_trigger_count: self.chat_trigger_count,
+            chat_capturing: self.chat_capture,
             hotkey_registered: self
                 .hotkey
                 .as_ref()
@@ -1502,6 +1525,13 @@ struct LogMessageRequest {
 }
 
 #[derive(Deserialize)]
+struct PluginLogRequest {
+    plugin_id: String,
+    level: String,
+    message: String,
+}
+
+#[derive(Deserialize)]
 struct ApiKeySetRequest {
     backend: open_whisper_core::LlmBackendKind,
     key: String,
@@ -1538,6 +1568,26 @@ pub extern "C" fn ow_log_message(request_json: *const c_char) -> *mut c_char {
                 _ => log::Level::Info,
             };
             log::log!(target: "app", level, "{}", request.message);
+            "ok".to_owned()
+        });
+    response_from_result(result)
+}
+
+/// Central plugin logging from the Swift host (#15): routes a plugin's log line
+/// through the shared `plugin_log` facade so Swift-side plugin code lands in the
+/// same `plugin:<id>` log as the Rust side. Levels: "error", "warn", "debug";
+/// anything else logs at info.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_plugin_log(request_json: *const c_char) -> *mut c_char {
+    logging::init();
+    let result =
+        parse_json_arg::<PluginLogRequest>(request_json, "PluginLogRequest").map(|request| {
+            match request.level.as_str() {
+                "error" => plugin_log::error(&request.plugin_id, &request.message),
+                "warn" => plugin_log::warn(&request.plugin_id, &request.message),
+                "debug" => plugin_log::debug(&request.plugin_id, &request.message),
+                _ => plugin_log::info(&request.plugin_id, &request.message),
+            }
             "ok".to_owned()
         });
     response_from_result(result)

@@ -431,6 +431,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func updateRecordingIndicatorVisibility() {
         let runtime = model.runtime
         let phase: IndicatorPhase? = {
+            // A chat turn shows its state inside the chat window — suppress the
+            // floating dictation bubble so the two don't overlap.
+            if runtime.chatCapturing { return nil }
             if runtime.dictationBlockedByMissingModel {
                 let progress = runtime.blockedModelProgressBasisPoints.map { Double($0) / 10_000.0 }
                 return .modelNotReady(

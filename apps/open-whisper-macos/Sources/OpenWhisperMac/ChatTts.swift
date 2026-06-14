@@ -9,6 +9,7 @@ import Security
 @MainActor
 final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
     private let synthesizer = AVSpeechSynthesizer()
+    private let bridge = BridgeClient()
     private var audioPlayer: AVAudioPlayer?
     private var pendingAudio: [Data] = []
     private var openAiQueue: [String] = []
@@ -24,8 +25,16 @@ final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
         guard !trimmed.isEmpty else { return }
         switch settings.provider {
         case .system:
+            bridge.pluginLog(
+                pluginId: "chat", level: "info",
+                message: "TTS: system voice '\(settings.systemVoice.isEmpty ? "default" : settings.systemVoice)'"
+            )
             speakSystem(trimmed)
         case .openAi:
+            bridge.pluginLog(
+                pluginId: "chat", level: "info",
+                message: "TTS: OpenAI voice '\(settings.openaiVoice)'"
+            )
             speakOpenAi(trimmed)
         }
     }
@@ -81,6 +90,10 @@ final class ChatTtsPlayer: NSObject, AVAudioPlayerDelegate {
                 self.playNextIfIdle()
             } else {
                 // No key / network / API error → keep the answer audible offline.
+                self.bridge.pluginLog(
+                    pluginId: "chat", level: "warn",
+                    message: "TTS: OpenAI unavailable (no API key, network or API error) — using system voice"
+                )
                 self.speakSystem(text)
             }
             self.synthesizing = false
