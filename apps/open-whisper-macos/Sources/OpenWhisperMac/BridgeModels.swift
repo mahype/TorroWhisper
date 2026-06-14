@@ -878,6 +878,61 @@ struct ChatStateDTO: Codable, Hashable {
     static let empty = ChatStateDTO(phase: .idle, messages: [], revision: 0, error: nil)
 }
 
+// MARK: - Plugin system (#15)
+
+/// Mirror of Rust `PluginConfig` — per-plugin enable state in AppSettings.plugins.
+struct PluginConfigDTO: Codable, Equatable, Hashable, Identifiable {
+    var id: String
+    var enabled: Bool
+}
+
+/// Mirror of Rust `PluginDescriptorDto` — the catalog of available plugins.
+struct PluginDescriptorDTO: Codable, Equatable, Hashable, Identifiable {
+    var id: String
+    var name: String
+    var description: String
+    var version: String
+    var configurable: Bool
+}
+
+// MARK: - Chat settings (#17)
+
+/// Mirror of Rust `ChatTtsProvider`. Raw values match serde snake_case.
+enum ChatTtsProvider: String, Codable, Hashable, CaseIterable, Identifiable {
+    case system
+    case openAi = "open_ai"
+
+    var id: String { rawValue }
+
+    func label(locale: Locale) -> String {
+        switch self {
+        case .system: return L("System voice (offline)", locale: locale)
+        case .openAi: return L("OpenAI (cloud)", locale: locale)
+        }
+    }
+}
+
+/// Mirror of Rust `ChatTtsSettings`.
+struct ChatTtsSettingsDTO: Codable, Equatable, Hashable {
+    var provider: ChatTtsProvider
+    var systemVoice: String
+    var openaiVoice: String
+    var rate: Float
+}
+
+/// Mirror of Rust `ChatSettings`.
+struct ChatSettingsDTO: Codable, Equatable, Hashable {
+    var defaultModelRef: LlmModelRefDTO?
+    var systemPrompt: String
+    var tts: ChatTtsSettingsDTO
+
+    static let `default` = ChatSettingsDTO(
+        defaultModelRef: nil,
+        systemPrompt: "",
+        tts: ChatTtsSettingsDTO(provider: .system, systemVoice: "", openaiVoice: "alloy", rate: 0.5)
+    )
+}
+
 struct AppSettings: Codable, Equatable {
     var onboardingCompleted: Bool
     var startupBehavior: StartupBehavior
@@ -923,6 +978,8 @@ struct AppSettings: Codable, Equatable {
     var dictionary: [DictionaryEntry]
     var historyEnabled: Bool
     var historyMaxEntries: UInt32
+    var chat: ChatSettingsDTO
+    var plugins: [PluginConfigDTO]
 
     static let `default` = AppSettings(
         onboardingCompleted: false,
@@ -966,7 +1023,9 @@ struct AppSettings: Codable, Equatable {
         uiLanguage: .system,
         dictionary: [],
         historyEnabled: true,
-        historyMaxEntries: historyMaxEntriesDefault
+        historyMaxEntries: historyMaxEntriesDefault,
+        chat: .default,
+        plugins: []
     )
 }
 

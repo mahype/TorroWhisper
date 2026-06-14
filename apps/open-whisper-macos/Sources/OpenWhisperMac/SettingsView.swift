@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var isManagingLanguageModels: Bool = false
     @State private var managerTab: LanguageModelsManagerTab = .transcription
     @State private var isManagingCloudModels: Bool = false
+    @State private var isConfiguringChat: Bool = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isConfirmingHistoryClear: Bool = false
     @State private var isConfirmingAccessibilityReset: Bool = false
@@ -51,6 +52,11 @@ struct SettingsView: View {
             .sheet(isPresented: $isManagingCloudModels) {
                 CloudModelsSheet(model: model) {
                     isManagingCloudModels = false
+                }
+            }
+            .sheet(isPresented: $isConfiguringChat) {
+                ChatSettingsSheet(model: model) {
+                    isConfiguringChat = false
                 }
             }
             .alert(
@@ -105,6 +111,8 @@ struct SettingsView: View {
             historyContent
         case .languageModels:
             languageModelsContent
+        case .plugins:
+            pluginsContent
         case .startup:
             startupContent
         case .updates:
@@ -583,6 +591,15 @@ struct SettingsView: View {
             }
         } header: {
             Text("Details", bundle: .module)
+        }
+    }
+
+    @ViewBuilder
+    private var pluginsContent: some View {
+        PluginsListView(model: model) { pluginId in
+            if pluginId == "chat" {
+                isConfiguringChat = true
+            }
         }
     }
 

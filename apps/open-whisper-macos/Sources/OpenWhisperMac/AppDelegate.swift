@@ -146,6 +146,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         refreshMenuState()
     }
 
+    /// Gates the "Chat…" entry on the chat plugin's enabled state. NSMenu's
+    /// automatic item enabling calls this on the responder chain; returning
+    /// false here is the only reliable way to disable an item with a live
+    /// action (a manual `.isEnabled = false` gets overwritten on display).
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem === chatItem {
+            return model.settings.plugins.first(where: { $0.id == "chat" })?.enabled ?? true
+        }
+        return true
+    }
+
     @objc private func toggleDictation() {
         model.toggleDictation()
     }
@@ -252,6 +263,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             ? dictationLabel
             : "\(dictationLabel) — \(hotkeySuffix)"
         chatItem.title = L("Chat…", locale: locale)
+        // Enable/disable of `chatItem` is driven by `validateMenuItem(_:)` —
+        // setting `.isEnabled` here would be clobbered by NSMenu's automatic
+        // item-enabling pass on display.
         settingsItem.title = L("Settings…", locale: locale)
         modeSwitchItem.title = L("Post-processing", locale: locale)
         modelSwitchItem.title = L("Transcription model", locale: locale)

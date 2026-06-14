@@ -28,8 +28,9 @@ const DEFAULT_SYSTEM_PROMPT: &str = "You are a friendly voice assistant. Answer 
 
 pub struct ChatController {
     messages: Vec<ChatMessageDto>,
+    /// Session-only model override (a pick in the chat window). When `None`, the
+    /// persisted `settings.chat.default_model_ref` is used.
     model_ref: Option<LlmModelRef>,
-    system_prompt: String,
     generation_rx: Option<Receiver<Result<String, String>>>,
     generating: bool,
     cancelled: Arc<AtomicBool>,
@@ -42,7 +43,6 @@ impl ChatController {
         Self {
             messages: Vec::new(),
             model_ref: None,
-            system_prompt: DEFAULT_SYSTEM_PROMPT.to_owned(),
             generation_rx: None,
             generating: false,
             cancelled: Arc::new(AtomicBool::new(false)),
@@ -141,10 +141,21 @@ impl ChatController {
     }
 
     fn start_generation(&mut self, settings: &AppSettings) {
-        let model_ref = self.model_ref.clone().unwrap_or(LlmModelRef::LocalPreset {
-            preset: LlmPreset::default(),
-        });
-        let system = build_system_with_history(&self.system_prompt, &self.messages);
+        // Session override → persisted default → local preset.
+        let model_ref = self
+            .model_ref
+            .clone()
+            .or_else(|| settings.chat.default_model_ref.clone())
+            .unwrap_or(LlmModelRef::LocalPreset {
+                preset: LlmPreset::default(),
+            });
+        let configured_prompt = settings.chat.system_prompt.trim();
+        let base_prompt = if configured_prompt.is_empty() {
+            DEFAULT_SYSTEM_PROMPT
+        } else {
+            configured_prompt
+        };
+        let system = build_system_with_history(base_prompt, &self.messages);
         let latest_user = self
             .messages
             .iter()

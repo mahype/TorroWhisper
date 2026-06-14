@@ -23,6 +23,7 @@ char *ow_set_llm_api_key(const char *request_json);
 char *ow_delete_llm_api_key(const char *request_json);
 char *ow_get_llm_api_key_status(void);
 char *ow_list_pipeline_stages(void);
+char *ow_get_plugin_catalog(void);
 char *ow_chat_start_listening(void);
 char *ow_chat_stop_listening(void);
 char *ow_chat_get_state(void);

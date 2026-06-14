@@ -107,6 +107,14 @@ final class BridgeClient {
         try decodeResponse(from: ow_list_pipeline_stages())
     }
 
+    // MARK: Plugins
+
+    /// Catalog of available plugins (what exists). Enable state lives in
+    /// AppSettings.plugins and is saved through the normal settings flow.
+    func getPluginCatalog() throws -> [PluginDescriptorDTO] {
+        try decodeResponse(from: ow_get_plugin_catalog())
+    }
+
     // MARK: Chat plugin
 
     func chatStartListening() throws -> String {

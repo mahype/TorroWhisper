@@ -246,6 +246,22 @@ final class AppModel: ObservableObject {
         )
     }
 
+    /// On/off binding for a plugin's enabled state (keyed by id, since plugins
+    /// are a list). Creates the entry if missing. Saved via the normal flow.
+    func pluginEnabledBinding(id: String) -> Binding<Bool> {
+        Binding(
+            get: { self.settings.plugins.first(where: { $0.id == id })?.enabled ?? true },
+            set: { newValue in
+                if let index = self.settings.plugins.firstIndex(where: { $0.id == id }) {
+                    self.settings.plugins[index].enabled = newValue
+                } else {
+                    self.settings.plugins.append(PluginConfigDTO(id: id, enabled: newValue))
+                }
+                self.requestAutoSave()
+            }
+        )
+    }
+
     /// A plain on/off binding for "launch at login", mapping the on state to
     /// `.launchAtLogin` and off to `.manualLaunch`. The `.askOnFirstLaunch`
     /// behavior is no longer offered in the UI — a yes/no choice is clearer.

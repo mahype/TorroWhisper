@@ -235,6 +235,9 @@ impl BridgeRuntime {
     // --- chat plugin (#17) ---
 
     fn chat_start_listening(&mut self) -> Result<String, String> {
+        if !self.settings.plugin_enabled("chat") {
+            return Err("The chat plugin is disabled. Enable it in Settings → Plugins.".to_owned());
+        }
         self.reset_cancellation();
         let message = self.dictation.start_recording(&self.settings)?;
         self.chat_capture = true;
@@ -1509,6 +1512,16 @@ pub extern "C" fn ow_get_llm_registry() -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_list_pipeline_stages() -> *mut c_char {
     response_ok(pipeline::StageRegistry::with_builtins().catalog())
+}
+
+// --- plugin system FFI (#15) ---
+
+/// Returns the catalog of available plugins (what exists). The enable state per
+/// plugin lives in `AppSettings.plugins` and is edited through the normal
+/// settings save flow.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_get_plugin_catalog() -> *mut c_char {
+    response_ok(open_whisper_core::builtin_plugin_catalog())
 }
 
 // --- chat plugin FFI (#17) ---

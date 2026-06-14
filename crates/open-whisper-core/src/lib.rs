@@ -883,6 +883,113 @@ pub struct PreferredDevice {
     pub last_selected_at: i64,
 }
 
+// --- Plugin system (#15) -----------------------------------------------------
+
+/// Per-plugin user state persisted in `AppSettings.plugins`. The catalog of
+/// *what exists* lives in [`builtin_plugin_catalog`] (Rust is the source of
+/// truth); this only carries the enable bit (and later, opaque config).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct PluginConfig {
+    pub id: String,
+    pub enabled: bool,
+}
+
+impl Default for PluginConfig {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            enabled: true,
+        }
+    }
+}
+
+/// Describes one available plugin for the Plugins overview UI. Built-in plugins
+/// are listed by [`builtin_plugin_catalog`]; Phase 2 third-party plugins will
+/// extend the same shape over the out-of-process protocol.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PluginDescriptorDto {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub version: String,
+    /// Whether the plugin exposes a configuration dialog (gear button).
+    pub configurable: bool,
+}
+
+/// IDs of the built-in plugins. Used by `normalize()` to seed enable entries
+/// and drop orphaned config for plugins that no longer exist.
+pub const BUILTIN_PLUGIN_IDS: &[&str] = &["chat"];
+
+/// The built-in plugin catalog — the single source of truth for *what plugins
+/// exist* in Phase 1. Surfaced to Swift via `ow_get_plugin_catalog`.
+pub fn builtin_plugin_catalog() -> Vec<PluginDescriptorDto> {
+    vec![PluginDescriptorDto {
+        id: "chat".to_owned(),
+        name: "Voice Chat".to_owned(),
+        description: "Talk to an AI assistant by voice — speak a question and hear the answer."
+            .to_owned(),
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        configurable: true,
+    }]
+}
+
+// --- Chat plugin settings (#17) ----------------------------------------------
+
+/// Which backend speaks the chat answers. `System` is the offline macOS voice
+/// (`AVSpeechSynthesizer`); `OpenAi` uses OpenAI's `/v1/audio/speech` and reuses
+/// the OpenAI key from the Keychain. (ElevenLabs is a planned follow-up — it
+/// needs a non-LLM Keychain slot.)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatTtsProvider {
+    #[default]
+    System,
+    OpenAi,
+}
+
+/// How chat answers are spoken. Voices are kept per provider so switching back
+/// and forth preserves each choice.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct ChatTtsSettings {
+    pub provider: ChatTtsProvider,
+    /// `AVSpeechSynthesisVoice` identifier for the system backend. Empty = the
+    /// OS default voice for the utterance language.
+    pub system_voice: String,
+    /// OpenAI voice name (e.g. `alloy`, `nova`).
+    pub openai_voice: String,
+    /// Speaking rate, normalized 0.0–1.0. Swift maps it onto each backend's
+    /// native range (system: AVSpeechUtterance min…max; OpenAI: 0.25–4.0).
+    pub rate: f32,
+}
+
+impl Default for ChatTtsSettings {
+    fn default() -> Self {
+        Self {
+            provider: ChatTtsProvider::System,
+            system_voice: String::new(),
+            openai_voice: "alloy".to_owned(),
+            rate: 0.5,
+        }
+    }
+}
+
+/// Configuration for the chat plugin, edited in its config dialog and consumed
+/// by the [`crate`]-side `ChatController` (system prompt + default model) and by
+/// the Swift chat window (TTS).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
+pub struct ChatSettings {
+    /// Default model for new chat turns. `None` = local preset default. A pick
+    /// in the chat window overrides it for that session only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_model_ref: Option<LlmModelRef>,
+    /// System prompt steering the assistant. Empty = the built-in default.
+    pub system_prompt: String,
+    pub tts: ChatTtsSettings,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct AppSettings {
@@ -940,6 +1047,12 @@ pub struct AppSettings {
     pub history_enabled: bool,
     #[serde(default = "default_history_max_entries")]
     pub history_max_entries: u32,
+    /// Chat plugin configuration (system prompt, default model, TTS).
+    #[serde(default)]
+    pub chat: ChatSettings,
+    /// Per-plugin enable state. Seeded/pruned in `normalize()`.
+    #[serde(default)]
+    pub plugins: Vec<PluginConfig>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -1023,6 +1136,29 @@ impl AppSettings {
         self.history_max_entries = self
             .history_max_entries
             .clamp(HISTORY_MAX_ENTRIES_MIN, HISTORY_MAX_ENTRIES_LIMIT);
+
+        // Seed enable entries for built-in plugins; drop config for plugins that
+        // no longer exist (downgrade-safe — unknown ids just vanish).
+        for id in BUILTIN_PLUGIN_IDS {
+            if !self.plugins.iter().any(|plugin| plugin.id == *id) {
+                self.plugins.push(PluginConfig {
+                    id: (*id).to_owned(),
+                    enabled: true,
+                });
+            }
+        }
+        self.plugins
+            .retain(|plugin| BUILTIN_PLUGIN_IDS.contains(&plugin.id.as_str()));
+    }
+
+    /// Whether a plugin is enabled. Unknown ids default to enabled (a plugin
+    /// not yet in settings is treated as on until `normalize()` records it).
+    pub fn plugin_enabled(&self, id: &str) -> bool {
+        self.plugins
+            .iter()
+            .find(|plugin| plugin.id == id)
+            .map(|plugin| plugin.enabled)
+            .unwrap_or(true)
     }
 
     pub fn active_mode(&self) -> &ProcessingMode {
@@ -1146,6 +1282,8 @@ impl Default for AppSettings {
             dictionary: Vec::new(),
             history_enabled: true,
             history_max_entries: HISTORY_MAX_ENTRIES_DEFAULT,
+            chat: ChatSettings::default(),
+            plugins: Vec::new(),
         }
     }
 }
@@ -1555,5 +1693,29 @@ mod tests {
             settings.active_post_processing_backend,
             PostProcessingBackend::Local
         );
+    }
+
+    #[test]
+    fn normalize_seeds_builtin_plugins_and_drops_orphans() {
+        let mut settings = AppSettings::default();
+        settings.plugins = vec![PluginConfig {
+            id: "ghost".to_owned(),
+            enabled: true,
+        }];
+        settings.normalize();
+        assert!(settings.plugins.iter().any(|p| p.id == "chat"));
+        assert!(!settings.plugins.iter().any(|p| p.id == "ghost"));
+    }
+
+    #[test]
+    fn plugin_enabled_honors_disabled_entry_and_defaults_on() {
+        let mut settings = AppSettings::default();
+        settings.normalize();
+        assert!(settings.plugin_enabled("chat"));
+        assert!(settings.plugin_enabled("unknown")); // unknown defaults on
+        if let Some(chat) = settings.plugins.iter_mut().find(|p| p.id == "chat") {
+            chat.enabled = false;
+        }
+        assert!(!settings.plugin_enabled("chat"));
     }
 }

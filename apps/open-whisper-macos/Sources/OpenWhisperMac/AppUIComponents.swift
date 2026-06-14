@@ -7,6 +7,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case dictionary
     case history
     case languageModels = "language_models"
+    case plugins
     case startup
     case updates
     case diagnostics
@@ -26,6 +27,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return L("History", locale: locale)
         case .languageModels:
             return L("Language models", locale: locale)
+        case .plugins:
+            return L("Plugins", locale: locale)
         case .startup:
             return L("Start & behavior", locale: locale)
         case .updates:
@@ -49,6 +52,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
             return "clock.arrow.circlepath"
         case .languageModels:
             return "brain.head.profile"
+        case .plugins:
+            return "puzzlepiece.extension.fill"
         case .startup:
             return "power.circle.fill"
         case .updates:

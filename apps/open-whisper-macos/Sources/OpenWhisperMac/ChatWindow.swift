@@ -1,8 +1,8 @@
-import AVFoundation
 import SwiftUI
 
 /// Drives the chat window: polls the bridge chat state, manages the model
-/// selection, and speaks new assistant answers via the system TTS.
+/// selection, and speaks new assistant answers through the configured TTS
+/// backend (system or OpenAI).
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var state: ChatStateDTO = .empty
@@ -10,7 +10,7 @@ final class ChatViewModel: ObservableObject {
     @Published var selectedModelStableId: String?
 
     private let bridge = BridgeClient()
-    private let synthesizer = AVSpeechSynthesizer()
+    private let tts = ChatTtsPlayer()
     private var timer: Timer?
     private var spokenAssistantCount = 0
     private var loadedOnce = false
@@ -24,7 +24,11 @@ final class ChatViewModel: ObservableObject {
 
     func start() {
         registry = (try? bridge.getLlmRegistry()) ?? []
-        seedModelSelection()
+        // Pull the persisted chat config (default model + TTS) fresh each time
+        // the window opens, so edits in Settings → Plugins → Chat take effect.
+        let chat = (try? bridge.loadSettings())?.chat ?? .default
+        tts.configure(chat.tts)
+        seedModelSelection(defaultRef: chat.defaultModelRef)
         let poll = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
@@ -36,7 +40,7 @@ final class ChatViewModel: ObservableObject {
     func stop() {
         timer?.invalidate()
         timer = nil
-        synthesizer.stopSpeaking(at: .immediate)
+        tts.stop()
     }
 
     func toggleListening() {
@@ -44,15 +48,20 @@ final class ChatViewModel: ObservableObject {
         case .listening:
             _ = try? bridge.chatStopListening()
         case .idle:
-            synthesizer.stopSpeaking(at: .immediate)
-            _ = try? bridge.chatStartListening()
+            tts.stop()
+            do {
+                _ = try bridge.chatStartListening()
+            } catch {
+                // e.g. the chat plugin was disabled while the window stayed open.
+                state.error = error.localizedDescription
+            }
         case .transcribing, .generating:
             break
         }
     }
 
     func newConversation() {
-        synthesizer.stopSpeaking(at: .immediate)
+        tts.stop()
         bridge.chatReset()
         spokenAssistantCount = 0
         tick()
@@ -64,9 +73,14 @@ final class ChatViewModel: ObservableObject {
         bridge.chatSetModel(ref)
     }
 
-    private func seedModelSelection() {
+    /// Seeds the in-window picker. Prefers the persisted default model; falls
+    /// back to the first ready model. The pick is a session override only.
+    private func seedModelSelection(defaultRef: LlmModelRefDTO?) {
         guard selectedModelStableId == nil else { return }
-        if let first = selectableModels.first {
+        if let defaultRef,
+           let match = registry.first(where: { $0.modelRef == defaultRef }) {
+            selectModel(match.stableId)
+        } else if let first = selectableModels.first {
             selectModel(first.stableId)
         }
     }
@@ -87,7 +101,7 @@ final class ChatViewModel: ObservableObject {
         let answers = state.messages.filter { $0.role == .assistant }
         guard answers.count > spokenAssistantCount else { return }
         for answer in answers[spokenAssistantCount...] {
-            synthesizer.speak(AVSpeechUtterance(string: answer.content))
+            tts.speak(answer.content)
         }
         spokenAssistantCount = answers.count
     }
