@@ -26,15 +26,9 @@ impl GeminiProvider {
     }
 }
 
-impl LlmProvider for GeminiProvider {
-    fn generate(
-        &self,
-        role_prompt: &str,
-        user_text: &str,
-        _cancelled: &Arc<AtomicBool>,
-    ) -> Result<String, String> {
+impl GeminiProvider {
+    fn complete(&self, system_message: &str, user_text: &str) -> Result<String, String> {
         let client = build_http_client()?;
-        let system_prompt = build_system_prompt(role_prompt);
         let url = format!("{API_BASE}/{}:generateContent", self.model_name);
 
         let response = client
@@ -42,25 +36,43 @@ impl LlmProvider for GeminiProvider {
             .header(reqwest::header::USER_AGENT, USER_AGENT)
             .header("x-goog-api-key", &self.api_key)
             .json(&json!({
-                "systemInstruction": { "parts": [{ "text": system_prompt }] },
+                "systemInstruction": { "parts": [{ "text": system_message }] },
                 "contents": [
                     { "role": "user", "parts": [{ "text": user_text }] },
                 ]
             }))
             .send()
-            .map_err(|err| format!("Gemini post-processing could not be started: {err}"))?;
+            .map_err(|err| format!("Gemini request could not be started: {err}"))?;
 
         let status = response.status();
         let value: Value = response
             .json()
             .map_err(|err| format!("Gemini response could not be read: {err}"))?;
         if !status.is_success() {
-            return Err(format!(
-                "Gemini returned HTTP {status} during post-processing."
-            ));
+            return Err(format!("Gemini returned HTTP {status}."));
         }
 
         parse_generate_content(&value)
+    }
+}
+
+impl LlmProvider for GeminiProvider {
+    fn generate(
+        &self,
+        role_prompt: &str,
+        user_text: &str,
+        _cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        self.complete(&build_system_prompt(role_prompt), user_text)
+    }
+
+    fn chat(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        _cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        self.complete(system_prompt, user_text)
     }
 }
 

@@ -42,15 +42,14 @@ fn base_url(provider: OpenAiCompatibleProvider) -> &'static str {
     }
 }
 
-impl LlmProvider for OpenAiCompatibleProviderImpl {
-    fn generate(
+impl OpenAiCompatibleProviderImpl {
+    fn complete(
         &self,
-        role_prompt: &str,
+        system_message: &str,
         user_text: &str,
-        _cancelled: &Arc<AtomicBool>,
+        temperature: f32,
     ) -> Result<String, String> {
         let client = build_http_client()?;
-        let system_prompt = build_system_prompt(role_prompt);
         let url = format!("{}/chat/completions", base_url(self.provider));
 
         let response = client
@@ -59,14 +58,14 @@ impl LlmProvider for OpenAiCompatibleProviderImpl {
             .bearer_auth(&self.api_key)
             .json(&json!({
                 "model": self.model_name,
-                "temperature": 0.1,
+                "temperature": temperature,
                 "messages": [
-                    { "role": "system", "content": system_prompt },
+                    { "role": "system", "content": system_message },
                     { "role": "user", "content": user_text },
                 ]
             }))
             .send()
-            .map_err(|err| format!("Cloud post-processing could not be started: {err}"))?;
+            .map_err(|err| format!("Cloud request could not be started: {err}"))?;
 
         let status = response.status();
         let value: Value = response
@@ -74,12 +73,34 @@ impl LlmProvider for OpenAiCompatibleProviderImpl {
             .map_err(|err| format!("Cloud response could not be read: {err}"))?;
         if !status.is_success() {
             return Err(format!(
-                "{} returned HTTP {status} during post-processing.",
+                "{} returned HTTP {status}.",
                 self.provider.backend_kind().label()
             ));
         }
 
         parse_chat_completion(&value)
+    }
+}
+
+impl LlmProvider for OpenAiCompatibleProviderImpl {
+    fn generate(
+        &self,
+        role_prompt: &str,
+        user_text: &str,
+        _cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        // Low temperature: post-processing should be deterministic.
+        self.complete(&build_system_prompt(role_prompt), user_text, 0.1)
+    }
+
+    fn chat(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        _cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        // Higher temperature: chat should feel natural, not robotic.
+        self.complete(system_prompt, user_text, 0.7)
     }
 }
 

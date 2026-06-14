@@ -988,6 +988,9 @@ pub struct ChatSettings {
     /// System prompt steering the assistant. Empty = the built-in default.
     pub system_prompt: String,
     pub tts: ChatTtsSettings,
+    /// Global shortcut that opens the chat window (e.g. `Ctrl+Shift+C`). Empty =
+    /// no shortcut. Independent of the dictation hotkey.
+    pub chat_hotkey: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1422,6 +1425,10 @@ pub struct RuntimeStatusDto {
     /// fast completion doesn't look like the bubble crashing.
     pub dictation_success_count: u64,
     pub dictation_trigger_count: u64,
+    /// Bumped when the chat shortcut fires; the UI opens the chat window on
+    /// change. Defaulted for back-compat with older snapshots.
+    #[serde(default)]
+    pub chat_trigger_count: u64,
     pub hotkey_registered: bool,
     pub hotkey_text: String,
     pub startup_summary: String,

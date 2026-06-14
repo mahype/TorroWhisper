@@ -35,6 +35,18 @@ struct Request {
     n_ctx: u32,
     system_prompt: String,
     text: String,
+    /// `post_processing` (default) revises the text; `chat` answers it
+    /// conversationally. Defaulted so older callers stay on post-processing.
+    #[serde(default)]
+    task: HelperTask,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+enum HelperTask {
+    #[default]
+    PostProcessing,
+    Chat,
 }
 
 #[derive(Serialize)]
@@ -125,6 +137,7 @@ fn handle_request(
         request.n_ctx,
         &request.system_prompt,
         &request.text,
+        request.task,
     ) {
         Ok(text) => Response::success(text),
         Err(err) => Response::failure(err),
@@ -176,6 +189,7 @@ fn generate(
     n_ctx_value: u32,
     system_prompt: &str,
     user_text: &str,
+    task: HelperTask,
 ) -> Result<String, String> {
     let n_ctx = NonZeroU32::new(n_ctx_value)
         .ok_or_else(|| "context_size must be greater than zero".to_owned())?;
@@ -185,7 +199,10 @@ fn generate(
         .new_context(backend, ctx_params)
         .map_err(|err| format!("LLM context could not be created: {err}"))?;
 
-    let prompt = build_gemma_chat_prompt(system_prompt, user_text);
+    let prompt = match task {
+        HelperTask::Chat => build_gemma_conversation_prompt(system_prompt, user_text),
+        HelperTask::PostProcessing => build_gemma_chat_prompt(system_prompt, user_text),
+    };
     let tokens = model
         .str_to_token(&prompt, AddBos::Always)
         .map_err(|err| format!("LLM tokenization failed: {err}"))?;
@@ -275,6 +292,22 @@ fn build_gemma_chat_prompt(mode_instruction: &str, transcript: &str) -> String {
     format!("<bos><|turn>user\n{body}<turn|>\n<|turn>model\n")
 }
 
+/// Conversational prompt for the chat plugin. Gemma has no system role, so the
+/// system prompt (which already carries any folded history) is prepended to the
+/// user's turn, then the model is asked to respond. Uses Gemma's canonical
+/// `<start_of_turn>` template so the model answers instead of revising the text.
+fn build_gemma_conversation_prompt(system_prompt: &str, user_text: &str) -> String {
+    let system = system_prompt.trim();
+    let user = user_text.trim();
+    let turn = if system.is_empty() {
+        user.to_owned()
+    } else {
+        format!("{system}\n\n{user}")
+    };
+    // AddBos::Always prepends <bos>, so it is not included literally here.
+    format!("<start_of_turn>user\n{turn}<end_of_turn>\n<start_of_turn>model\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,6 +327,24 @@ mod tests {
         let prompt = build_gemma_chat_prompt("   ", "hallo welt");
         assert!(prompt.contains("bereinigst"));
         assert!(prompt.contains("Text zum Bereinigen:\nhallo welt"));
+    }
+
+    #[test]
+    fn conversation_prompt_is_a_real_turn_not_a_revision() {
+        let prompt = build_gemma_conversation_prompt("You are a helpful assistant.", "Wie geht's?");
+        assert!(prompt.starts_with("<start_of_turn>user\n"));
+        assert!(prompt.contains("You are a helpful assistant.\n\nWie geht's?"));
+        assert!(prompt.ends_with("<start_of_turn>model\n"));
+        // Must NOT carry the post-processing "revise the text" framing.
+        assert!(!prompt.contains("bereinig"));
+        assert!(!prompt.contains("ueberarbeit"));
+    }
+
+    #[test]
+    fn request_defaults_to_post_processing_task() {
+        let line = r#"{"model_path":"/tmp/m.gguf","n_ctx":2048,"system_prompt":"p","text":"t"}"#;
+        let request: Request = serde_json::from_str(line).unwrap();
+        assert_eq!(request.task, HelperTask::PostProcessing);
     }
 
     #[test]

@@ -110,6 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         model.onMicSwitched = { [weak self] notification in
             self?.showMicSwitchToast(notification)
         }
+        model.onChatTriggered = { [weak self] in
+            self?.showChat(nil)
+        }
         refreshMenuState()
 
         audioDeviceMonitor.onDevicesChanged = { [weak self] in

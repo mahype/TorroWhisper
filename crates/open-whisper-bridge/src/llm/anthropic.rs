@@ -32,15 +32,9 @@ impl AnthropicProvider {
     }
 }
 
-impl LlmProvider for AnthropicProvider {
-    fn generate(
-        &self,
-        role_prompt: &str,
-        user_text: &str,
-        _cancelled: &Arc<AtomicBool>,
-    ) -> Result<String, String> {
+impl AnthropicProvider {
+    fn complete(&self, system_message: &str, user_text: &str) -> Result<String, String> {
         let client = build_http_client()?;
-        let system_prompt = build_system_prompt(role_prompt);
 
         let response = client
             .post(API_URL)
@@ -50,25 +44,43 @@ impl LlmProvider for AnthropicProvider {
             .json(&json!({
                 "model": self.model_name,
                 "max_tokens": MAX_TOKENS,
-                "system": system_prompt,
+                "system": system_message,
                 "messages": [
                     { "role": "user", "content": user_text },
                 ]
             }))
             .send()
-            .map_err(|err| format!("Anthropic post-processing could not be started: {err}"))?;
+            .map_err(|err| format!("Anthropic request could not be started: {err}"))?;
 
         let status = response.status();
         let value: Value = response
             .json()
             .map_err(|err| format!("Anthropic response could not be read: {err}"))?;
         if !status.is_success() {
-            return Err(format!(
-                "Anthropic returned HTTP {status} during post-processing."
-            ));
+            return Err(format!("Anthropic returned HTTP {status}."));
         }
 
         parse_messages_response(&value)
+    }
+}
+
+impl LlmProvider for AnthropicProvider {
+    fn generate(
+        &self,
+        role_prompt: &str,
+        user_text: &str,
+        _cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        self.complete(&build_system_prompt(role_prompt), user_text)
+    }
+
+    fn chat(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        _cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        self.complete(system_prompt, user_text)
     }
 }
 

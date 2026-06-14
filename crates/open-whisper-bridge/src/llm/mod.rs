@@ -43,6 +43,18 @@ pub trait LlmProvider {
         user_text: &str,
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String>;
+
+    /// Conversational generation for the chat plugin (#17). Unlike [`generate`]
+    /// — which frames `role_prompt` as a "revise this dictated text"
+    /// instruction — `chat` uses `system_prompt` directly as the assistant's
+    /// system message and `user_text` as the user's turn, so the model answers
+    /// the question instead of rewriting it.
+    fn chat(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String>;
 }
 
 /// Resolves a [`LlmModelRef`] into a runnable provider. The single dispatch
@@ -148,6 +160,27 @@ impl LlmProvider for LocalGgufProvider {
                 name,
                 path,
                 role_prompt,
+                user_text,
+                cancelled,
+            ),
+        }
+    }
+
+    fn chat(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        match self {
+            LocalGgufProvider::Preset(preset) => {
+                local_llm::chat_with_shared_runtime(*preset, system_prompt, user_text, cancelled)
+            }
+            LocalGgufProvider::Custom { id, name, path } => local_llm::chat_with_custom_path(
+                id,
+                name,
+                path,
+                system_prompt,
                 user_text,
                 cancelled,
             ),

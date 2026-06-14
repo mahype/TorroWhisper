@@ -29,6 +29,9 @@ final class AppModel: ObservableObject {
 
     var onStateChanged: (() -> Void)?
     var onMicSwitched: ((MicSwitchNotification) -> Void)?
+    /// Fired when the chat shortcut is pressed; the app delegate opens the chat
+    /// window in response.
+    var onChatTriggered: (() -> Void)?
 
     private let bridge = BridgeClient()
     private var timer: Timer?
@@ -42,6 +45,7 @@ final class AppModel: ObservableObject {
     /// How long the red error bubble stays visible after a dictation failure.
     private static let dictationErrorDisplaySeconds: TimeInterval = 6
     private var lastSeenDictationSuccessCount: UInt64 = 0
+    private var lastSeenChatTriggerCount: UInt64 = 0
     private var dictationSuccessOccurredAt: Date?
     /// How long the brief green "done" bubble stays visible after a successful
     /// dictation. Short on purpose — just enough that a fast completion reads as
@@ -603,6 +607,7 @@ final class AppModel: ObservableObject {
             lastSeenMicSwitchEventCount = runtime.micSwitchEventCount
             lastSeenDictationErrorCount = runtime.dictationErrorCount
             lastSeenDictationSuccessCount = runtime.dictationSuccessCount
+            lastSeenChatTriggerCount = runtime.chatTriggerCount
             history = (try? bridge.loadHistory()) ?? []
             lastSeenHistoryRevision = runtime.historyRevision
             bridgeError = nil
@@ -633,6 +638,7 @@ final class AppModel: ObservableObject {
             checkMicSwitchEvent()
             checkDictationErrorEvent()
             checkDictationSuccessEvent()
+            checkChatTriggerEvent()
             if runtime.historyRevision != lastSeenHistoryRevision {
                 history = (try? bridge.loadHistory()) ?? []
                 lastSeenHistoryRevision = runtime.historyRevision
@@ -654,6 +660,12 @@ final class AppModel: ObservableObject {
         guard runtime.dictationSuccessCount != lastSeenDictationSuccessCount else { return }
         lastSeenDictationSuccessCount = runtime.dictationSuccessCount
         dictationSuccessOccurredAt = Date()
+    }
+
+    private func checkChatTriggerEvent() {
+        guard runtime.chatTriggerCount != lastSeenChatTriggerCount else { return }
+        lastSeenChatTriggerCount = runtime.chatTriggerCount
+        onChatTriggered?()
     }
 
     private func checkMicSwitchEvent() {

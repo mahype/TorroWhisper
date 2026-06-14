@@ -65,6 +65,9 @@ struct ChatSettingsSheet: View {
 
     private let bridge = BridgeClient()
     @State private var registry: [LlmRegistryEntryDTO] = []
+    @State private var hotkeyCapturing = false
+    @State private var hotkeyPreview = ""
+    @State private var hotkeyError: String?
 
     /// OpenAI's published TTS voices.
     private let openAiVoices = [
@@ -92,14 +95,65 @@ struct ChatSettingsSheet: View {
             Divider()
 
             Form {
+                shortcutSection
                 modelSection
                 voiceSection
                 promptSection
             }
             .formStyle(.grouped)
         }
-        .frame(width: 540, height: 620)
+        .frame(width: 540, height: 680)
         .onAppear { registry = (try? bridge.getLlmRegistry()) ?? [] }
+    }
+
+    private var shortcutSection: some View {
+        Section {
+            HotkeyRecorderField(
+                title: L("Chat shortcut", locale: locale),
+                currentHotkey: model.settings.chat.chatHotkey,
+                isCapturing: hotkeyCapturing,
+                preview: hotkeyPreview,
+                errorText: hotkeyError,
+                warningText: nil,
+                warningDetails: nil,
+                onStartCapture: {
+                    hotkeyCapturing = true
+                    hotkeyError = nil
+                    hotkeyPreview = ""
+                },
+                onCommit: { hotkey in
+                    hotkeyCapturing = false
+                    hotkeyPreview = ""
+                    // Same combo as dictation would clobber that registration —
+                    // reject with feedback instead of silently failing.
+                    guard hotkey != model.settings.hotkey else {
+                        hotkeyError = L("This shortcut is already used for dictation.", locale: locale)
+                        return
+                    }
+                    hotkeyError = nil
+                    model.settings.chat.chatHotkey = hotkey
+                    model.requestAutoSave()
+                },
+                onCancel: {
+                    hotkeyCapturing = false
+                    hotkeyPreview = ""
+                },
+                onClear: {
+                    model.settings.chat.chatHotkey = ""
+                    model.requestAutoSave()
+                    hotkeyCapturing = false
+                    hotkeyPreview = ""
+                },
+                onPreview: { hotkeyPreview = $0 },
+                onInvalid: { hotkeyError = $0 }
+            )
+            Text("Opens the chat window from anywhere. Separate from the dictation hotkey.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } header: {
+            Text("Shortcut", bundle: .module)
+        }
     }
 
     private var modelSection: some View {

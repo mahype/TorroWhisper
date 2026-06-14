@@ -22,7 +22,7 @@ use open_whisper_core::{
     AppSettings, ChatMessageDto, ChatPhase, ChatRole, ChatStateDto, LlmModelRef, LlmPreset,
 };
 
-use crate::llm;
+use crate::{llm, plugin_log};
 
 const DEFAULT_SYSTEM_PROMPT: &str = "You are a friendly voice assistant. Answer briefly and conversationally, as if speaking aloud. Avoid markdown, lists and code blocks unless explicitly asked.";
 
@@ -75,6 +75,10 @@ impl ChatController {
             // Nothing said — just re-arm without a turn.
             return;
         }
+        plugin_log::info(
+            "chat",
+            &format!("user turn received ({} chars)", text.chars().count()),
+        );
         self.error = None;
         self.messages.push(ChatMessageDto {
             role: ChatRole::User,
@@ -95,8 +99,13 @@ impl ChatController {
                 self.generation_rx = None;
                 self.generating = false;
                 if trimmed.is_empty() {
+                    plugin_log::warn("chat", "model returned an empty answer");
                     self.error = Some("The model returned an empty answer.".to_owned());
                 } else {
+                    plugin_log::info(
+                        "chat",
+                        &format!("answer received ({} chars)", trimmed.chars().count()),
+                    );
                     self.messages.push(ChatMessageDto {
                         role: ChatRole::Assistant,
                         content: trimmed,
@@ -164,18 +173,42 @@ impl ChatController {
             .map(|message| message.content.clone())
             .unwrap_or_default();
 
+        plugin_log::info(
+            "chat",
+            &format!("generating with {}", describe_model(&model_ref)),
+        );
+
         let settings = settings.clone();
         let cancelled = self.cancelled.clone();
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
             let result = (|| {
                 let provider = llm::provider_for(&model_ref, &settings)?;
-                provider.generate(&system, &latest_user, &cancelled)
+                provider.chat(&system, &latest_user, &cancelled)
             })();
+            if let Err(err) = &result {
+                plugin_log::error("chat", &format!("generation failed: {err}"));
+            }
             let _ = tx.send(result);
         });
         self.generation_rx = Some(rx);
         self.generating = true;
+    }
+}
+
+/// A short, log-safe label for a model reference (no secrets).
+fn describe_model(model_ref: &LlmModelRef) -> String {
+    match model_ref {
+        LlmModelRef::LocalPreset { preset } => format!("local preset {preset:?}"),
+        LlmModelRef::LocalCustom { id } => format!("local custom {id}"),
+        LlmModelRef::Ollama { model_name } => format!("ollama {model_name}"),
+        LlmModelRef::LmStudio { model_name } => format!("lm_studio {model_name}"),
+        LlmModelRef::OpenAiCompatible {
+            provider,
+            model_name,
+        } => format!("{provider:?} {model_name}"),
+        LlmModelRef::Anthropic { model_name } => format!("anthropic {model_name}"),
+        LlmModelRef::Gemini { model_name } => format!("gemini {model_name}"),
     }
 }
 

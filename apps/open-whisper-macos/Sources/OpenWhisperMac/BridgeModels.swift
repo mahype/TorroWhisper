@@ -925,11 +925,13 @@ struct ChatSettingsDTO: Codable, Equatable, Hashable {
     var defaultModelRef: LlmModelRefDTO?
     var systemPrompt: String
     var tts: ChatTtsSettingsDTO
+    var chatHotkey: String
 
     static let `default` = ChatSettingsDTO(
         defaultModelRef: nil,
         systemPrompt: "",
-        tts: ChatTtsSettingsDTO(provider: .system, systemVoice: "", openaiVoice: "alloy", rate: 0.5)
+        tts: ChatTtsSettingsDTO(provider: .system, systemVoice: "", openaiVoice: "alloy", rate: 0.5),
+        chatHotkey: ""
     )
 }
 
@@ -1130,6 +1132,7 @@ struct RuntimeStatusDTO: Codable {
     var dictationErrorCount: UInt64
     var dictationSuccessCount: UInt64
     var dictationTriggerCount: UInt64
+    var chatTriggerCount: UInt64
     var hotkeyRegistered: Bool
     var hotkeyText: String
     var startupSummary: String
@@ -1156,6 +1159,7 @@ struct RuntimeStatusDTO: Codable {
         dictationErrorCount: 0,
         dictationSuccessCount: 0,
         dictationTriggerCount: 0,
+        chatTriggerCount: 0,
         hotkeyRegistered: false,
         hotkeyText: "Ctrl+Shift+Space",
         startupSummary: "Startup status not synchronized yet.",

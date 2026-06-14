@@ -17,6 +17,7 @@ mod logging;
 #[allow(dead_code)]
 mod model_manager;
 mod permission_diagnostics;
+pub mod plugin_log;
 // Several pipeline types are scaffolding for plugins (#15) and chat (#17):
 // `StageRegistry::register`, the diagnostic `StageRecord`/context fields, the
 // `Stop` short-circuit outcome. Allow until those consumers land.
@@ -73,6 +74,9 @@ struct BridgeRuntime {
     /// being inserted.
     chat: chat::ChatController,
     chat_capture: bool,
+    /// Bumped each time the chat shortcut fires; Swift polls it to open the
+    /// chat window (Rust cannot open windows itself).
+    chat_trigger_count: u64,
     cancelled: Arc<AtomicBool>,
     history: Vec<HistoryEntry>,
     history_revision: u64,
@@ -183,6 +187,7 @@ impl BridgeRuntime {
             dictation_success_count: 0,
             chat: chat::ChatController::new(),
             chat_capture: false,
+            chat_trigger_count: 0,
             cancelled: Arc::new(AtomicBool::new(false)),
             history: history_store::load().unwrap_or_default(),
             history_revision: 0,
@@ -376,6 +381,10 @@ impl BridgeRuntime {
                 HotKeyAction::Released => {
                     let outcomes = self.dictation.handle_hotkey(&self.settings, false);
                     self.apply_dictation_outcomes(outcomes);
+                }
+                HotKeyAction::ChatTriggered => {
+                    self.chat_trigger_count += 1;
+                    plugin_log::info("chat", "chat shortcut pressed — opening window");
                 }
             }
         }
@@ -1092,6 +1101,7 @@ impl BridgeRuntime {
             last_status: i18n::translate(lang, &self.last_status),
             last_transcript: self.last_transcript.clone(),
             dictation_trigger_count: self.dictation_trigger_count,
+            chat_trigger_count: self.chat_trigger_count,
             hotkey_registered: self
                 .hotkey
                 .as_ref()
@@ -1157,12 +1167,16 @@ mod hotkey {
     pub enum HotKeyAction {
         Pressed,
         Released,
+        /// The chat plugin's shortcut was pressed — open the chat window.
+        ChatTriggered,
     }
 
     pub struct HotKeyController {
         manager: GlobalHotKeyManager,
         registered_hotkey: Option<HotKey>,
         registered_text: Option<String>,
+        registered_chat_hotkey: Option<HotKey>,
+        registered_chat_text: Option<String>,
     }
 
     impl HotKeyController {
@@ -1172,10 +1186,19 @@ mod hotkey {
                 manager,
                 registered_hotkey: None,
                 registered_text: None,
+                registered_chat_hotkey: None,
+                registered_chat_text: None,
             })
         }
 
         pub fn apply_settings(&mut self, settings: &AppSettings) -> Result<(), String> {
+            self.apply_dictation_hotkey(settings)?;
+            // A bad/duplicate chat hotkey must not break the dictation hotkey.
+            self.apply_chat_hotkey(settings);
+            Ok(())
+        }
+
+        fn apply_dictation_hotkey(&mut self, settings: &AppSettings) -> Result<(), String> {
             if self.registered_text.as_deref() == Some(settings.hotkey.as_str()) {
                 return Ok(());
             }
@@ -1203,10 +1226,73 @@ mod hotkey {
             Ok(())
         }
 
-        /// Re-registers the hotkey unconditionally — used when the keyboard
+        /// Registers/updates the optional chat shortcut. Non-fatal: an invalid or
+        /// already-taken shortcut is logged and skipped rather than propagated.
+        fn apply_chat_hotkey(&mut self, settings: &AppSettings) {
+            // A disabled chat plugin has no shortcut, regardless of the saved key.
+            let mut desired = if settings.plugin_enabled("chat") {
+                settings.chat.chat_hotkey.trim().to_owned()
+            } else {
+                String::new()
+            };
+
+            // global-hotkey derives a HotKey's id from mods+key, so registering
+            // the same combo for chat and dictation clobbers the dictation
+            // registration (and the chat branch in poll_actions would never win
+            // the id match anyway). Refuse the collision rather than break
+            // dictation. (Swift also blocks this at the recorder for feedback.)
+            if !desired.is_empty()
+                && matches!(
+                    (desired.parse::<HotKey>(), settings.hotkey.parse::<HotKey>()),
+                    (Ok(chat), Ok(dictation)) if chat.id() == dictation.id()
+                )
+            {
+                crate::plugin_log::warn(
+                    "chat",
+                    &format!(
+                        "chat shortcut '{desired}' conflicts with the dictation hotkey — ignored"
+                    ),
+                );
+                desired = String::new();
+            }
+
+            if self.registered_chat_text.as_deref() == Some(desired.as_str()) {
+                return;
+            }
+
+            if let Some(old) = self.registered_chat_hotkey.take() {
+                let _ = self.manager.unregister(old);
+            }
+            self.registered_chat_text = Some(desired.clone());
+
+            if desired.is_empty() {
+                return;
+            }
+            match desired.parse::<HotKey>() {
+                Ok(parsed) => {
+                    if self.manager.register(parsed).is_ok() {
+                        self.registered_chat_hotkey = Some(parsed);
+                    } else {
+                        crate::plugin_log::warn(
+                            "chat",
+                            &format!(
+                                "chat shortcut '{desired}' could not be registered (already in use?)"
+                            ),
+                        );
+                    }
+                }
+                Err(err) => crate::plugin_log::warn(
+                    "chat",
+                    &format!("chat shortcut '{desired}' is invalid: {err}"),
+                ),
+            }
+        }
+
+        /// Re-registers the hotkeys unconditionally — used when the keyboard
         /// hardware changes and the OS may have lost the prior registration.
         pub fn force_reapply(&mut self, settings: &AppSettings) -> Result<(), String> {
             self.registered_text = None;
+            self.registered_chat_text = None;
             self.apply_settings(settings)
         }
 
@@ -1223,6 +1309,13 @@ mod hotkey {
                         HotKeyState::Pressed => actions.push(HotKeyAction::Pressed),
                         HotKeyState::Released => actions.push(HotKeyAction::Released),
                     }
+                } else if self
+                    .registered_chat_hotkey
+                    .as_ref()
+                    .is_some_and(|registered| registered.id() == event.id)
+                    && matches!(event.state, HotKeyState::Pressed)
+                {
+                    actions.push(HotKeyAction::ChatTriggered);
                 }
             }
 

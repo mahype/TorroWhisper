@@ -20,15 +20,9 @@ impl OllamaProvider {
     }
 }
 
-impl LlmProvider for OllamaProvider {
-    fn generate(
-        &self,
-        role_prompt: &str,
-        user_text: &str,
-        _cancelled: &Arc<AtomicBool>,
-    ) -> Result<String, String> {
+impl OllamaProvider {
+    fn complete(&self, system_message: &str, user_text: &str) -> Result<String, String> {
         let client = build_http_client()?;
-        let system_prompt = build_system_prompt(role_prompt);
         let url = join_base_url(&self.endpoint, "/api/chat");
 
         let response = client
@@ -38,21 +32,19 @@ impl LlmProvider for OllamaProvider {
                 "model": self.model_name,
                 "stream": false,
                 "messages": [
-                    { "role": "system", "content": system_prompt },
+                    { "role": "system", "content": system_message },
                     { "role": "user", "content": user_text },
                 ]
             }))
             .send()
-            .map_err(|err| format!("Ollama post-processing could not be started: {err}"))?;
+            .map_err(|err| format!("Ollama request could not be started: {err}"))?;
 
         let status = response.status();
         let value: Value = response
             .json()
             .map_err(|err| format!("Ollama response could not be read: {err}"))?;
         if !status.is_success() {
-            return Err(format!(
-                "Ollama returned HTTP {status} during post-processing."
-            ));
+            return Err(format!("Ollama returned HTTP {status}."));
         }
 
         value
@@ -66,6 +58,26 @@ impl LlmProvider for OllamaProvider {
                     .and_then(Value::as_str)
                     .map(str::to_owned)
             })
-            .ok_or_else(|| "Ollama response contained no processed text.".to_owned())
+            .ok_or_else(|| "Ollama response contained no text.".to_owned())
+    }
+}
+
+impl LlmProvider for OllamaProvider {
+    fn generate(
+        &self,
+        role_prompt: &str,
+        user_text: &str,
+        _cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        self.complete(&build_system_prompt(role_prompt), user_text)
+    }
+
+    fn chat(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        _cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        self.complete(system_prompt, user_text)
     }
 }

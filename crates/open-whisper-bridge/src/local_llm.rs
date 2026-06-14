@@ -191,6 +191,41 @@ impl LocalLlmRuntime {
         user_text: &str,
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String> {
+        self.generate_preset(
+            preset,
+            system_prompt,
+            user_text,
+            LocalLlmTask::PostProcessing,
+            cancelled,
+        )
+    }
+
+    /// Conversational generation (chat plugin) — the helper answers the user
+    /// instead of revising the text.
+    pub fn chat(
+        &mut self,
+        preset: LlmPreset,
+        system_prompt: &str,
+        user_text: &str,
+        cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        self.generate_preset(
+            preset,
+            system_prompt,
+            user_text,
+            LocalLlmTask::Chat,
+            cancelled,
+        )
+    }
+
+    fn generate_preset(
+        &mut self,
+        preset: LlmPreset,
+        system_prompt: &str,
+        user_text: &str,
+        task: LocalLlmTask,
+        cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
         let target_path = default_llm_model_path(preset)?;
         if !target_path.exists() {
             return Err(format!(
@@ -204,6 +239,7 @@ impl LocalLlmRuntime {
             preset.context_size(),
             system_prompt,
             user_text,
+            task,
             cancelled,
         )
     }
@@ -215,6 +251,48 @@ impl LocalLlmRuntime {
         path: &Path,
         system_prompt: &str,
         user_text: &str,
+        cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        self.generate_custom_any(
+            id,
+            display_name,
+            path,
+            system_prompt,
+            user_text,
+            LocalLlmTask::PostProcessing,
+            cancelled,
+        )
+    }
+
+    pub fn chat_custom(
+        &mut self,
+        id: &str,
+        display_name: &str,
+        path: &Path,
+        system_prompt: &str,
+        user_text: &str,
+        cancelled: &Arc<AtomicBool>,
+    ) -> Result<String, String> {
+        self.generate_custom_any(
+            id,
+            display_name,
+            path,
+            system_prompt,
+            user_text,
+            LocalLlmTask::Chat,
+            cancelled,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn generate_custom_any(
+        &mut self,
+        id: &str,
+        display_name: &str,
+        path: &Path,
+        system_prompt: &str,
+        user_text: &str,
+        task: LocalLlmTask,
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String> {
         if !path.exists() {
@@ -230,10 +308,12 @@ impl LocalLlmRuntime {
             CUSTOM_CONTEXT_SIZE,
             system_prompt,
             user_text,
+            task,
             cancelled,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn generate_any(
         &mut self,
         key: LocalLlmKey,
@@ -241,6 +321,7 @@ impl LocalLlmRuntime {
         n_ctx: u32,
         system_prompt: &str,
         user_text: &str,
+        task: LocalLlmTask,
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String> {
         self.last_used = Instant::now();
@@ -251,6 +332,7 @@ impl LocalLlmRuntime {
             "n_ctx": n_ctx,
             "system_prompt": system_prompt,
             "text": user_text,
+            "task": task.as_request_str(),
         });
         let helper = self.helper.as_mut().expect("ensure_helper just succeeded");
         let mut encoded = request.to_string();
@@ -363,6 +445,23 @@ fn helper_executable_path() -> Result<PathBuf, String> {
     ))
 }
 
+/// Whether the helper should revise the text (post-processing) or answer it
+/// conversationally (chat). Serialized into the helper request `task` field.
+#[derive(Clone, Copy)]
+enum LocalLlmTask {
+    PostProcessing,
+    Chat,
+}
+
+impl LocalLlmTask {
+    fn as_request_str(self) -> &'static str {
+        match self {
+            LocalLlmTask::PostProcessing => "post_processing",
+            LocalLlmTask::Chat => "chat",
+        }
+    }
+}
+
 static SHARED_RUNTIME: OnceLock<Mutex<LocalLlmRuntime>> = OnceLock::new();
 
 pub fn shared_runtime() -> &'static Mutex<LocalLlmRuntime> {
@@ -393,6 +492,32 @@ pub fn generate_with_custom_path(
         .lock()
         .map_err(|_| "Local language model runtime mutex was poisoned.".to_owned())?;
     runtime.generate_custom(id, display_name, path, system_prompt, user_text, cancelled)
+}
+
+pub fn chat_with_shared_runtime(
+    preset: LlmPreset,
+    system_prompt: &str,
+    user_text: &str,
+    cancelled: &Arc<AtomicBool>,
+) -> Result<String, String> {
+    let mut runtime = shared_runtime()
+        .lock()
+        .map_err(|_| "Local language model runtime mutex was poisoned.".to_owned())?;
+    runtime.chat(preset, system_prompt, user_text, cancelled)
+}
+
+pub fn chat_with_custom_path(
+    id: &str,
+    display_name: &str,
+    path: &Path,
+    system_prompt: &str,
+    user_text: &str,
+    cancelled: &Arc<AtomicBool>,
+) -> Result<String, String> {
+    let mut runtime = shared_runtime()
+        .lock()
+        .map_err(|_| "Local language model runtime mutex was poisoned.".to_owned())?;
+    runtime.chat_custom(id, display_name, path, system_prompt, user_text, cancelled)
 }
 
 pub fn maybe_unload_shared_runtime(auto_unload_secs: u32) {
