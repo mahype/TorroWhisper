@@ -26,13 +26,28 @@ final class ChatViewModel: ObservableObject {
         return ready.isEmpty ? registry : ready
     }
 
+    /// Selectable plain language models (everything that is not a Hermes agent),
+    /// for the first group of the header picker.
+    var languageModelOptions: [LlmRegistryEntryDTO] {
+        selectableModels.filter { $0.backendKind != .hermes }
+    }
+
+    /// Selectable Hermes agents, for the second group of the header picker.
+    var agentOptions: [LlmRegistryEntryDTO] {
+        selectableModels.filter { $0.backendKind == .hermes }
+    }
+
+    /// Persisted default model, used as the picker fallback for conversations
+    /// that have not pinned their own model yet.
+    private var defaultModelRef: LlmModelRefDTO?
+
     func start() {
         registry = (try? bridge.getLlmRegistry()) ?? []
         // Pull the persisted chat config (default model + TTS) fresh each time
         // the window opens, so edits in Settings → Plugins → Chat take effect.
         let chat = (try? bridge.loadSettings())?.chat ?? .default
         tts.configure(chat.tts)
-        seedModelSelection(defaultRef: chat.defaultModelRef)
+        defaultModelRef = chat.defaultModelRef
         let poll = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
@@ -92,15 +107,18 @@ final class ChatViewModel: ObservableObject {
         bridge.chatSetModel(ref)
     }
 
-    /// Seeds the in-window picker. Prefers the persisted default model; falls
-    /// back to the first ready model. The pick is a session override only.
-    private func seedModelSelection(defaultRef: LlmModelRefDTO?) {
-        guard selectedModelStableId == nil else { return }
-        if let defaultRef,
-           let match = registry.first(where: { $0.modelRef == defaultRef }) {
-            selectModel(match.stableId)
-        } else if let first = selectableModels.first {
-            selectModel(first.stableId)
+    /// Re-syncs the header picker to the active conversation's model when the
+    /// user switches conversations. Each conversation remembers its own pick
+    /// (#agent); falls back to the persisted default, then the first ready
+    /// model. Only updates local UI state — it must not re-persist (that would
+    /// overwrite the conversation's stored pick with the fallback).
+    private func syncSelection(to activeRef: LlmModelRefDTO?) {
+        let resolved = activeRef ?? defaultModelRef
+        if let resolved,
+           let match = registry.first(where: { $0.modelRef == resolved }) {
+            selectedModelStableId = match.stableId
+        } else {
+            selectedModelStableId = selectableModels.first?.stableId
         }
     }
 
@@ -128,8 +146,9 @@ final class ChatViewModel: ObservableObject {
         lastActiveSessionId = fresh.activeSessionId
         state = fresh
         if sessionChanged {
-            // Switched to / loaded a different conversation — don't re-speak its
-            // existing answers.
+            // Switched to / loaded a different conversation — reflect its pinned
+            // model/agent and don't re-speak its existing answers.
+            syncSelection(to: fresh.activeModelRef)
             spokenAssistantCount = fresh.messages.filter { $0.role == .assistant }.count
             tts.stop()
         } else {
@@ -236,8 +255,21 @@ struct ChatWindowView: View {
                 get: { chat.selectedModelStableId },
                 set: { chat.selectModel($0) }
             )) {
-                ForEach(chat.selectableModels) { entry in
-                    Text(entry.displayName).tag(String?.some(entry.stableId))
+                Section {
+                    ForEach(chat.languageModelOptions) { entry in
+                        Text(entry.displayName).tag(String?.some(entry.stableId))
+                    }
+                } header: {
+                    Text("Language models", bundle: .module)
+                }
+                if !chat.agentOptions.isEmpty {
+                    Section {
+                        ForEach(chat.agentOptions) { entry in
+                            Text(entry.displayName).tag(String?.some(entry.stableId))
+                        }
+                    } header: {
+                        Text("Hermes agents", bundle: .module)
+                    }
                 }
             } label: {
                 Text("Model", bundle: .module)

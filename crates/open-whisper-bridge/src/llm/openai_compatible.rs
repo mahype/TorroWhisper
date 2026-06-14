@@ -97,6 +97,7 @@ impl LlmProvider for OpenAiCompatibleProviderImpl {
         &self,
         system_prompt: &str,
         user_text: &str,
+        _session_key: Option<&str>,
         _cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String> {
         // Higher temperature: chat should feel natural, not robotic.

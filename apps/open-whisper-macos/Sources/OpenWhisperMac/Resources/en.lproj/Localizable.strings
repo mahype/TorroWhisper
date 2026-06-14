@@ -361,3 +361,16 @@
 "Adjust the behavior in Onboarding or Settings." = "Adjust the behavior in Onboarding or Settings.";
 "macOS may require privacy permissions for the microphone, global hotkey, and pasting into other apps." = "macOS may require privacy permissions for the microphone, global hotkey, and pasting into other apps.";
 "If you run into issues, open System Settings > Privacy & Security and check Microphone, Accessibility, and Input Monitoring." = "If you run into issues, open System Settings > Privacy & Security and check Microphone, Accessibility, and Input Monitoring.";
+
+/* Hermes agents (#agent) */
+"Hermes agents" = "Hermes agents";
+"No Hermes agents added yet." = "No Hermes agents added yet.";
+"+ Add Hermes agent" = "+ Add Hermes agent";
+"Address" = "Address";
+"Model id" = "Model id";
+"API key (optional)" = "API key (optional)";
+"Key could not be saved." = "Key could not be saved.";
+"Remove stored key" = "Remove stored key";
+"Key stored" = "Key stored";
+"Save" = "Save";
+"Voice-chat with a Hermes Agent (NousResearch) over its API server. Enter the agent's address (e.g. http://localhost:8642/v1) and, if the server requires one, its API key. Agents appear in the chat window's model picker. Each conversation keeps its own memory via the agent." = "Voice-chat with a Hermes Agent (NousResearch) over its API server. Enter the agent's address (e.g. http://localhost:8642/v1) and, if the server requires one, its API key. Agents appear in the chat window's model picker. Each conversation keeps its own memory via the agent.";

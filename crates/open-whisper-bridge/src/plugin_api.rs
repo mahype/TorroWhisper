@@ -60,12 +60,15 @@ pub trait PluginHost {
 
     /// Conversational generation: `system_prompt` is used verbatim as the
     /// assistant's system message and `user_text` as the user's turn, so the
-    /// model answers rather than rewrites.
+    /// model answers rather than rewrites. `session_key` is a stable
+    /// per-conversation id; memory-capable backends (Hermes) scope it, the rest
+    /// ignore it.
     fn chat(
         &self,
         model: &LlmModelRef,
         system_prompt: &str,
         user_text: &str,
+        session_key: Option<&str>,
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String>;
 
@@ -114,9 +117,15 @@ impl PluginHost for BridgeHost {
         model: &LlmModelRef,
         system_prompt: &str,
         user_text: &str,
+        session_key: Option<&str>,
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String> {
-        llm::provider_for(model, &self.settings)?.chat(system_prompt, user_text, cancelled)
+        llm::provider_for(model, &self.settings)?.chat(
+            system_prompt,
+            user_text,
+            session_key,
+            cancelled,
+        )
     }
 
     fn generate(

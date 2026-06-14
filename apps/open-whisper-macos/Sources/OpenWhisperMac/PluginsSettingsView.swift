@@ -69,6 +69,10 @@ struct ChatSettingsSheet: View {
     @State private var hotkeyCapturing = false
     @State private var hotkeyPreview = ""
     @State private var hotkeyError: String?
+    /// Per-agent token entry buffers + stored-state (Hermes agents, #agent).
+    @State private var hermesKeyInputs: [String: String] = [:]
+    @State private var hermesKeyStored: [String: Bool] = [:]
+    @State private var hermesStatusLine = ""
 
     /// OpenAI's published TTS voices.
     private let openAiVoices = [
@@ -117,6 +121,7 @@ struct ChatSettingsSheet: View {
             Form {
                 shortcutSection
                 modelSection
+                agentsSection
                 voiceSection
                 promptSection
             }
@@ -127,6 +132,7 @@ struct ChatSettingsSheet: View {
             registry = (try? bridge.getLlmRegistry()) ?? []
             openAiKeyPresent = (try? bridge.getLlmApiKeyStatus())?
                 .first(where: { $0.backend == .openAi })?.hasKey ?? false
+            refreshHermesKeyStatus()
         }
     }
 
@@ -267,5 +273,142 @@ struct ChatSettingsSheet: View {
         } header: {
             Text("Assistant", bundle: .module)
         }
+    }
+
+    // MARK: - Hermes agents (#agent)
+
+    private var agentsSection: some View {
+        Section {
+            if model.settings.hermesAgents.isEmpty {
+                Text("No Hermes agents added yet.", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(model.settings.hermesAgents) { agent in
+                    agentRow(agent)
+                }
+            }
+
+            Button {
+                let id = model.addHermesAgent()
+                hermesKeyInputs[id] = ""
+                refreshHermesKeyStatus()
+            } label: {
+                Text("+ Add Hermes agent", bundle: .module)
+            }
+
+            if !hermesStatusLine.isEmpty {
+                Text(hermesStatusLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Hermes agents", bundle: .module)
+        } footer: {
+            Text("Voice-chat with a Hermes Agent (NousResearch) over its API server. Enter the agent's address (e.g. http://localhost:8642/v1) and, if the server requires one, its API key. Agents appear in the chat window's model picker. Each conversation keeps its own memory via the agent.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private func agentRow(_ agent: HermesAgent) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField(text: agentBinding(agent.id, \.name)) {
+                Text("Name", bundle: .module)
+            }
+            TextField(text: agentBinding(agent.id, \.baseUrl), prompt: Text(verbatim: "http://localhost:8642/v1")) {
+                Text("Address", bundle: .module)
+            }
+            TextField(text: agentBinding(agent.id, \.modelName), prompt: Text(verbatim: "hermes-agent")) {
+                Text("Model id", bundle: .module)
+            }
+
+            HStack(spacing: 8) {
+                SecureField(
+                    hermesKeyStored[agent.id] == true ? "••••••••" : L("API key (optional)", locale: locale),
+                    text: hermesKeyBinding(agent.id)
+                )
+                Button {
+                    saveHermesKey(agent.id)
+                } label: {
+                    Text("Save", bundle: .module)
+                }
+                .disabled((hermesKeyInputs[agent.id] ?? "").trimmingCharacters(in: .whitespaces).isEmpty)
+
+                if hermesKeyStored[agent.id] == true {
+                    Button(role: .destructive) {
+                        deleteHermesKey(agent.id)
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .help(L("Remove stored key", locale: locale))
+                }
+
+                Spacer()
+
+                Button(role: .destructive) {
+                    removeAgent(agent.id)
+                } label: {
+                    Text("Remove", bundle: .module)
+                }
+            }
+
+            if hermesKeyStored[agent.id] == true {
+                Text("Key stored", bundle: .module)
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func agentBinding(
+        _ id: String,
+        _ keyPath: WritableKeyPath<HermesAgent, String>
+    ) -> Binding<String> {
+        Binding(
+            get: { model.settings.hermesAgents.first(where: { $0.id == id })?[keyPath: keyPath] ?? "" },
+            set: { newValue in
+                if let index = model.settings.hermesAgents.firstIndex(where: { $0.id == id }) {
+                    model.settings.hermesAgents[index][keyPath: keyPath] = newValue
+                    model.requestAutoSave()
+                }
+            }
+        )
+    }
+
+    private func hermesKeyBinding(_ id: String) -> Binding<String> {
+        Binding(
+            get: { hermesKeyInputs[id] ?? "" },
+            set: { hermesKeyInputs[id] = $0 }
+        )
+    }
+
+    private func refreshHermesKeyStatus() {
+        let statuses = (try? bridge.getHermesApiKeyStatus()) ?? []
+        hermesKeyStored = Dictionary(uniqueKeysWithValues: statuses.map { ($0.id, $0.hasKey) })
+    }
+
+    private func saveHermesKey(_ id: String) {
+        let key = (hermesKeyInputs[id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        hermesStatusLine = (try? bridge.setHermesApiKey(id: id, key: key))
+            ?? L("Key could not be saved.", locale: locale)
+        hermesKeyInputs[id] = ""
+        refreshHermesKeyStatus()
+    }
+
+    private func deleteHermesKey(_ id: String) {
+        _ = try? bridge.deleteHermesApiKey(id: id)
+        hermesKeyInputs[id] = ""
+        refreshHermesKeyStatus()
+    }
+
+    private func removeAgent(_ id: String) {
+        model.removeHermesAgent(id: id)
+        hermesKeyInputs[id] = nil
+        refreshHermesKeyStatus()
     }
 }

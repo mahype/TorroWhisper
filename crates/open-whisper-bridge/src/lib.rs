@@ -240,6 +240,19 @@ impl BridgeRuntime {
         llm::registry::build(&self.settings, &self.llm_downloads)
     }
 
+    /// Per-agent Keychain token presence for every configured Hermes agent
+    /// (booleans only — the tokens never cross the FFI boundary).
+    fn hermes_key_status(&self) -> Vec<open_whisper_core::HermesKeyStatusDto> {
+        self.settings
+            .hermes_agents
+            .iter()
+            .map(|agent| open_whisper_core::HermesKeyStatusDto {
+                id: agent.id.clone(),
+                has_key: llm::keychain::has_hermes_api_key(&agent.id),
+            })
+            .collect()
+    }
+
     // --- chat plugin (#17) ---
 
     fn chat_start_listening(&mut self) -> Result<String, String> {
@@ -1558,6 +1571,17 @@ struct ApiKeyBackendRequest {
 }
 
 #[derive(Deserialize)]
+struct HermesKeySetRequest {
+    id: String,
+    key: String,
+}
+
+#[derive(Deserialize)]
+struct HermesKeyIdRequest {
+    id: String,
+}
+
+#[derive(Deserialize)]
 struct ChatModelRequest {
     #[serde(default)]
     model_ref: Option<LlmModelRef>,
@@ -1674,6 +1698,32 @@ pub extern "C" fn ow_get_llm_api_key_status() -> *mut c_char {
     })
     .collect();
     response_ok(statuses)
+}
+
+/// Stores a Hermes agent's bearer token in the Keychain (keyed by agent id).
+/// Like the cloud-key setter, the secret crosses the FFI boundary only here.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_set_hermes_api_key(request_json: *const c_char) -> *mut c_char {
+    let result = parse_json_arg::<HermesKeySetRequest>(request_json, "HermesKeySetRequest")
+        .and_then(|req| {
+            llm::keychain::set_hermes_api_key(&req.id, &req.key).map(|()| "ok".to_owned())
+        });
+    response_from_result(result)
+}
+
+/// Removes a Hermes agent's stored bearer token from the Keychain.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_delete_hermes_api_key(request_json: *const c_char) -> *mut c_char {
+    let result = parse_json_arg::<HermesKeyIdRequest>(request_json, "HermesKeyIdRequest")
+        .and_then(|req| llm::keychain::delete_hermes_api_key(&req.id).map(|()| "ok".to_owned()));
+    response_from_result(result)
+}
+
+/// Reports which configured Hermes agents currently have a token stored —
+/// booleans only, never the secrets themselves.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_get_hermes_api_key_status() -> *mut c_char {
+    response_ok(with_runtime_value(|runtime| runtime.hermes_key_status()))
 }
 
 /// Returns the unified local + cloud model registry. Remote Ollama / LM Studio

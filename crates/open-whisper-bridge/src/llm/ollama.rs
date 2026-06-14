@@ -76,6 +76,7 @@ impl LlmProvider for OllamaProvider {
         &self,
         system_prompt: &str,
         user_text: &str,
+        _session_key: Option<&str>,
         _cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String> {
         self.complete(system_prompt, user_text)

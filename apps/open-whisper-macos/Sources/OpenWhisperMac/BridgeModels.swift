@@ -714,6 +714,7 @@ enum LlmBackendKind: String, Codable, Hashable {
     case grok
     case anthropic
     case gemini
+    case hermes
 
     var displayName: String {
         switch self {
@@ -726,14 +727,16 @@ enum LlmBackendKind: String, Codable, Hashable {
         case .grok: return "Grok (xAI)"
         case .anthropic: return "Anthropic"
         case .gemini: return "Gemini"
+        case .hermes: return "Hermes Agent"
         }
     }
 
-    /// Cloud backends that need an API key (have a Keychain slot).
+    /// Cloud backends that need a single shared API key (have a Keychain slot).
+    /// Hermes is excluded: each agent has its own per-agent token.
     var isCloud: Bool {
         switch self {
         case .openAi, .mistral, .deepSeek, .grok, .anthropic, .gemini: return true
-        case .localGguf, .ollama, .lmStudio: return false
+        case .localGguf, .ollama, .lmStudio, .hermes: return false
         }
     }
 }
@@ -756,6 +759,7 @@ enum LlmModelRefDTO: Codable, Hashable {
     case openAiCompatible(provider: OpenAiCompatibleProviderDTO, modelName: String)
     case anthropic(String)
     case gemini(String)
+    case hermes(id: String)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -773,6 +777,7 @@ enum LlmModelRefDTO: Codable, Hashable {
         case openAiCompatible = "open_ai_compatible"
         case anthropic
         case gemini
+        case hermes
     }
 
     init(from decoder: Decoder) throws {
@@ -795,6 +800,8 @@ enum LlmModelRefDTO: Codable, Hashable {
             self = .anthropic(try container.decode(String.self, forKey: .modelName))
         case .gemini:
             self = .gemini(try container.decode(String.self, forKey: .modelName))
+        case .hermes:
+            self = .hermes(id: try container.decode(String.self, forKey: .id))
         }
     }
 
@@ -823,6 +830,9 @@ enum LlmModelRefDTO: Codable, Hashable {
         case .gemini(let name):
             try container.encode(Kind.gemini, forKey: .kind)
             try container.encode(name, forKey: .modelName)
+        case .hermes(let id):
+            try container.encode(Kind.hermes, forKey: .kind)
+            try container.encode(id, forKey: .id)
         }
     }
 }
@@ -844,6 +854,23 @@ struct ApiKeyStatusDTO: Codable, Hashable, Identifiable {
     var hasKey: Bool
 
     var id: LlmBackendKind { backend }
+}
+
+// MARK: - Hermes Agents (#agent)
+
+/// Mirror of Rust `HermesAgent`. The bearer token is NOT part of this struct —
+/// it lives in the Keychain and is managed via the dedicated key endpoints.
+struct HermesAgent: Codable, Identifiable, Hashable {
+    var id: String
+    var name: String
+    var baseUrl: String
+    var modelName: String
+}
+
+/// Mirror of Rust `HermesKeyStatusDto` — whether an agent has a stored token.
+struct HermesKeyStatusDTO: Codable, Hashable, Identifiable {
+    var id: String
+    var hasKey: Bool
 }
 
 // MARK: - Chat plugin (#17)
@@ -884,10 +911,13 @@ struct ChatStateDTO: Codable, Hashable {
     var error: String?
     var sessions: [ChatSessionDTO]
     var activeSessionId: String
+    /// Model/agent the active conversation uses — lets the picker re-sync when
+    /// the user switches conversations.
+    var activeModelRef: LlmModelRefDTO?
 
     static let empty = ChatStateDTO(
         phase: .idle, messages: [], revision: 0, error: nil,
-        sessions: [], activeSessionId: ""
+        sessions: [], activeSessionId: "", activeModelRef: nil
     )
 }
 
@@ -981,6 +1011,8 @@ struct AppSettings: Codable, Equatable {
     var activePostProcessingBackend: PostProcessingBackend
     var activeCustomLlmId: String
     var customLlmModels: [CustomLlmModel]
+    /// User-configured Hermes Agents (#agent). Selectable in the chat.
+    var hermesAgents: [HermesAgent]
     /// Registry-selected post-processing model (incl. cloud). nil = legacy
     /// PostProcessingChoice resolution.
     var activePostProcessingModel: LlmModelRefDTO?
@@ -1029,6 +1061,7 @@ struct AppSettings: Codable, Equatable {
         activePostProcessingBackend: .local,
         activeCustomLlmId: "",
         customLlmModels: [],
+        hermesAgents: [],
         activePostProcessingModel: nil,
         ollama: ExternalProviderSettings(endpoint: "http://127.0.0.1:11434", modelName: "whisper"),
         lmStudio: ExternalProviderSettings(endpoint: "http://127.0.0.1:1234", modelName: "openai/whisper-small"),

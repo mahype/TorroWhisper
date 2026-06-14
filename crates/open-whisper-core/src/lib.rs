@@ -452,6 +452,38 @@ pub struct CustomLlmModel {
     pub source: CustomLlmSource,
 }
 
+/// A user-configured Hermes Agent (NousResearch) reachable over its
+/// OpenAI-compatible API server (`/v1/chat/completions`). Unlike the
+/// fixed-vendor [`OpenAiCompatibleProvider`] entries, every agent has its own
+/// base URL and an *optional* bearer token. The token lives in the Keychain
+/// (account `hermes_agent:<id>`) and never in `settings.json`; only the
+/// non-secret metadata below is persisted.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct HermesAgent {
+    /// Stable identifier — UI selection token and Keychain account suffix.
+    pub id: String,
+    /// Display name shown in the chat model picker.
+    pub name: String,
+    /// Base URL of the agent's API server, e.g. `http://localhost:8642/v1`.
+    pub base_url: String,
+    /// Value sent in the request's `model` field. Hermes overrides it
+    /// server-side (config.yaml), so any value works; defaults to
+    /// `hermes-agent`.
+    pub model_name: String,
+}
+
+impl Default for HermesAgent {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            base_url: String::new(),
+            model_name: "hermes-agent".to_owned(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PostProcessingChoice {
@@ -488,6 +520,9 @@ pub enum LlmBackendKind {
     Grok,
     Anthropic,
     Gemini,
+    /// A user-configured Hermes Agent (NousResearch). Per-agent base URL and
+    /// optional bearer token; not a fixed cloud vendor.
+    Hermes,
 }
 
 impl LlmBackendKind {
@@ -502,6 +537,7 @@ impl LlmBackendKind {
             Self::Grok => "Grok (xAI)",
             Self::Anthropic => "Anthropic",
             Self::Gemini => "Gemini",
+            Self::Hermes => "Hermes Agent",
         }
     }
 
@@ -560,6 +596,12 @@ pub enum LlmModelRef {
     Gemini {
         model_name: String,
     },
+    /// A user-configured Hermes Agent, referenced by its [`HermesAgent::id`].
+    /// The base URL and (optional) token are resolved from settings + Keychain
+    /// at request time.
+    Hermes {
+        id: String,
+    },
 }
 
 impl LlmModelRef {
@@ -571,6 +613,7 @@ impl LlmModelRef {
             Self::OpenAiCompatible { provider, .. } => provider.backend_kind(),
             Self::Anthropic { .. } => LlmBackendKind::Anthropic,
             Self::Gemini { .. } => LlmBackendKind::Gemini,
+            Self::Hermes { .. } => LlmBackendKind::Hermes,
         }
     }
 
@@ -597,6 +640,7 @@ impl LlmModelRef {
             } => format!("{}:{model_name}", provider.backend_kind().label_id()),
             Self::Anthropic { model_name } => format!("anthropic:{model_name}"),
             Self::Gemini { model_name } => format!("gemini:{model_name}"),
+            Self::Hermes { id } => format!("hermes:{id}"),
         }
     }
 }
@@ -614,6 +658,7 @@ impl LlmBackendKind {
             Self::Grok => "grok",
             Self::Anthropic => "anthropic",
             Self::Gemini => "gemini",
+            Self::Hermes => "hermes",
         }
     }
 }
@@ -635,6 +680,15 @@ impl From<PostProcessingChoice> for LlmModelRef {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ApiKeyStatusDto {
     pub backend: LlmBackendKind,
+    pub has_key: bool,
+}
+
+/// Whether a configured Hermes agent currently has a bearer token stored in the
+/// Keychain. Per-agent counterpart of [`ApiKeyStatusDto`] — booleans only, the
+/// secret never crosses the FFI boundary.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HermesKeyStatusDto {
+    pub id: String,
     pub has_key: bool,
 }
 
@@ -825,6 +879,11 @@ pub struct ChatSession {
     pub messages: Vec<ChatMessageDto>,
     /// Unix seconds of the last change; the sidebar sorts newest-first on it.
     pub updated_at: i64,
+    /// Model/agent this conversation uses. `None` falls back to
+    /// `settings.chat.default_model_ref`, then the local preset. Persisted so
+    /// each conversation remembers its own pick (#agent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_ref: Option<LlmModelRef>,
 }
 
 /// Lightweight session entry for the sidebar list (no message bodies).
@@ -852,6 +911,11 @@ pub struct ChatStateDto {
     /// Id of the session currently shown in the transcript.
     #[serde(default)]
     pub active_session_id: String,
+    /// Model/agent the active session uses, so the chat window's picker can
+    /// re-sync when the user switches conversations. `None` = no explicit pick
+    /// (uses the configured default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_model_ref: Option<LlmModelRef>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1061,6 +1125,11 @@ pub struct AppSettings {
     pub active_post_processing_backend: PostProcessingBackend,
     pub active_custom_llm_id: String,
     pub custom_llm_models: Vec<CustomLlmModel>,
+    /// User-configured Hermes Agents (NousResearch). Selectable in the chat
+    /// alongside language models; each carries its own base URL + optional
+    /// Keychain token (#agent).
+    #[serde(default)]
+    pub hermes_agents: Vec<HermesAgent>,
     /// Registry-selected post-processing model. When set, it overrides the
     /// legacy `PostProcessingChoice` resolution and is the path through which
     /// cloud models become selectable. `None` keeps the legacy behaviour.
@@ -1303,6 +1372,7 @@ impl Default for AppSettings {
             active_custom_llm_id: String::new(),
             active_post_processing_model: None,
             custom_llm_models: Vec::new(),
+            hermes_agents: Vec::new(),
             ollama: ExternalProviderSettings::ollama_defaults(),
             lm_studio: ExternalProviderSettings::lm_studio_defaults(),
             post_processing_enabled: false,

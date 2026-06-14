@@ -593,6 +593,33 @@ final class AppModel: ObservableObject {
         requestAutoSave()
     }
 
+    // MARK: - Hermes Agents (#agent)
+
+    /// Adds a blank Hermes agent (pre-filled with the default local address) and
+    /// persists immediately so its id exists before a token is stored against it.
+    /// Returns the new agent's id.
+    @discardableResult
+    func addHermesAgent() -> String {
+        let id = UUID().uuidString.lowercased()
+        settings.hermesAgents.append(
+            HermesAgent(
+                id: id,
+                name: "",
+                baseUrl: "http://localhost:8642/v1",
+                modelName: "hermes-agent"
+            )
+        )
+        flushAutoSave()
+        return id
+    }
+
+    /// Removes a Hermes agent and its stored Keychain token.
+    func removeHermesAgent(id: String) {
+        _ = try? bridge.deleteHermesApiKey(id: id)
+        settings.hermesAgents.removeAll(where: { $0.id == id })
+        flushAutoSave()
+    }
+
     func reloadAll() {
         do {
             settings = try bridge.loadSettings()

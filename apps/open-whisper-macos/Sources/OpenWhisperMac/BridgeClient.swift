@@ -101,6 +101,22 @@ final class BridgeClient {
         try decodeResponse(from: ow_get_llm_api_key_status())
     }
 
+    // MARK: Hermes Agents (#agent)
+
+    /// Stores a Hermes agent's bearer token in the Keychain (keyed by agent id).
+    func setHermesApiKey(id: String, key: String) throws -> String {
+        try encodeAndCall(["id": id, "key": key], function: ow_set_hermes_api_key)
+    }
+
+    func deleteHermesApiKey(id: String) throws -> String {
+        try encodeAndCall(["id": id], function: ow_delete_hermes_api_key)
+    }
+
+    /// Which configured Hermes agents currently have a token stored (booleans only).
+    func getHermesApiKeyStatus() throws -> [HermesKeyStatusDTO] {
+        try decodeResponse(from: ow_get_hermes_api_key_status())
+    }
+
     /// Available post-processing pipeline stages (built-in + plugin) for the
     /// per-mode pipeline editor.
     func listPipelineStages() throws -> [StageCatalogEntry] {

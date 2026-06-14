@@ -41,9 +41,6 @@ const TITLE_MAX_CHARS: usize = 40;
 pub struct ChatController {
     sessions: Vec<ChatSession>,
     active_id: String,
-    /// Session-only model override (a pick in the chat window). When `None`, the
-    /// persisted `settings.chat.default_model_ref` is used.
-    model_ref: Option<LlmModelRef>,
     generation_rx: Option<Receiver<Result<String, String>>>,
     generating: bool,
     /// Session the in-flight answer belongs to, so it lands in the right place
@@ -76,7 +73,6 @@ impl ChatController {
         Self {
             sessions,
             active_id,
-            model_ref: None,
             generation_rx: None,
             generating: false,
             generating_session_id: String::new(),
@@ -87,8 +83,15 @@ impl ChatController {
         }
     }
 
+    /// Sets the active conversation's model/agent and persists it, so each
+    /// conversation remembers its own pick across window reopens and restarts
+    /// (#agent). `updated_at` is intentionally left untouched — picking a model
+    /// must not reshuffle the sidebar's newest-first order.
     pub fn set_model(&mut self, model_ref: Option<LlmModelRef>) {
-        self.model_ref = model_ref;
+        if let Some(index) = self.active_index() {
+            self.sessions[index].model_ref = model_ref;
+            self.persist();
+        }
     }
 
     /// True while an answer is being generated. The shortcut uses this to avoid
@@ -141,7 +144,13 @@ impl ChatController {
             .unwrap_or(true);
         if !active_empty {
             self.cancel_generation();
-            let session = new_empty_session();
+            // Carry the current pick into the new conversation so the user does
+            // not have to re-select their model/agent every time.
+            let inherited = self
+                .active_index()
+                .and_then(|index| self.sessions[index].model_ref.clone());
+            let mut session = new_empty_session();
+            session.model_ref = inherited;
             self.active_id = session.id.clone();
             self.sessions.insert(0, session);
             self.persist();
@@ -298,6 +307,9 @@ impl ChatController {
             })
             .collect();
         sessions.sort_by_key(|s| Reverse(s.updated_at));
+        let active_model_ref = self
+            .active_index()
+            .and_then(|index| self.sessions[index].model_ref.clone());
         ChatStateDto {
             phase,
             messages,
@@ -305,6 +317,7 @@ impl ChatController {
             error: self.error.clone(),
             sessions,
             active_session_id: self.active_id.clone(),
+            active_model_ref,
         }
     }
 
@@ -314,10 +327,10 @@ impl ChatController {
             .map(|index| self.sessions[index].messages.clone())
             .unwrap_or_default();
 
-        // Session override → persisted default → local preset.
+        // Per-conversation pick → persisted default → local preset.
         let model_ref = self
-            .model_ref
-            .clone()
+            .active_index()
+            .and_then(|index| self.sessions[index].model_ref.clone())
             .or_else(|| settings.chat.default_model_ref.clone())
             .unwrap_or(LlmModelRef::LocalPreset {
                 preset: LlmPreset::default(),
@@ -345,9 +358,18 @@ impl ChatController {
         );
 
         let cancelled = self.cancelled.clone();
+        // Stable per-conversation scope so memory-capable agents (Hermes) keep
+        // context across turns and sessions.
+        let session_key = self.active_id.clone();
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
-            let result = host.chat(&model_ref, &system, &latest_user, &cancelled);
+            let result = host.chat(
+                &model_ref,
+                &system,
+                &latest_user,
+                Some(session_key.as_str()),
+                &cancelled,
+            );
             if let Err(err) = &result {
                 host.log(LogLevel::Error, &format!("generation failed: {err}"));
             }
@@ -377,6 +399,7 @@ fn new_empty_session() -> ChatSession {
         title: String::new(),
         messages: Vec::new(),
         updated_at: now_unix(),
+        model_ref: None,
     }
 }
 
@@ -403,6 +426,7 @@ fn describe_model(model_ref: &LlmModelRef) -> String {
         } => format!("{provider:?} {model_name}"),
         LlmModelRef::Anthropic { model_name } => format!("anthropic {model_name}"),
         LlmModelRef::Gemini { model_name } => format!("gemini {model_name}"),
+        LlmModelRef::Hermes { id } => format!("hermes agent {id}"),
     }
 }
 

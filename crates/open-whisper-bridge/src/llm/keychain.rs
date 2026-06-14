@@ -24,7 +24,12 @@ fn account_for(kind: LlmBackendKind) -> Option<&'static str> {
         LlmBackendKind::Grok => Some("grok_api_key"),
         LlmBackendKind::Anthropic => Some("anthropic_api_key"),
         LlmBackendKind::Gemini => Some("gemini_api_key"),
-        LlmBackendKind::LocalGguf | LlmBackendKind::Ollama | LlmBackendKind::LmStudio => None,
+        // Hermes agents use per-agent accounts (see the Hermes helpers below),
+        // not this single-slot-per-backend table.
+        LlmBackendKind::LocalGguf
+        | LlmBackendKind::Ollama
+        | LlmBackendKind::LmStudio
+        | LlmBackendKind::Hermes => None,
     }
 }
 
@@ -60,4 +65,44 @@ pub fn delete_api_key(kind: LlmBackendKind) -> Result<(), String> {
 /// True if a non-empty key is stored for this backend.
 pub fn has_api_key(kind: LlmBackendKind) -> bool {
     get_api_key(kind).is_some()
+}
+
+// --- Hermes Agents (#agent) ---
+//
+// Unlike the fixed cloud vendors above (one key slot per backend), each Hermes
+// agent has its own bearer token, keyed by the agent id. Same Keychain service,
+// account `hermes_agent:<id>`. The token is optional — a local Hermes server can
+// run without `API_SERVER_KEY` — so absence is never an error.
+
+/// Keychain account for a Hermes agent's bearer token.
+fn hermes_account(id: &str) -> String {
+    format!("hermes_agent:{id}")
+}
+
+/// Returns the stored bearer token for a Hermes agent, or `None` if absent/empty.
+pub fn get_hermes_api_key(id: &str) -> Option<String> {
+    let bytes = get_generic_password(SERVICE, &hermes_account(id)).ok()?;
+    let key = String::from_utf8(bytes).ok()?.trim().to_owned();
+    if key.is_empty() { None } else { Some(key) }
+}
+
+/// Stores (or replaces) a Hermes agent's bearer token.
+pub fn set_hermes_api_key(id: &str, key: &str) -> Result<(), String> {
+    let trimmed = key.trim();
+    if trimmed.is_empty() {
+        return Err("API key is empty.".to_owned());
+    }
+    set_generic_password(SERVICE, &hermes_account(id), trimmed.as_bytes())
+        .map_err(|err| format!("API key could not be saved to the Keychain: {err}"))
+}
+
+/// Deletes a Hermes agent's stored token. A missing token is not an error.
+pub fn delete_hermes_api_key(id: &str) -> Result<(), String> {
+    let _ = delete_generic_password(SERVICE, &hermes_account(id));
+    Ok(())
+}
+
+/// True if a non-empty bearer token is stored for this Hermes agent.
+pub fn has_hermes_api_key(id: &str) -> bool {
+    get_hermes_api_key(id).is_some()
 }

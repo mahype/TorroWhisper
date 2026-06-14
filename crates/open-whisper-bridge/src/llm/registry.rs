@@ -125,7 +125,42 @@ fn build_inner(
         ));
     }
 
+    // User-configured Hermes agents (#agent). Reachability can't be checked
+    // synchronously here, so a configured agent is reported `Ready` — a failed
+    // request surfaces its error in the chat instead.
+    for agent in &settings.hermes_agents {
+        entries.push(entry(
+            LlmModelRef::Hermes {
+                id: agent.id.clone(),
+            },
+            LlmBackendKind::Hermes,
+            agent.name.clone(),
+            format!("Hermes Agent · {}", agent_detail(&agent.base_url)),
+            LlmAvailability::Ready,
+            None,
+        ));
+    }
+
     entries
+}
+
+/// Compact, secret-free detail line for a Hermes agent: the host[:port] of its
+/// base URL, falling back to the raw value when it can't be parsed.
+fn agent_detail(base_url: &str) -> String {
+    let trimmed = base_url.trim();
+    let without_scheme = trimmed
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(trimmed);
+    let host = without_scheme
+        .split(['/', '?'])
+        .next()
+        .unwrap_or(without_scheme);
+    if host.is_empty() {
+        trimmed.to_owned()
+    } else {
+        host.to_owned()
+    }
 }
 
 fn integrity_to_availability(integrity: LlmModelIntegrity) -> LlmAvailability {

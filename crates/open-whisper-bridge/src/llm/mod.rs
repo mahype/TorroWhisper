@@ -9,6 +9,7 @@
 
 mod anthropic;
 mod gemini;
+mod hermes;
 pub(crate) mod keychain;
 mod lm_studio;
 mod ollama;
@@ -49,10 +50,15 @@ pub trait LlmProvider {
     /// instruction — `chat` uses `system_prompt` directly as the assistant's
     /// system message and `user_text` as the user's turn, so the model answers
     /// the question instead of rewriting it.
+    ///
+    /// `session_key` is a stable per-conversation identifier. Backends that
+    /// support long-term memory (the Hermes agent, via `X-Hermes-Session-Key`)
+    /// scope it to this conversation; all other backends ignore it.
     fn chat(
         &self,
         system_prompt: &str,
         user_text: &str,
+        session_key: Option<&str>,
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String>;
 }
@@ -125,6 +131,27 @@ pub fn provider_for(
                 api_key,
             )))
         }
+        LlmModelRef::Hermes { id } => {
+            let agent = settings
+                .hermes_agents
+                .iter()
+                .find(|agent| &agent.id == id)
+                .ok_or_else(|| format!("Hermes agent '{id}' is not configured."))?;
+            if agent.base_url.trim().is_empty() {
+                return Err(format!(
+                    "Hermes agent '{}' has no address configured.",
+                    agent.name
+                ));
+            }
+            // The bearer token is optional — a local Hermes server may run
+            // without `API_SERVER_KEY`.
+            let api_key = keychain::get_hermes_api_key(id);
+            Ok(Box::new(hermes::HermesAgentProvider::new(
+                agent.base_url.clone(),
+                agent.model_name.clone(),
+                api_key,
+            )))
+        }
     }
 }
 
@@ -170,6 +197,7 @@ impl LlmProvider for LocalGgufProvider {
         &self,
         system_prompt: &str,
         user_text: &str,
+        _session_key: Option<&str>,
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String> {
         match self {
@@ -190,8 +218,15 @@ impl LlmProvider for LocalGgufProvider {
 
 /// Shared blocking HTTP client for remote/cloud providers.
 pub(crate) fn build_http_client() -> Result<Client, String> {
+    build_http_client_with_timeout(REQUEST_TIMEOUT)
+}
+
+/// Blocking HTTP client with a custom request timeout. The Hermes agent runs a
+/// full toolset (terminal, web, files) per turn, so it needs far more headroom
+/// than a plain chat-completion call.
+pub(crate) fn build_http_client_with_timeout(timeout: Duration) -> Result<Client, String> {
     Client::builder()
-        .timeout(REQUEST_TIMEOUT)
+        .timeout(timeout)
         .build()
         .map_err(|err| format!("HTTP client for the language model could not be created: {err}"))
 }

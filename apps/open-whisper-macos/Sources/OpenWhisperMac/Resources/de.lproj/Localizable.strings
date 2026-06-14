@@ -361,3 +361,16 @@
 "Adjust the behavior in Onboarding or Settings." = "Passe das Verhalten im Onboarding oder in den Einstellungen an.";
 "macOS may require privacy permissions for the microphone, global hotkey, and pasting into other apps." = "macOS verlangt ggf. Datenschutz-Berechtigungen für Mikrofon, globalen Hotkey und das Einfügen in andere Apps.";
 "If you run into issues, open System Settings > Privacy & Security and check Microphone, Accessibility, and Input Monitoring." = "Öffne bei Problemen Systemeinstellungen > Datenschutz & Sicherheit und prüfe Mikrofon, Bedienungshilfen und Eingabeüberwachung.";
+
+/* Hermes-Agenten (#agent) */
+"Hermes agents" = "Hermes-Agenten";
+"No Hermes agents added yet." = "Noch keine Hermes-Agenten hinzugefügt.";
+"+ Add Hermes agent" = "+ Hermes-Agent hinzufügen";
+"Address" = "Adresse";
+"Model id" = "Modell-ID";
+"API key (optional)" = "API-Schlüssel (optional)";
+"Key could not be saved." = "Schlüssel konnte nicht gespeichert werden.";
+"Remove stored key" = "Gespeicherten Schlüssel entfernen";
+"Key stored" = "Schlüssel gespeichert";
+"Save" = "Speichern";
+"Voice-chat with a Hermes Agent (NousResearch) over its API server. Enter the agent's address (e.g. http://localhost:8642/v1) and, if the server requires one, its API key. Agents appear in the chat window's model picker. Each conversation keeps its own memory via the agent." = "Sprich per Sprache mit einem Hermes-Agenten (NousResearch) über dessen API-Server. Gib die Adresse des Agenten an (z. B. http://localhost:8642/v1) und, falls der Server einen verlangt, dessen API-Schlüssel. Agenten erscheinen im Modell-Auswahlmenü des Chat-Fensters. Jede Unterhaltung behält über den Agenten ihr eigenes Gedächtnis.";
