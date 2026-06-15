@@ -141,6 +141,61 @@ fn build_inner(
         ));
     }
 
+    // Remote Ollama / LM Studio models exist in the registry *only* once the user
+    // enabled them — there is no static catalog to discover them from offline.
+    // Reconstruct each enabled remote id into an entry without a network call (the
+    // live fetch is just a discovery aid in the management UI). Reachability isn't
+    // probed here, so a configured model is reported `Ready`; a failed request
+    // surfaces its own error. `stable_id()` round-trips the id exactly, so these
+    // never duplicate a catalog entry.
+    for id in &settings.enabled_model_ids {
+        let (model_ref, backend_kind, detail) = if let Some(name) = id.strip_prefix("ollama:") {
+            (
+                LlmModelRef::Ollama {
+                    model_name: name.to_owned(),
+                },
+                LlmBackendKind::Ollama,
+                "Ollama · remote",
+            )
+        } else if let Some(name) = id.strip_prefix("lmstudio:") {
+            (
+                LlmModelRef::LmStudio {
+                    model_name: name.to_owned(),
+                },
+                LlmBackendKind::LmStudio,
+                "LM Studio · remote",
+            )
+        } else {
+            continue;
+        };
+        let display_name = match &model_ref {
+            LlmModelRef::Ollama { model_name } | LlmModelRef::LmStudio { model_name } => {
+                model_name.clone()
+            }
+            _ => unreachable!("only ollama/lmstudio refs are built above"),
+        };
+        entries.push(entry(
+            model_ref,
+            backend_kind,
+            display_name,
+            detail.to_owned(),
+            LlmAvailability::Ready,
+            None,
+        ));
+    }
+
+    // One final pass stamps the app-wide enable state onto every entry: literal
+    // membership of `enabled_model_ids` (the "empty = show all" fallback lives in
+    // the pickers). User-configured Hermes agents are always enabled — adding one
+    // in Settings should surface it in the chat right away.
+    for item in &mut entries {
+        item.enabled = item.backend_kind == LlmBackendKind::Hermes
+            || settings
+                .enabled_model_ids
+                .iter()
+                .any(|id| id == &item.stable_id);
+    }
+
     entries
 }
 
@@ -186,6 +241,8 @@ fn entry(
         display_name,
         detail,
         availability,
+        // Filled in one final pass in `build_inner` from `enabled_model_ids`.
+        enabled: false,
         progress_basis_points,
     }
 }

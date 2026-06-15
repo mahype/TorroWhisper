@@ -10,7 +10,7 @@ enum LanguageModelsManagerTab: String, CaseIterable, Identifiable {
     func title(locale: Locale) -> String {
         switch self {
         case .transcription: return L("Transcription", locale: locale)
-        case .postProcessing: return L("Post-processing", locale: locale)
+        case .postProcessing: return L("Language models", locale: locale)
         }
     }
 }
@@ -131,6 +131,16 @@ struct LanguageModelsManagerSheet: View {
     @ViewBuilder
     private var postProcessingContent: some View {
         Section {
+            Text(
+                "Enable the language models you want available across the whole app — in the chat window and as post-processing options. Toggle a model on to make it selectable everywhere; which one post-processing uses is chosen under Post-processing.",
+                bundle: .module
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+
+        Section {
             ForEach(LlmPreset.allCases) { preset in
                 let status = model.llmStatusList.first(where: { $0.displayLabel == preset.displayName })
                 llmTile(preset: preset, status: status)
@@ -169,6 +179,18 @@ struct LanguageModelsManagerSheet: View {
         }
 
         Section {
+            ForEach(model.llmRegistry.filter { $0.backendKind.isCloud }) { entry in
+                cloudModelTile(entry: entry)
+            }
+            Text("Cloud models need an API key, set under \"Cloud models & API keys\". Enabling one here only makes it selectable; it stays unavailable until a key is stored.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } header: {
+            Text("Cloud", bundle: .module)
+        }
+
+        Section {
             TextField(text: model.binding(for: \.ollama.endpoint)) {
                 Text("Endpoint", bundle: .module)
             }
@@ -191,7 +213,7 @@ struct LanguageModelsManagerSheet: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(model.ollamaModels) { entry in
-                    remoteModelTile(entry: entry, isActive: isActiveOllama(entry))
+                    remoteModelTile(entry: entry)
                 }
             }
         } header: {
@@ -221,7 +243,7 @@ struct LanguageModelsManagerSheet: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(model.lmStudioModels) { entry in
-                    remoteModelTile(entry: entry, isActive: isActiveLmStudio(entry))
+                    remoteModelTile(entry: entry)
                 }
             }
         } header: {
@@ -231,28 +253,17 @@ struct LanguageModelsManagerSheet: View {
 
     @ViewBuilder
     private func customLlmTile(entry: CustomLlmModel) -> some View {
-        let isActive = model.settings.activePostProcessingBackend == .local
-            && model.settings.activeCustomLlmId == entry.id
         let status = model.customLlmStatusList.first(where: { $0.id == entry.id })
         let needsDownload = status?.needsDownload ?? false
         let isDownloading = status?.isDownloading ?? false
         let isDownloaded = status?.isDownloaded ?? false
+        let stableId = LlmModelRefDTO.localCustom(id: entry.id).stableId
 
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(entry.name)
-                            .font(.body.weight(.medium))
-                        if isActive {
-                            Text("Active", bundle: .module)
-                                .font(.caption2.weight(.semibold))
-                                .padding(.vertical, 2)
-                                .padding(.horizontal, 6)
-                                .background(Color.accentColor.opacity(0.14), in: Capsule())
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
+                    Text(entry.name)
+                        .font(.body.weight(.medium))
                     Text(status?.sourceLabel ?? entry.source.summaryText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -262,12 +273,7 @@ struct LanguageModelsManagerSheet: View {
 
                 Spacer()
 
-                Button {
-                    model.postProcessingChoiceBinding.wrappedValue = .localCustom(id: entry.id)
-                } label: {
-                    Text(isActive ? "Active" : "Select", bundle: .module)
-                }
-                .disabled(isActive)
+                enableToggle(stableId: stableId)
 
                 if needsDownload {
                     if isDownloaded {
@@ -322,32 +328,20 @@ struct LanguageModelsManagerSheet: View {
         model.addCustomLocalLlm(name: name, path: url.path)
     }
 
-    private func isActiveOllama(_ entry: RemoteModelDTO) -> Bool {
-        model.settings.activePostProcessingBackend == .ollama
-            && model.settings.ollama.modelName == entry.name
-    }
-
-    private func isActiveLmStudio(_ entry: RemoteModelDTO) -> Bool {
-        model.settings.activePostProcessingBackend == .lmStudio
-            && model.settings.lmStudio.modelName == entry.name
+    /// Stable id of a fetched remote model, matching Rust `LlmModelRef::stable_id`.
+    private func remoteStableId(_ entry: RemoteModelDTO) -> String {
+        switch entry.backend {
+        case .ollama: return LlmModelRefDTO.ollama(entry.name).stableId
+        case .lmStudio: return LlmModelRefDTO.lmStudio(entry.name).stableId
+        }
     }
 
     @ViewBuilder
-    private func remoteModelTile(entry: RemoteModelDTO, isActive: Bool) -> some View {
+    private func remoteModelTile(entry: RemoteModelDTO) -> some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(entry.name)
-                        .font(.body.weight(.medium))
-                    if isActive {
-                        Text("Active", bundle: .module)
-                            .font(.caption2.weight(.semibold))
-                            .padding(.vertical, 2)
-                            .padding(.horizontal, 6)
-                            .background(Color.accentColor.opacity(0.14), in: Capsule())
-                            .foregroundStyle(Color.accentColor)
-                    }
-                }
+                Text(entry.name)
+                    .font(.body.weight(.medium))
                 Text(entry.summary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -356,19 +350,43 @@ struct LanguageModelsManagerSheet: View {
 
             Spacer()
 
-            Button {
-                switch entry.backend {
-                case .ollama:
-                    model.postProcessingChoiceBinding.wrappedValue = .ollamaModel(entry.name)
-                case .lmStudio:
-                    model.postProcessingChoiceBinding.wrappedValue = .lmStudioModel(entry.name)
-                }
-            } label: {
-                Text(isActive ? "Active" : "Select", bundle: .module)
-            }
-            .disabled(isActive)
+            enableToggle(stableId: remoteStableId(entry))
         }
         .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private func cloudModelTile(entry: LlmRegistryEntryDTO) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.displayName)
+                    .font(.body.weight(.medium))
+                Text(entry.availability == .needsApiKey
+                    ? L("Needs API key", locale: locale)
+                    : entry.detail)
+                    .font(.caption)
+                    .foregroundStyle(entry.availability == .needsApiKey
+                        ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            enableToggle(stableId: entry.stableId)
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// App-wide "available everywhere" switch for one model, bound to
+    /// `AppModel.enabledModelIds` via its stable id.
+    @ViewBuilder
+    private func enableToggle(stableId: String) -> some View {
+        Toggle(isOn: model.modelEnabledBinding(stableId: stableId)) {
+            Text("Enabled", bundle: .module)
+        }
+        .labelsHidden()
+        .toggleStyle(.switch)
+        .accessibilityLabel(L("Available everywhere", locale: locale))
     }
 
     @ViewBuilder
@@ -467,6 +485,8 @@ struct LanguageModelsManagerSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+
+                enableToggle(stableId: LlmModelRefDTO.localPreset(preset).stableId)
             }
 
             if let status, status.isDownloading, let basisPoints = status.progressBasisPoints {

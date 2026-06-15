@@ -722,6 +722,12 @@ pub struct LlmRegistryEntryDto {
     /// Secondary line: size / quant / "Cloud · needs API key".
     pub detail: String,
     pub availability: LlmAvailability,
+    /// Whether the user enabled this model app-wide ([`AppSettings::enabled_model_ids`]).
+    /// Literal membership — the "empty = show all" fallback lives in the consuming
+    /// pickers (chat, post-processing), not here, so the management UI reflects the
+    /// true toggle state.
+    #[serde(default)]
+    pub enabled: bool,
     /// Download progress in basis points (0..=10000) when downloading.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub progress_basis_points: Option<u16>,
@@ -1189,6 +1195,14 @@ pub struct AppSettings {
     /// cloud models become selectable. `None` keeps the legacy behaviour.
     #[serde(default)]
     pub active_post_processing_model: Option<LlmModelRef>,
+    /// Stable IDs ([`LlmModelRef::stable_id`]) of models the user enabled
+    /// app-wide. Every model picker (chat, post-processing, plugins) shows only
+    /// enabled models; an empty list means "show all" (handled by the pickers,
+    /// not here). Remote Ollama/LM Studio models exist in the registry *only* via
+    /// this list — enabling one in the management UI is what makes it discoverable
+    /// without a network call. Seeded from legacy selections in [`Self::normalize`].
+    #[serde(default)]
+    pub enabled_model_ids: Vec<String>,
     pub ollama: ExternalProviderSettings,
     pub lm_studio: ExternalProviderSettings,
     pub post_processing_enabled: bool,
@@ -1310,6 +1324,78 @@ impl AppSettings {
         }
         self.plugins
             .retain(|plugin| BUILTIN_PLUGIN_IDS.contains(&plugin.id.as_str()));
+
+        self.seed_enabled_models_from_legacy();
+    }
+
+    /// Seeds [`Self::enabled_model_ids`] from the user's *explicit* prior model
+    /// selections so an upgrade never makes a previously-chosen model vanish from
+    /// the new app-wide pickers.
+    ///
+    /// Only runs while the list is still empty: once the user has curated
+    /// anything, the list is the source of truth and we never re-add behind their
+    /// back (so disabling a model in the management UI sticks). We deliberately do
+    /// *not* seed the plain default local preset — an empty list is treated as
+    /// "show all" by the pickers ([`Self::is_model_enabled`]), and a fresh install
+    /// should start in that show-all state, not pre-curated down to one model.
+    fn seed_enabled_models_from_legacy(&mut self) {
+        if !self.enabled_model_ids.is_empty() {
+            return;
+        }
+
+        let mut seeds: Vec<String> = Vec::new();
+
+        // Registry-based post-processing selection (incl. cloud) — always explicit.
+        if let Some(model_ref) = &self.active_post_processing_model {
+            seeds.push(model_ref.stable_id());
+        }
+        // Chat plugin default model — explicit.
+        if let Some(model_ref) = &self.chat.default_model_ref {
+            seeds.push(model_ref.stable_id());
+        }
+        // Legacy backend choice, but only when it represents a real pick (a remote
+        // model or a custom GGUF), never the plain default local preset.
+        match self.active_post_processing_backend {
+            PostProcessingBackend::Ollama if !self.ollama.model_name.trim().is_empty() => {
+                seeds.push(
+                    LlmModelRef::Ollama {
+                        model_name: self.ollama.model_name.clone(),
+                    }
+                    .stable_id(),
+                );
+            }
+            PostProcessingBackend::LmStudio if !self.lm_studio.model_name.trim().is_empty() => {
+                seeds.push(
+                    LlmModelRef::LmStudio {
+                        model_name: self.lm_studio.model_name.clone(),
+                    }
+                    .stable_id(),
+                );
+            }
+            PostProcessingBackend::Local if !self.active_custom_llm_id.trim().is_empty() => {
+                seeds.push(
+                    LlmModelRef::LocalCustom {
+                        id: self.active_custom_llm_id.clone(),
+                    }
+                    .stable_id(),
+                );
+            }
+            _ => {}
+        }
+
+        for id in seeds {
+            if !self.enabled_model_ids.iter().any(|existing| existing == &id) {
+                self.enabled_model_ids.push(id);
+            }
+        }
+    }
+
+    /// Whether `stable_id` is enabled app-wide. An empty enabled list means the
+    /// user has curated nothing yet, so everything counts as enabled (the
+    /// "show all" fallback the pickers rely on).
+    pub fn is_model_enabled(&self, stable_id: &str) -> bool {
+        self.enabled_model_ids.is_empty()
+            || self.enabled_model_ids.iter().any(|id| id == stable_id)
     }
 
     /// Whether a plugin is enabled. Unknown ids default to enabled (a plugin
@@ -1433,6 +1519,7 @@ impl Default for AppSettings {
             active_post_processing_backend: PostProcessingBackend::default(),
             active_custom_llm_id: String::new(),
             active_post_processing_model: None,
+            enabled_model_ids: Vec::new(),
             custom_llm_models: Vec::new(),
             hermes_agents: Vec::new(),
             ollama: ExternalProviderSettings::ollama_defaults(),
@@ -1887,5 +1974,61 @@ mod tests {
             chat.enabled = false;
         }
         assert!(!settings.plugin_enabled("chat"));
+    }
+
+    #[test]
+    fn fresh_settings_have_no_enabled_models_so_pickers_show_all() {
+        let mut settings = AppSettings::default();
+        settings.normalize();
+        // No explicit legacy pick → empty list → "show all" fallback.
+        assert!(settings.enabled_model_ids.is_empty());
+        assert!(settings.is_model_enabled("anything:at-all"));
+    }
+
+    #[test]
+    fn normalize_seeds_explicit_ollama_post_processing_choice() {
+        let mut settings = AppSettings::default();
+        settings.active_post_processing_backend = PostProcessingBackend::Ollama;
+        settings.ollama.model_name = "llama3.1:8b".to_owned();
+        settings.normalize();
+        assert!(
+            settings
+                .enabled_model_ids
+                .contains(&"ollama:llama3.1:8b".to_owned()),
+            "enabled = {:?}",
+            settings.enabled_model_ids
+        );
+        assert!(settings.is_model_enabled("ollama:llama3.1:8b"));
+        // Curation is now non-empty, so an unrelated model is NOT shown.
+        assert!(!settings.is_model_enabled("anthropic:claude-opus-4-8"));
+    }
+
+    #[test]
+    fn seeding_does_not_resurrect_a_user_disabled_model() {
+        let mut settings = AppSettings::default();
+        settings.active_post_processing_backend = PostProcessingBackend::Ollama;
+        settings.ollama.model_name = "mistral".to_owned();
+        settings.normalize();
+        assert!(settings.is_model_enabled("ollama:mistral"));
+
+        // User disables it but keeps another model enabled (list stays non-empty).
+        settings.enabled_model_ids = vec!["local_preset:Medium".to_owned()];
+        settings.normalize();
+        assert!(!settings.is_model_enabled("ollama:mistral"));
+        assert!(settings.is_model_enabled("local_preset:Medium"));
+    }
+
+    #[test]
+    fn enabled_model_ids_seeded_once_then_left_alone() {
+        let mut settings = AppSettings::default();
+        settings.active_post_processing_model = Some(LlmModelRef::Anthropic {
+            model_name: "claude-opus-4-8".to_owned(),
+        });
+        settings.normalize();
+        let after_first = settings.enabled_model_ids.clone();
+        assert_eq!(after_first, vec!["anthropic:claude-opus-4-8".to_owned()]);
+        // Re-normalizing must not duplicate or change the curated list.
+        settings.normalize();
+        assert_eq!(settings.enabled_model_ids, after_first);
     }
 }
