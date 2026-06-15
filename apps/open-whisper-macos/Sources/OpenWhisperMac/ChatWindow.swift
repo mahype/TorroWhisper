@@ -17,6 +17,10 @@ final class ChatViewModel: ObservableObject {
     /// True while a freshly picked voice's model is downloading (~110 MB on first
     /// use) — surfaced as a spinner so the header doesn't go silently dead.
     @Published var voiceDownloading = false
+    /// App-wide default language (`transcription_language`) and whether to narrow
+    /// the voice list to it (#28). An "auto" language shows all voices.
+    private var defaultLanguage = "auto"
+    private var voicesDefaultLanguageOnly = true
 
     /// Live mic levels for the in-window waveform (reuses the dictation feed).
     let levelFeed = RecordingLevelFeed()
@@ -80,6 +84,8 @@ final class ChatViewModel: ObservableObject {
         let speech = settings?.speechOutput ?? ChatSettingsDTO.default.tts
         tts.configure(speech)
         defaultModelRef = chat.defaultModelRef
+        defaultLanguage = settings?.transcriptionLanguage ?? "auto"
+        voicesDefaultLanguageOnly = settings?.voicesDefaultLanguageOnly ?? true
         selectedVoice = speech.piperVoice.isEmpty ? "de_DE-thorsten-high" : speech.piperVoice
         reloadVoiceOptions()
         let poll = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -217,13 +223,26 @@ final class ChatViewModel: ObservableObject {
     }
 
     /// Loads the local Piper voices to offer — the same curated set the settings
-    /// expose. The current pick is always kept present even if the list can't be
-    /// fetched.
+    /// expose. Narrowed to the app-wide default language when that filter is on
+    /// (keeps the list tidy); never narrowed to empty. The current pick is always
+    /// kept present even if the list can't be fetched.
     private func reloadVoiceOptions() {
-        voiceOptions = (try? bridge.ttsPiperVoices()) ?? []
+        var ids = (try? bridge.ttsPiperVoices()) ?? []
+        let lang = defaultLanguage.lowercased()
+        if voicesDefaultLanguageOnly, lang != "auto", !lang.isEmpty {
+            let filtered = ids.filter { Self.voiceLanguageCode($0) == lang }
+            if !filtered.isEmpty { ids = filtered }
+        }
+        voiceOptions = ids
         if !selectedVoice.isEmpty, !voiceOptions.contains(selectedVoice) {
             voiceOptions.insert(selectedVoice, at: 0)
         }
+    }
+
+    /// ISO 639-1 language code of a Piper voice id: `de_DE-thorsten-high` → `de`.
+    private static func voiceLanguageCode(_ id: String) -> String {
+        let locale = id.split(separator: "-").first.map(String.init) ?? id
+        return String(locale.split(separator: "_").first ?? Substring(locale)).lowercased()
     }
 
     /// Re-syncs the header picker to the active conversation's model when the

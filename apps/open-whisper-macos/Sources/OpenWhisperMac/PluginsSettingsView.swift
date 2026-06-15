@@ -129,6 +129,7 @@ struct ChatSettingsSheet: View {
                 shortcutSection
                 modelSection
                 agentsSection
+                defaultLanguageSection
                 voiceSection
                 promptSection
             }
@@ -210,6 +211,31 @@ struct ChatSettingsSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
         } header: {
             Text("Model", bundle: .module)
+        }
+    }
+
+    /// App-wide default language (#28): drives transcription and narrows the
+    /// chat's voice list. Reuses `transcription_language` so there's a single
+    /// source of truth.
+    private var defaultLanguageSection: some View {
+        Section {
+            Picker(selection: model.languageBinding()) {
+                ForEach(model.availableLanguageOptions) { option in
+                    Text(option.label(locale: locale)).tag(option.code)
+                }
+            } label: {
+                Text("Default language", bundle: .module)
+            }
+            Toggle(isOn: model.binding(for: \.voicesDefaultLanguageOnly)) {
+                Text("Only show voices of the default language", bundle: .module)
+            }
+        } header: {
+            Text("Default language", bundle: .module)
+        } footer: {
+            Text("App-wide default language — used for transcription and to narrow the chat’s voice list to that language. Choose “Automatic” to show every voice.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

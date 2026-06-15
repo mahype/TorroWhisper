@@ -1095,6 +1095,9 @@ struct AppSettings: Codable, Equatable {
     /// Speech-output (TTS) config. Mirrors Rust top-level `AppSettings.speech_output`
     /// — pulled out of the chat plugin (#28 AP1).
     var speechOutput: ChatTtsSettingsDTO
+    /// When true, voice pickers only list voices of the app-wide default language
+    /// (`transcriptionLanguage`); "auto" disables the filter (#28).
+    var voicesDefaultLanguageOnly: Bool
     var plugins: [PluginConfigDTO]
 
     static let `default` = AppSettings(
@@ -1146,6 +1149,7 @@ struct AppSettings: Codable, Equatable {
         historyMaxEntries: historyMaxEntriesDefault,
         chat: .default,
         speechOutput: ChatSettingsDTO.default.tts,
+        voicesDefaultLanguageOnly: true,
         plugins: []
     )
 }

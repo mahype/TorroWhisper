@@ -1236,9 +1236,18 @@ pub struct AppSettings {
     /// [`Self::normalize`].
     #[serde(default)]
     pub speech_output: ChatTtsSettings,
+    /// When true, voice pickers only list voices of the app-wide default language
+    /// (`transcription_language`); an `auto` default disables the filter (shows
+    /// all). Keeps the voice list tidy as more languages/providers arrive (#28).
+    #[serde(default = "default_true")]
+    pub voices_default_language_only: bool,
     /// Per-plugin enable state. Seeded/pruned in `normalize()`.
     #[serde(default)]
     pub plugins: Vec<PluginConfig>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -1582,6 +1591,7 @@ impl Default for AppSettings {
             history_max_entries: HISTORY_MAX_ENTRIES_DEFAULT,
             chat: ChatSettings::default(),
             speech_output: ChatTtsSettings::default(),
+            voices_default_language_only: true,
             plugins: Vec::new(),
         }
     }
