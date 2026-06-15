@@ -486,7 +486,10 @@ struct ChatWindowView: View {
             if chat.voiceDownloading {
                 ProgressView()
                     .controlSize(.small)
-                    .help(Text("Downloading voice…", bundle: .module))
+                Text("Downloading voice…", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
             }
 
             Spacer()
