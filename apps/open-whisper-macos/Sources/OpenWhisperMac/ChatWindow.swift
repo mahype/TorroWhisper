@@ -193,33 +193,27 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    /// Human-readable label for a Piper voice id within its language section:
-    /// `de_DE-thorsten-high` → `Thorsten — high`.
+    /// Header label for a Piper voice id within its provider section, with the
+    /// country code (ISO 3166-1 alpha-2) appended so the language is obvious at a
+    /// glance: `de_DE-thorsten-high` → `Thorsten — high · DE`, `en_US-amy-medium`
+    /// → `Amy — medium · US`.
     func voiceLabel(_ id: String) -> String {
         let parts = id.split(separator: "-")
         guard parts.count >= 2 else { return id }
         let name = parts[1].replacingOccurrences(of: "_", with: " ").capitalized
         let quality = parts.count > 2 ? String(parts[2]) : ""
-        return quality.isEmpty ? name : "\(name) — \(quality)"
+        let country = parts[0].split(separator: "_").last.map { String($0).uppercased() }
+            ?? String(parts[0]).uppercased()
+        let base = quality.isEmpty ? name : "\(name) — \(quality)"
+        return "\(base) · \(country)"
     }
 
-    /// Voices grouped by language (`de_DE`, `en_US`, …) in first-seen order, for
-    /// the header picker's sections.
+    /// Voices grouped by TTS provider, with the provider as the section header.
+    /// Only Piper exists today (more providers arrive with #28 AP4); every voice
+    /// from `ttsPiperVoices` belongs to it.
     var voiceGroups: [VoiceGroup] {
-        var order: [String] = []
-        var byLang: [String: [String]] = [:]
-        for id in voiceOptions {
-            let lang = String(id.split(separator: "-").first ?? Substring(id))
-            if byLang[lang] == nil { order.append(lang) }
-            byLang[lang, default: []].append(id)
-        }
-        return order.map { VoiceGroup(id: $0, label: Self.languageLabel($0), ids: byLang[$0] ?? []) }
-    }
-
-    /// Friendly name for a Piper language code (`de_DE` → "German (Germany)" in
-    /// the current locale), falling back to the raw code.
-    private static func languageLabel(_ code: String) -> String {
-        Locale.current.localizedString(forIdentifier: code) ?? code
+        guard !voiceOptions.isEmpty else { return [] }
+        return [VoiceGroup(id: "piper", label: "Piper", ids: voiceOptions)]
     }
 
     /// Loads the local Piper voices to offer — the same curated set the settings
