@@ -1076,7 +1076,12 @@ struct AppSettings: Codable, Equatable {
     var activePostProcessingModel: LlmModelRefDTO?
     /// Stable IDs of models enabled app-wide. Mirrors Rust
     /// `AppSettings.enabled_model_ids`. Empty = "show all" (the pickers' fallback).
+    /// This is the general/post-processing LLM role's curation list.
     var enabledModelIds: [String]
+    /// Per-role curation for transcription (Whisper) models (#28 AP1). Empty = all.
+    var enabledTranscriptionIds: [String]
+    /// Per-role curation for speech-output (TTS) voices (#28 AP1). Empty = all.
+    var enabledSpeechOutputIds: [String]
     var ollama: ExternalProviderSettings
     var lmStudio: ExternalProviderSettings
     var postProcessingEnabled: Bool
@@ -1087,6 +1092,9 @@ struct AppSettings: Codable, Equatable {
     var historyEnabled: Bool
     var historyMaxEntries: UInt32
     var chat: ChatSettingsDTO
+    /// Speech-output (TTS) config. Mirrors Rust top-level `AppSettings.speech_output`
+    /// — pulled out of the chat plugin (#28 AP1).
+    var speechOutput: ChatTtsSettingsDTO
     var plugins: [PluginConfigDTO]
 
     static let `default` = AppSettings(
@@ -1125,6 +1133,8 @@ struct AppSettings: Codable, Equatable {
         hermesAgents: [],
         activePostProcessingModel: nil,
         enabledModelIds: [],
+        enabledTranscriptionIds: [],
+        enabledSpeechOutputIds: [],
         ollama: ExternalProviderSettings(endpoint: "http://127.0.0.1:11434", modelName: "whisper"),
         lmStudio: ExternalProviderSettings(endpoint: "http://127.0.0.1:1234", modelName: "openai/whisper-small"),
         postProcessingEnabled: false,
@@ -1135,6 +1145,7 @@ struct AppSettings: Codable, Equatable {
         historyEnabled: true,
         historyMaxEntries: historyMaxEntriesDefault,
         chat: .default,
+        speechOutput: ChatSettingsDTO.default.tts,
         plugins: []
     )
 }

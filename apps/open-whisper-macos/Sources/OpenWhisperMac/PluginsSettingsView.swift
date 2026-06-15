@@ -223,14 +223,14 @@ struct ChatSettingsSheet: View {
                 Text("Language", bundle: .module)
             }
 
-            Picker(selection: model.binding(for: \.chat.tts.piperVoice)) {
+            Picker(selection: model.binding(for: \.speechOutput.piperVoice)) {
                 ForEach(voicesForSelectedLanguage, id: \.self) { id in
                     Text(voiceLabel(id)).tag(id)
                 }
             } label: {
                 Text("Voice", bundle: .module)
             }
-            .onChange(of: model.settings.chat.tts.piperVoice) { _, _ in refreshPiperReady() }
+            .onChange(of: model.settings.speechOutput.piperVoice) { _, _ in refreshPiperReady() }
 
             HStack(spacing: 8) {
                 if piperReady {
@@ -260,7 +260,7 @@ struct ChatSettingsSheet: View {
 
             VStack(alignment: .leading) {
                 Text("Speed", bundle: .module)
-                Slider(value: model.binding(for: \.chat.tts.rate), in: 0...1)
+                Slider(value: model.binding(for: \.speechOutput.rate), in: 0...1)
             }
         } header: {
             Text("Speech output (local Piper)", bundle: .module)
@@ -294,9 +294,9 @@ struct ChatSettingsSheet: View {
             set: { newLang in
                 piperLanguage = newLang
                 // Move the selection to the first voice of the new language.
-                if !model.settings.chat.tts.piperVoice.hasPrefix(newLang + "-"),
+                if !model.settings.speechOutput.piperVoice.hasPrefix(newLang + "-"),
                    let first = piperVoices.first(where: { $0.hasPrefix(newLang + "-") }) {
-                    model.settings.chat.tts.piperVoice = first
+                    model.settings.speechOutput.piperVoice = first
                     model.requestAutoSave()
                 }
                 refreshPiperReady()
@@ -333,13 +333,13 @@ struct ChatSettingsSheet: View {
 
     private func loadPiperVoices() {
         piperVoices = (try? bridge.ttsPiperVoices()) ?? []
-        let current = model.settings.chat.tts.piperVoice
+        let current = model.settings.speechOutput.piperVoice
         piperLanguage = String(current.split(separator: "-").first ?? "de_DE")
         refreshPiperReady()
     }
 
     private func refreshPiperReady() {
-        let voice = model.settings.chat.tts.piperVoice
+        let voice = model.settings.speechOutput.piperVoice
         piperReady = (try? bridge.ttsLocalReady(voice: voice)) ?? false
         piperStatus = ""
     }
@@ -347,7 +347,7 @@ struct ChatSettingsSheet: View {
     /// Downloads the selected voice (+ shared CLI) off the main thread, with a
     /// spinner + inline status.
     private func preparePiper() {
-        let voice = model.settings.chat.tts.piperVoice
+        let voice = model.settings.speechOutput.piperVoice
         piperPreparing = true
         piperStatus = L("Downloading voice…", locale: locale)
         DispatchQueue.global(qos: .userInitiated).async {

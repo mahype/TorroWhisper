@@ -73,10 +73,14 @@ final class ChatViewModel: ObservableObject {
         registry = (try? bridge.getLlmRegistry()) ?? []
         // Pull the persisted chat config (default model + TTS) fresh each time
         // the window opens, so edits in Settings → Plugins → Chat take effect.
-        let chat = (try? bridge.loadSettings())?.chat ?? .default
-        tts.configure(chat.tts)
+        let settings = try? bridge.loadSettings()
+        let chat = settings?.chat ?? .default
+        // Speech output (TTS) now lives top-level in AppSettings (#28 AP1), no
+        // longer inside the chat plugin config.
+        let speech = settings?.speechOutput ?? ChatSettingsDTO.default.tts
+        tts.configure(speech)
         defaultModelRef = chat.defaultModelRef
-        selectedVoice = chat.tts.piperVoice.isEmpty ? "de_DE-thorsten-high" : chat.tts.piperVoice
+        selectedVoice = speech.piperVoice.isEmpty ? "de_DE-thorsten-high" : speech.piperVoice
         reloadVoiceOptions()
         let poll = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
@@ -165,10 +169,10 @@ final class ChatViewModel: ObservableObject {
     func selectVoice(_ id: String) {
         selectedVoice = id
         guard var settings = try? bridge.loadSettings() else { return }
-        settings.chat.tts.piperVoice = id
-        settings.chat.tts.provider = .piper
+        settings.speechOutput.piperVoice = id
+        settings.speechOutput.provider = .piper
         _ = try? bridge.saveSettings(settings)
-        tts.configure(settings.chat.tts)
+        tts.configure(settings.speechOutput)
         prepareVoiceIfNeeded(id)
     }
 
@@ -299,7 +303,7 @@ final class ChatViewModel: ObservableObject {
             ttsMsgIndex = lastIndex
             spokenOffset = 0
             speechSuppressed = false
-            if let freshTts = (try? bridge.loadSettings())?.chat.tts {
+            if let freshTts = (try? bridge.loadSettings())?.speechOutput {
                 tts.configure(freshTts)
             }
         }

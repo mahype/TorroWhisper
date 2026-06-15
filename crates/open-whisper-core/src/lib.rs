@@ -1203,6 +1203,17 @@ pub struct AppSettings {
     /// without a network call. Seeded from legacy selections in [`Self::normalize`].
     #[serde(default)]
     pub enabled_model_ids: Vec<String>,
+    /// Per-role curation for transcription (Whisper) models — stable IDs the user
+    /// enabled app-wide. Empty = "show all" (same fallback as
+    /// [`Self::enabled_model_ids`]). Separate list per the #28 AP1 decision
+    /// ("Freigabe pro Rolle"). `enabled_model_ids` stays the general/post-processing
+    /// LLM role's list.
+    #[serde(default)]
+    pub enabled_transcription_ids: Vec<String>,
+    /// Per-role curation for speech-output (TTS) voices — stable IDs the user
+    /// enabled app-wide. Empty = "show all". Separate list (#28 AP1).
+    #[serde(default)]
+    pub enabled_speech_output_ids: Vec<String>,
     pub ollama: ExternalProviderSettings,
     pub lm_studio: ExternalProviderSettings,
     pub post_processing_enabled: bool,
@@ -1214,9 +1225,17 @@ pub struct AppSettings {
     pub history_enabled: bool,
     #[serde(default = "default_history_max_entries")]
     pub history_max_entries: u32,
-    /// Chat plugin configuration (system prompt, default model, TTS).
+    /// Chat plugin configuration (system prompt, default model). TTS used to live
+    /// here; it now lives in [`Self::speech_output`] (#28 AP1). `ChatSettings.tts`
+    /// is kept only so old settings still deserialize and can be migrated once.
     #[serde(default)]
     pub chat: ChatSettings,
+    /// Speech-output (TTS) configuration. Pulled out of the chat plugin into the
+    /// main program (#28 AP1) so it is a first-class language-model role next to
+    /// transcription and post-processing. Migrated once from `chat.tts` in
+    /// [`Self::normalize`].
+    #[serde(default)]
+    pub speech_output: ChatTtsSettings,
     /// Per-plugin enable state. Seeded/pruned in `normalize()`.
     #[serde(default)]
     pub plugins: Vec<PluginConfig>,
@@ -1304,12 +1323,20 @@ impl AppSettings {
             .history_max_entries
             .clamp(HISTORY_MAX_ENTRIES_MIN, HISTORY_MAX_ENTRIES_LIMIT);
 
-        // Cloud TTS was removed — migrate any saved OpenAI choice to local Piper.
-        if self.chat.tts.provider == ChatTtsProvider::OpenAi {
-            self.chat.tts.provider = ChatTtsProvider::Piper;
+        // Speech output (TTS) moved out of the chat plugin into the main program
+        // (#28 AP1). Migrate a customized legacy `chat.tts` once, while the new
+        // top-level field is still at its default.
+        if self.speech_output == ChatTtsSettings::default()
+            && self.chat.tts != ChatTtsSettings::default()
+        {
+            self.speech_output = self.chat.tts.clone();
         }
-        if self.chat.tts.piper_voice.trim().is_empty() {
-            self.chat.tts.piper_voice = DEFAULT_PIPER_VOICE.to_owned();
+        // Cloud TTS was removed — migrate any saved OpenAI choice to local Piper.
+        if self.speech_output.provider == ChatTtsProvider::OpenAi {
+            self.speech_output.provider = ChatTtsProvider::Piper;
+        }
+        if self.speech_output.piper_voice.trim().is_empty() {
+            self.speech_output.piper_voice = DEFAULT_PIPER_VOICE.to_owned();
         }
 
         // Seed enable entries for built-in plugins; drop config for plugins that
@@ -1396,6 +1423,26 @@ impl AppSettings {
     pub fn is_model_enabled(&self, stable_id: &str) -> bool {
         self.enabled_model_ids.is_empty()
             || self.enabled_model_ids.iter().any(|id| id == stable_id)
+    }
+
+    /// Whether a transcription (Whisper) model `stable_id` is enabled app-wide.
+    /// Empty list = "show all" — the per-role fallback (#28 AP1).
+    pub fn is_transcription_enabled(&self, stable_id: &str) -> bool {
+        self.enabled_transcription_ids.is_empty()
+            || self
+                .enabled_transcription_ids
+                .iter()
+                .any(|id| id == stable_id)
+    }
+
+    /// Whether a speech-output (TTS) voice `stable_id` is enabled app-wide.
+    /// Empty list = "show all" (#28 AP1).
+    pub fn is_speech_output_enabled(&self, stable_id: &str) -> bool {
+        self.enabled_speech_output_ids.is_empty()
+            || self
+                .enabled_speech_output_ids
+                .iter()
+                .any(|id| id == stable_id)
     }
 
     /// Whether a plugin is enabled. Unknown ids default to enabled (a plugin
@@ -1520,6 +1567,8 @@ impl Default for AppSettings {
             active_custom_llm_id: String::new(),
             active_post_processing_model: None,
             enabled_model_ids: Vec::new(),
+            enabled_transcription_ids: Vec::new(),
+            enabled_speech_output_ids: Vec::new(),
             custom_llm_models: Vec::new(),
             hermes_agents: Vec::new(),
             ollama: ExternalProviderSettings::ollama_defaults(),
@@ -1532,6 +1581,7 @@ impl Default for AppSettings {
             history_enabled: true,
             history_max_entries: HISTORY_MAX_ENTRIES_DEFAULT,
             chat: ChatSettings::default(),
+            speech_output: ChatTtsSettings::default(),
             plugins: Vec::new(),
         }
     }
@@ -1983,6 +2033,45 @@ mod tests {
         // No explicit legacy pick → empty list → "show all" fallback.
         assert!(settings.enabled_model_ids.is_empty());
         assert!(settings.is_model_enabled("anything:at-all"));
+    }
+
+    #[test]
+    fn per_role_enable_lists_default_to_show_all() {
+        let settings = AppSettings::default();
+        assert!(settings.enabled_transcription_ids.is_empty());
+        assert!(settings.enabled_speech_output_ids.is_empty());
+        assert!(settings.is_transcription_enabled("local_preset:Standard"));
+        assert!(settings.is_speech_output_enabled("de_DE-thorsten-high"));
+    }
+
+    #[test]
+    fn per_role_enable_lists_are_independent() {
+        let mut settings = AppSettings::default();
+        settings.enabled_transcription_ids = vec!["local_preset:Standard".to_owned()];
+        // Curating transcription must not affect the other roles' "show all".
+        assert!(settings.is_transcription_enabled("local_preset:Standard"));
+        assert!(!settings.is_transcription_enabled("local_preset:Tiny"));
+        assert!(settings.is_speech_output_enabled("anything"));
+        assert!(settings.is_model_enabled("anything"));
+    }
+
+    #[test]
+    fn tts_migrates_from_legacy_chat_to_speech_output() {
+        let mut settings = AppSettings::default();
+        // Old settings carried TTS inside the chat plugin.
+        settings.chat.tts.piper_voice = "en_US-amy-medium".to_owned();
+        settings.chat.tts.rate = 0.8;
+        settings.normalize();
+        assert_eq!(settings.speech_output.piper_voice, "en_US-amy-medium");
+        assert_eq!(settings.speech_output.rate, 0.8);
+    }
+
+    #[test]
+    fn speech_output_migrates_openai_provider_to_piper() {
+        let mut settings = AppSettings::default();
+        settings.speech_output.provider = ChatTtsProvider::OpenAi;
+        settings.normalize();
+        assert_eq!(settings.speech_output.provider, ChatTtsProvider::Piper);
     }
 
     #[test]
