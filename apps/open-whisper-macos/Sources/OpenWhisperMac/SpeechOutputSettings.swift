@@ -9,29 +9,36 @@ struct SpeechOutputSettings: View {
     @Environment(\.locale) private var locale
 
     private let bridge = BridgeClient()
-    /// Local Piper TTS: available voice ids, selected language, download state.
+    /// Local Piper TTS: available voice ids + download state. The voice list is
+    /// narrowed to the app-wide default language (`transcription_language`) when
+    /// that filter is on.
     @State private var piperVoices: [String] = []
-    @State private var piperLanguage = "de_DE"
     @State private var piperReady = false
     @State private var piperPreparing = false
     @State private var piperStatus = ""
 
     var body: some View {
         Section {
-            Picker(selection: piperLanguageBinding) {
-                ForEach(piperLanguages, id: \.self) { lang in
-                    Text(languageLabel(lang)).tag(lang)
+            // Default language first, then the filter toggle, then the voice it
+            // narrows — so the controls read top-to-bottom in the order they apply.
+            Picker(selection: model.languageBinding()) {
+                ForEach(model.availableLanguageOptions) { option in
+                    Text(option.label(locale: locale)).tag(option.code)
                 }
             } label: {
-                Text("Language", bundle: .module)
+                Text("Default language", bundle: .module)
+            }
+
+            Toggle(isOn: model.binding(for: \.voicesDefaultLanguageOnly)) {
+                Text("Only show voices of the default language", bundle: .module)
             }
 
             Picker(selection: model.binding(for: \.speechOutput.piperVoice)) {
-                ForEach(voicesForSelectedLanguage, id: \.self) { id in
+                ForEach(voiceChoices, id: \.self) { id in
                     Text(voiceLabel(id)).tag(id)
                 }
             } label: {
-                Text("Voice", bundle: .module)
+                Text("Default voice", bundle: .module)
             }
             .onChange(of: model.settings.speechOutput.piperVoice) { _, _ in refreshPiperReady() }
 
@@ -61,10 +68,6 @@ struct SpeechOutputSettings: View {
                 }
             }
 
-            Toggle(isOn: model.binding(for: \.voicesDefaultLanguageOnly)) {
-                Text("Only show voices of the default language", bundle: .module)
-            }
-
             VStack(alignment: .leading) {
                 Text("Speed", bundle: .module)
                 Slider(value: model.binding(for: \.speechOutput.rate), in: 0...1)
@@ -72,7 +75,7 @@ struct SpeechOutputSettings: View {
         } header: {
             Text("Speech output", bundle: .module)
         } footer: {
-            Text("Answers are spoken by a fast, fully-local neural voice (Piper). Pick a language and voice; it downloads once (~25–115 MB). Until a voice is downloaded, the offline system voice is used as a fallback.", bundle: .module)
+            Text("Answers are spoken by a fast, fully-local neural voice (Piper). It downloads once (~25–115 MB). Until a voice is downloaded, the offline system voice is used as a fallback.", bundle: .module)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -82,51 +85,35 @@ struct SpeechOutputSettings: View {
 
     // MARK: - Piper voice helpers
 
-    /// Distinct languages (e.g. `de_DE`) from the available voice ids, original order.
-    private var piperLanguages: [String] {
-        var seen: [String] = []
-        for id in piperVoices {
-            let lang = String(id.split(separator: "-").first ?? "")
-            if !lang.isEmpty, !seen.contains(lang) { seen.append(lang) }
+    /// Voices to offer for the default voice picker: narrowed to the app-wide
+    /// default language when the filter is on (never to empty), with the current
+    /// pick always kept present.
+    private var voiceChoices: [String] {
+        var ids = piperVoices
+        let lang = model.settings.transcriptionLanguage.lowercased()
+        if model.settings.voicesDefaultLanguageOnly, lang != "auto", !lang.isEmpty {
+            let filtered = ids.filter { Self.voiceLanguageCode($0) == lang }
+            if !filtered.isEmpty { ids = filtered }
         }
-        return seen
+        let current = model.settings.speechOutput.piperVoice
+        if !current.isEmpty, !ids.contains(current) { ids.insert(current, at: 0) }
+        return ids
     }
 
-    private var voicesForSelectedLanguage: [String] {
-        piperVoices.filter { $0.hasPrefix(piperLanguage + "-") }
+    /// ISO 639-1 language code of a Piper voice id: `de_DE-thorsten-high` → `de`.
+    private static func voiceLanguageCode(_ id: String) -> String {
+        let locale = id.split(separator: "-").first.map(String.init) ?? id
+        return String(locale.split(separator: "_").first ?? Substring(locale)).lowercased()
     }
 
-    private var piperLanguageBinding: Binding<String> {
-        Binding(
-            get: { piperLanguage },
-            set: { newLang in
-                piperLanguage = newLang
-                // Move the selection to the first voice of the new language.
-                if !model.settings.speechOutput.piperVoice.hasPrefix(newLang + "-"),
-                   let first = piperVoices.first(where: { $0.hasPrefix(newLang + "-") }) {
-                    model.settings.speechOutput.piperVoice = first
-                    model.requestAutoSave()
-                }
-                refreshPiperReady()
-            }
-        )
-    }
-
-    /// `de_DE` → "Deutsch"; disambiguates English regions (US/UK).
-    private func languageLabel(_ lang: String) -> String {
-        let code = String(lang.prefix(2))
-        let base = locale.localizedString(forLanguageCode: code)?.capitalized(with: locale) ?? lang
-        let region = lang.split(separator: "_").count > 1 ? String(lang.split(separator: "_")[1]) : ""
-        if code == "en", !region.isEmpty { return "\(base) (\(region))" }
-        return base
-    }
-
-    /// `de_DE-thorsten_emotional-medium` → "Thorsten emotional — medium".
+    /// `de_DE-thorsten_emotional-medium` → "Thorsten emotional — medium · DE".
     private func voiceLabel(_ id: String) -> String {
         let parts = id.split(separator: "-")
         let voice = parts.count > 1 ? String(parts[1]).replacingOccurrences(of: "_", with: " ") : id
         let quality = parts.count > 2 ? qualityLabel(String(parts[2])) : ""
-        return quality.isEmpty ? voice.capitalized : "\(voice.capitalized) — \(quality)"
+        let country = parts.first?.split(separator: "_").last.map { String($0).uppercased() } ?? ""
+        let base = quality.isEmpty ? voice.capitalized : "\(voice.capitalized) — \(quality)"
+        return country.isEmpty ? base : "\(base) · \(country)"
     }
 
     private func qualityLabel(_ quality: String) -> String {
@@ -141,8 +128,6 @@ struct SpeechOutputSettings: View {
 
     private func loadPiperVoices() {
         piperVoices = (try? bridge.ttsPiperVoices()) ?? []
-        let current = model.settings.speechOutput.piperVoice
-        piperLanguage = String(current.split(separator: "-").first ?? "de_DE")
         refreshPiperReady()
     }
 
