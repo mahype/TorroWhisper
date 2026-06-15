@@ -14,6 +14,9 @@ final class ChatViewModel: ObservableObject {
     /// it persists to `AppSettings.chat.tts` and reconfigures the live player.
     @Published var voiceOptions: [String] = []
     @Published var selectedVoice: String = ""
+    /// True while a freshly picked voice's model is downloading (~110 MB on first
+    /// use) — surfaced as a spinner so the header doesn't go silently dead.
+    @Published var voiceDownloading = false
 
     /// Live mic levels for the in-window waveform (reuses the dictation feed).
     let levelFeed = RecordingLevelFeed()
@@ -166,17 +169,53 @@ final class ChatViewModel: ObservableObject {
         settings.chat.tts.provider = .piper
         _ = try? bridge.saveSettings(settings)
         tts.configure(settings.chat.tts)
+        prepareVoiceIfNeeded(id)
     }
 
-    /// Human-readable label for a Piper voice id: `de_DE-thorsten-high` renders as
-    /// `Thorsten — high · de_DE`, so the flat multi-language list stays readable.
+    /// Downloads the picked voice's model in the background when it isn't on disk
+    /// yet, so the first spoken answer doesn't block silently on a ~110 MB fetch
+    /// inside `piper_speech`. The spinner clears only if this voice is still the
+    /// selection, so switching again mid-download doesn't hide the new download.
+    private func prepareVoiceIfNeeded(_ id: String) {
+        if (try? bridge.ttsLocalReady(voice: id)) == true {
+            voiceDownloading = false
+            return
+        }
+        voiceDownloading = true
+        Task { [weak self] in
+            _ = await Task.detached { try? BridgeClient().ttsLocalPrepare(voice: id) }.value
+            guard let self else { return }
+            if self.selectedVoice == id { self.voiceDownloading = false }
+        }
+    }
+
+    /// Human-readable label for a Piper voice id within its language section:
+    /// `de_DE-thorsten-high` → `Thorsten — high`.
     func voiceLabel(_ id: String) -> String {
         let parts = id.split(separator: "-")
         guard parts.count >= 2 else { return id }
         let name = parts[1].replacingOccurrences(of: "_", with: " ").capitalized
         let quality = parts.count > 2 ? String(parts[2]) : ""
-        let base = quality.isEmpty ? name : "\(name) — \(quality)"
-        return "\(base) · \(parts[0])"
+        return quality.isEmpty ? name : "\(name) — \(quality)"
+    }
+
+    /// Voices grouped by language (`de_DE`, `en_US`, …) in first-seen order, for
+    /// the header picker's sections.
+    var voiceGroups: [VoiceGroup] {
+        var order: [String] = []
+        var byLang: [String: [String]] = [:]
+        for id in voiceOptions {
+            let lang = String(id.split(separator: "-").first ?? Substring(id))
+            if byLang[lang] == nil { order.append(lang) }
+            byLang[lang, default: []].append(id)
+        }
+        return order.map { VoiceGroup(id: $0, label: Self.languageLabel($0), ids: byLang[$0] ?? []) }
+    }
+
+    /// Friendly name for a Piper language code (`de_DE` → "German (Germany)" in
+    /// the current locale), falling back to the raw code.
+    private static func languageLabel(_ code: String) -> String {
+        Locale.current.localizedString(forIdentifier: code) ?? code
     }
 
     /// Loads the local Piper voices to offer — the same curated set the settings
@@ -313,6 +352,13 @@ final class ChatViewModel: ObservableObject {
     }
 }
 
+/// A language group of Piper voices for the header picker's sections.
+struct VoiceGroup: Identifiable {
+    let id: String
+    let label: String
+    let ids: [String]
+}
+
 struct ChatWindowView: View {
     @ObservedObject var chat: ChatViewModel
     @Environment(\.locale) private var locale
@@ -425,13 +471,23 @@ struct ChatWindowView: View {
                 get: { chat.selectedVoice },
                 set: { chat.selectVoice($0) }
             )) {
-                ForEach(chat.voiceOptions, id: \.self) { id in
-                    Text(chat.voiceLabel(id)).tag(id)
+                ForEach(chat.voiceGroups) { group in
+                    Section(group.label) {
+                        ForEach(group.ids, id: \.self) { id in
+                            Text(chat.voiceLabel(id)).tag(id)
+                        }
+                    }
                 }
             } label: {
                 Text("Voice", bundle: .module)
             }
             .frame(maxWidth: 240)
+
+            if chat.voiceDownloading {
+                ProgressView()
+                    .controlSize(.small)
+                    .help(Text("Downloading voice…", bundle: .module))
+            }
 
             Spacer()
         }
