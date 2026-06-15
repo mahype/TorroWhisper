@@ -165,6 +165,10 @@
 "Overview" = "Übersicht";
 "Pink" = "Pink";
 "Post-processing" = "Nachbearbeitung";
+"General models" = "Generelle Sprachmodelle";
+"General-purpose language models for post-processing and other AI features." = "Generelle Sprachmodelle für die Nachbearbeitung und andere KI-Funktionen.";
+"API keys" = "API-Schlüssel";
+"Cloud models need an API key, stored in your macOS Keychain." = "Cloud-Modelle brauchen einen API-Schlüssel, gespeichert im macOS-Schlüsselbund.";
 "Post-processing in progress" = "Nachbearbeitung läuft";
 "Post-processing…" = "Nachbearbeitung…";
 "Press your keyboard shortcut now" = "Jetzt Tastenkombination drücken";

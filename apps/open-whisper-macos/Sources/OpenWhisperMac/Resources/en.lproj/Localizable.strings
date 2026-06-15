@@ -160,6 +160,10 @@
 "Overview" = "Overview";
 "Pink" = "Pink";
 "Post-processing" = "Post-processing";
+"General models" = "General models";
+"General-purpose language models for post-processing and other AI features." = "General-purpose language models for post-processing and other AI features.";
+"API keys" = "API keys";
+"Cloud models need an API key, stored in your macOS Keychain." = "Cloud models need an API key, stored in your macOS Keychain.";
 "Post-processing in progress" = "Post-processing in progress";
 "Post-processing…" = "Post-processing…";
 "Press your keyboard shortcut now" = "Press your keyboard shortcut now";

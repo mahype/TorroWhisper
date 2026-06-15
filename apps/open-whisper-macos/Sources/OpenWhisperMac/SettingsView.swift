@@ -476,14 +476,28 @@ struct SettingsView: View {
             } label: {
                 Text("Manage language models…", bundle: .module)
             }
+        } header: {
+            Text("General models", bundle: .module)
+        } footer: {
+            Text("General-purpose language models for post-processing and other AI features.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
 
+        Section {
             Button {
                 isManagingCloudModels = true
             } label: {
                 Text("Cloud models & API keys…", bundle: .module)
             }
         } header: {
-            Text("Post-processing", bundle: .module)
+            Text("API keys", bundle: .module)
+        } footer: {
+            Text("Cloud models need an API key, stored in your macOS Keychain.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
