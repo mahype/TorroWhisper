@@ -26,15 +26,23 @@ final class ChatViewModel: ObservableObject {
     private var loadedOnce = false
     private var lastActiveSessionId = ""
 
-    /// Models worth offering for chat. Starts from the app-wide enabled set the
-    /// user curated in Settings → language models (an empty set means "show all",
-    /// so a fresh install isn't empty), then prefers models Ready to run right now
-    /// (local on disk or a cloud model with a key), falling back to the whole set.
+    /// Models offered for chat: exactly the app-wide enabled set the user curated
+    /// in Settings → language models (an empty set means "show all", so a fresh
+    /// install isn't empty). This mirrors the central curation 1:1 — no extra
+    /// availability filtering, which previously dropped enabled-but-not-ready
+    /// models and made the list diverge from what the user configured.
     var selectableModels: [LlmRegistryEntryDTO] {
         let enabled = registry.filter { $0.enabled }
-        let pool = enabled.isEmpty ? registry : enabled
-        let ready = pool.filter { $0.availability == .ready }
-        return ready.isEmpty ? pool : ready
+        var pool = enabled.isEmpty ? registry : enabled
+        // Always keep the model the picker currently points at (the active or
+        // persisted-default model) present — otherwise a model running in the
+        // background that isn't in the enabled set leaves the picker blank.
+        if let selected = selectedModelStableId,
+           !pool.contains(where: { $0.stableId == selected }),
+           let active = registry.first(where: { $0.stableId == selected }) {
+            pool.append(active)
+        }
+        return pool
     }
 
     /// Selectable plain language models (everything that is not a Hermes agent),
@@ -494,7 +502,6 @@ private struct RecordingBubble: View {
         HStack {
             Spacer(minLength: 40)
             ChatWaveformView(feed: feed)
-                .frame(width: 110)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .background(
@@ -542,12 +549,11 @@ private struct ChatWaveformView: View {
         HStack(alignment: .center, spacing: 3) {
             ForEach(Array(feed.bars.enumerated()), id: \.offset) { _, level in
                 Capsule()
-                    .fill(Color.red.opacity(0.85))
+                    .fill(Color.accentColor)
                     .frame(width: 3, height: max(2, CGFloat(Self.normalized(level)) * 22))
             }
         }
         .frame(height: 22)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .animation(.linear(duration: RecordingLevelFeed.pollingInterval), value: feed.bars)
     }
 

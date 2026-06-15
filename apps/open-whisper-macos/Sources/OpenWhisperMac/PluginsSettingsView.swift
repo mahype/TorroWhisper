@@ -82,11 +82,20 @@ struct ChatSettingsSheet: View {
     @State private var piperPreparing = false
     @State private var piperStatus = ""
 
-    /// Ready-to-run models first, the rest after — so the usable picks sit at
-    /// the top. Order within each group is preserved (presets, custom, cloud).
-    private var sortedRegistry: [LlmRegistryEntryDTO] {
-        registry.filter { $0.availability == .ready }
-            + registry.filter { $0.availability != .ready }
+    /// Models offered as the chat default: only those the user enabled app-wide
+    /// in Language models (an empty curation means "show all", so a fresh install
+    /// isn't empty). The currently saved default is always kept present so the
+    /// picker never renders blank. Ready-to-run models sort first.
+    private var enabledRegistry: [LlmRegistryEntryDTO] {
+        let enabled = registry.filter { $0.enabled }
+        var pool = enabled.isEmpty ? registry : enabled
+        if let current = model.settings.chat.defaultModelRef,
+           !pool.contains(where: { $0.modelRef == current }),
+           let entry = registry.first(where: { $0.modelRef == current }) {
+            pool.append(entry)
+        }
+        return pool.filter { $0.availability == .ready }
+            + pool.filter { $0.availability != .ready }
     }
 
     /// Short reason a model is not ready, appended to its picker row. `nil` for
@@ -187,7 +196,7 @@ struct ChatSettingsSheet: View {
         Section {
             Picker(selection: model.binding(for: \.chat.defaultModelRef)) {
                 Text("Local default", bundle: .module).tag(LlmModelRefDTO?.none)
-                ForEach(sortedRegistry) { entry in
+                ForEach(enabledRegistry) { entry in
                     let note = availabilityNote(entry.availability)
                     Text(note.map { "\(entry.displayName) — \($0)" } ?? entry.displayName)
                         .tag(LlmModelRefDTO?.some(entry.modelRef))
