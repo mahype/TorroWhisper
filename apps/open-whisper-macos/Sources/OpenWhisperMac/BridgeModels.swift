@@ -465,6 +465,18 @@ enum PostProcessingChoice: Codable, Hashable, Identifiable {
         }
     }
 
+    /// Cross-language model identity — MUST match `LlmModelRefDTO.stableId` (and
+    /// Rust `LlmModelRef::stable_id`) for the same model, so it can be looked up
+    /// in `AppSettings.enabledModelIds` (the app-wide enabled set).
+    var stableId: String {
+        switch self {
+        case .localPreset(let preset): return "local_preset:\(preset.stableToken)"
+        case .localCustom(let id): return "local_custom:\(id)"
+        case .ollamaModel(let name): return "ollama:\(name)"
+        case .lmStudioModel(let name): return "lmstudio:\(name)"
+        }
+    }
+
     func fallbackLabel(locale: Locale) -> String {
         switch self {
         case .localPreset(let preset):

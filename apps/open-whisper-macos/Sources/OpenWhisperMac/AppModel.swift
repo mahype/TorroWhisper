@@ -510,6 +510,17 @@ final class AppModel: ObservableObject {
         list.append(contentsOf: ollamaModels.map { PostProcessingChoice.ollamaModel($0.name) })
         list.append(contentsOf: lmStudioModels.map { PostProcessingChoice.lmStudioModel($0.name) })
 
+        // Honor the app-wide enabled set curated in the language-models manager:
+        // only offer models the user enabled. An empty curation means "show all"
+        // (the same fallback the registry-based pickers use), so a fresh install
+        // isn't empty.
+        let enabledIds = settings.enabledModelIds
+        if !enabledIds.isEmpty {
+            list = list.filter { enabledIds.contains($0.stableId) }
+        }
+
+        // The currently selected model stays present even if it isn't enabled,
+        // so the picker never renders blank with a model already in use.
         let current = postProcessingChoiceBinding.wrappedValue
         if !list.contains(where: { $0.id == current.id }) {
             list.insert(current, at: 0)
