@@ -20,6 +20,9 @@ final class ChatViewModel: ObservableObject {
     /// spoken, and how many characters of it have already been dispatched.
     private var ttsMsgIndex = -1
     private var spokenOffset = 0
+    /// Set when the user stops speech (Escape) — suppresses further synthesis for
+    /// the current answer even as it keeps streaming. Reset on the next answer.
+    private var speechSuppressed = false
     private var loadedOnce = false
     private var lastActiveSessionId = ""
 
@@ -66,6 +69,14 @@ final class ChatViewModel: ObservableObject {
         tts.stop()
         thinking.stop()
         levelFeed.stop()
+    }
+
+    /// Stops speech output now (Escape) and silences the rest of the current
+    /// answer even while it keeps streaming. The next answer speaks normally.
+    func cancelSpeech() {
+        tts.stop()
+        thinking.stop()
+        speechSuppressed = true
     }
 
     func toggleListening() {
@@ -182,6 +193,7 @@ final class ChatViewModel: ObservableObject {
         if lastIndex != ttsMsgIndex {
             ttsMsgIndex = lastIndex
             spokenOffset = 0
+            speechSuppressed = false
             if let freshTts = (try? bridge.loadSettings())?.chat.tts {
                 tts.configure(freshTts)
             }
@@ -190,6 +202,8 @@ final class ChatViewModel: ObservableObject {
         let chars = Array(state.messages[lastIndex].content)
         // Text started arriving → drop the "thinking" cue.
         if !chars.isEmpty { thinking.stop() }
+        // User stopped this answer's speech — stay silent until the next one.
+        if speechSuppressed { return }
         if spokenOffset > chars.count { spokenOffset = chars.count }
         let pending = String(chars[spokenOffset...])
 
@@ -253,6 +267,8 @@ struct ChatWindowView: View {
         .frame(minWidth: 680, idealWidth: 760, minHeight: 480, idealHeight: 580)
         .onAppear { chat.start() }
         .onDisappear { chat.stop() }
+        // Escape stops the spoken answer.
+        .onExitCommand { chat.cancelSpeech() }
     }
 
     // MARK: Sidebar (conversation history)
