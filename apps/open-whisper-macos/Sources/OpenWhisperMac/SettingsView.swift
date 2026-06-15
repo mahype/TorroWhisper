@@ -135,14 +135,6 @@ struct SettingsView: View {
                 Text("Microphone", bundle: .module)
             }
 
-            Picker(selection: model.languageBinding()) {
-                ForEach(model.availableLanguageOptions) { option in
-                    Text(option.label(locale: locale)).tag(option.code)
-                }
-            } label: {
-                Text("Language", bundle: .module)
-            }
-
             Button {
                 model.refreshDevices()
             } label: {
@@ -422,6 +414,14 @@ struct SettingsView: View {
     @ViewBuilder
     private var languageModelsContent: some View {
         Section {
+            Picker(selection: model.languageBinding()) {
+                ForEach(model.availableLanguageOptions) { option in
+                    Text(option.label(locale: locale)).tag(option.code)
+                }
+            } label: {
+                Text("Default language", bundle: .module)
+            }
+
             Picker(selection: model.binding(for: \.localModel)) {
                 ForEach(model.availableModelPresets) { preset in
                     Text(model.whisperPresetPickerLabel(preset)).tag(preset)
@@ -447,7 +447,14 @@ struct SettingsView: View {
             }
         } header: {
             Text("Transcription", bundle: .module)
+        } footer: {
+            Text("The default language applies app-wide — used for transcription and to narrow the voice list. Choose “Automatic” to show every voice.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+
+        SpeechOutputSettings(model: model)
 
         Section {
             Picker(selection: model.postProcessingChoiceBinding) {
