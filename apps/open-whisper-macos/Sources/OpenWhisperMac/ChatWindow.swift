@@ -96,6 +96,15 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    /// Sends a typed message as a chat turn (same flow as a voice transcript).
+    func sendText(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        tts.stop()
+        bridge.chatSendText(trimmed)
+        tick()
+    }
+
     // MARK: Sessions
 
     func newSession() {
@@ -250,6 +259,7 @@ final class ChatViewModel: ObservableObject {
 struct ChatWindowView: View {
     @ObservedObject var chat: ChatViewModel
     @Environment(\.locale) private var locale
+    @State private var draft = ""
 
     var body: some View {
         NavigationSplitView {
@@ -365,6 +375,15 @@ struct ChatWindowView: View {
                     ForEach(Array(chat.state.messages.enumerated()), id: \.offset) { _, message in
                         ChatBubble(message: message)
                     }
+                    // Recording shows as a waveform bubble on the user's (right)
+                    // side; the assistant "typing" appears on the left until its
+                    // streamed text starts.
+                    if chat.state.phase == .listening {
+                        RecordingBubble(feed: chat.levelFeed)
+                    }
+                    if showsTypingBubble {
+                        TypingBubble()
+                    }
                     Color.clear.frame(height: 1).id("bottom")
                 }
                 .padding(12)
@@ -372,7 +391,16 @@ struct ChatWindowView: View {
             .onChange(of: chat.state.revision) { _, _ in
                 withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
             }
+            .onChange(of: chat.state.phase) { _, _ in
+                withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+            }
         }
+    }
+
+    /// Show the "typing" indicator while generating, until the assistant's
+    /// streamed text starts (after which its growing bubble stands in for it).
+    private var showsTypingBubble: Bool {
+        chat.state.phase == .generating && chat.state.messages.last?.role != .assistant
     }
 
     private var inputBar: some View {
@@ -383,30 +411,45 @@ struct ChatWindowView: View {
                     .foregroundStyle(.red)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            HStack(spacing: 12) {
-                if chat.state.phase == .listening {
-                    ChatWaveformView(feed: chat.levelFeed)
-                } else {
-                    Text(phaseText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
+            HStack(spacing: 10) {
+                TextField(L("Message…", locale: locale), text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { sendDraft() }
+                    .disabled(inputBusy)
+                if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button {
+                        sendDraft()
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill").font(.title2)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tint)
+                    .disabled(inputBusy)
+                    .help(L("Send", locale: locale))
                 }
                 Button {
                     chat.toggleListening()
                 } label: {
-                    Label {
-                        Text(buttonLabel)
-                    } icon: {
-                        Image(systemName: buttonIcon)
-                    }
-                    .font(.title3)
+                    Image(systemName: buttonIcon).font(.title2)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(buttonTint)
+                .help(buttonLabel)
             }
         }
         .padding(12)
+    }
+
+    /// Typed input is only accepted when not mid-transcription/generation.
+    private var inputBusy: Bool {
+        chat.state.phase == .transcribing || chat.state.phase == .generating
+    }
+
+    private func sendDraft() {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !inputBusy else { return }
+        chat.sendText(text)
+        draft = ""
     }
 
     private var buttonLabel: String {
@@ -436,18 +479,58 @@ struct ChatWindowView: View {
         }
     }
 
-    private var phaseText: String {
-        switch chat.state.phase {
-        case .idle: return L("Ready", locale: locale)
-        case .listening: return L("Listening…", locale: locale)
-        case .transcribing: return L("Transcribing…", locale: locale)
-        case .generating: return L("Thinking…", locale: locale)
+}
+
+/// Recording indicator shown as a bubble on the user's (right) side of the
+/// transcript while listening — like a chat client's "typing" indicator.
+private struct RecordingBubble: View {
+    @ObservedObject var feed: RecordingLevelFeed
+
+    var body: some View {
+        HStack {
+            Spacer(minLength: 40)
+            ChatWaveformView(feed: feed)
+                .frame(width: 110)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    Color.accentColor.opacity(0.18),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                )
         }
     }
 }
 
-/// Compact centered-bars waveform for the chat input bar, fed by the shared
-/// recording-level feed. Mirrors the floating bubble's normalization.
+/// Assistant "typing" indicator: three softly pulsing dots on the left, shown
+/// while the answer is being generated but hasn't started streaming text yet.
+private struct TypingBubble: View {
+    var body: some View {
+        HStack {
+            TimelineView(.animation) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                HStack(spacing: 5) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Circle()
+                            .fill(.secondary)
+                            .frame(width: 7, height: 7)
+                            .opacity(0.3 + 0.7 * Self.pulse(t, i))
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            Spacer(minLength: 40)
+        }
+    }
+
+    private static func pulse(_ t: TimeInterval, _ i: Int) -> Double {
+        (sin(t * 3.0 - Double(i) * 0.6) + 1) / 2
+    }
+}
+
+/// Compact centered-bars waveform fed by the shared recording-level feed.
+/// Mirrors the floating bubble's normalization.
 private struct ChatWaveformView: View {
     @ObservedObject var feed: RecordingLevelFeed
 

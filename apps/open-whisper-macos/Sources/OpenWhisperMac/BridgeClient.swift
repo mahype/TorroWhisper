@@ -161,6 +161,11 @@ final class BridgeClient {
         let _: String? = try? encodeAndCall(Payload(modelRef: modelRef), function: ow_chat_set_model)
     }
 
+    /// Submits a typed chat message (text input alongside voice).
+    func chatSendText(_ text: String) {
+        let _: String? = try? encodeAndCall(["text": text], function: ow_chat_send_text)
+    }
+
     func chatNewSession() {
         let _: String? = try? decodeResponse(from: ow_chat_new_session())
     }

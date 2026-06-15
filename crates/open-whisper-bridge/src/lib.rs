@@ -290,6 +290,13 @@ impl BridgeRuntime {
         self.chat.set_model(model_ref);
     }
 
+    /// Submits a typed message as a chat turn (same path as a finished voice
+    /// transcript): appends it and starts generation.
+    fn chat_send_text(&mut self, text: String) {
+        let settings = self.settings.clone();
+        self.chat.on_transcript(text, &settings);
+    }
+
     fn chat_new_session(&mut self) {
         self.chat.new_session();
     }
@@ -1600,6 +1607,11 @@ struct ChatSessionRequest {
 }
 
 #[derive(Deserialize)]
+struct ChatTextRequest {
+    text: String,
+}
+
+#[derive(Deserialize)]
 struct ChatTtsRequest {
     text: String,
     voice: String,
@@ -1808,6 +1820,16 @@ pub extern "C" fn ow_chat_get_state() -> *mut c_char {
 pub extern "C" fn ow_chat_reset() -> *mut c_char {
     with_runtime_value(|runtime| runtime.chat_reset());
     response_ok("ok".to_owned())
+}
+
+/// Submits a typed chat message (text input alongside voice).
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_chat_send_text(request_json: *const c_char) -> *mut c_char {
+    let result = parse_json_arg::<ChatTextRequest>(request_json, "ChatTextRequest").map(|request| {
+        with_runtime_value(|runtime| runtime.chat_send_text(request.text));
+        "ok".to_owned()
+    });
+    response_from_result(result)
 }
 
 #[unsafe(no_mangle)]

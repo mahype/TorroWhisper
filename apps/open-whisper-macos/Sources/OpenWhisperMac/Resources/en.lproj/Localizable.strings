@@ -368,6 +368,8 @@
 "+ Add Hermes agent" = "+ Add Hermes agent";
 "Test connection" = "Test connection";
 "New agent" = "New agent";
+"Message…" = "Message…";
+"Send" = "Send";
 "Address" = "Address";
 "Model id" = "Model id";
 "API key (optional)" = "API key (optional)";
