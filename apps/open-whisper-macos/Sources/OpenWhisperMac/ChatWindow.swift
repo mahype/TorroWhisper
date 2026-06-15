@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 /// Drives the chat window: polls the bridge chat state, manages the model
@@ -8,6 +9,15 @@ final class ChatViewModel: ObservableObject {
     @Published var state: ChatStateDTO = .empty
     @Published var registry: [LlmRegistryEntryDTO] = []
     @Published var selectedModelStableId: String?
+
+    /// Voice selection surfaced in the header (#28 AP5): the voices offered for
+    /// the configured TTS provider and the current pick. Changing it persists to
+    /// `AppSettings.chat.tts` and reconfigures the live player.
+    @Published var voiceOptions: [String] = []
+    @Published var selectedVoice: String = ""
+    /// The provider the offered voices belong to (set in Settings; the header
+    /// only switches the voice within it).
+    private var ttsProvider: ChatTtsProvider = .piper
 
     /// Live mic levels for the in-window waveform (reuses the dictation feed).
     let levelFeed = RecordingLevelFeed()
@@ -67,6 +77,9 @@ final class ChatViewModel: ObservableObject {
         let chat = (try? bridge.loadSettings())?.chat ?? .default
         tts.configure(chat.tts)
         defaultModelRef = chat.defaultModelRef
+        ttsProvider = chat.tts.provider
+        selectedVoice = Self.voice(in: chat.tts)
+        reloadVoiceOptions()
         let poll = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
@@ -142,6 +155,69 @@ final class ChatViewModel: ObservableObject {
         selectedModelStableId = stableId
         let ref = registry.first(where: { $0.stableId == stableId })?.modelRef
         bridge.chatSetModel(ref)
+    }
+
+    // MARK: Voice (#28 AP5)
+
+    /// Persists the picked voice into the provider's slot in `AppSettings.chat.tts`
+    /// and reconfigures the live player so the next spoken answer uses it.
+    func selectVoice(_ id: String) {
+        selectedVoice = id
+        guard var settings = try? bridge.loadSettings() else { return }
+        switch settings.chat.tts.provider {
+        case .system: settings.chat.tts.systemVoice = id
+        case .openAi: settings.chat.tts.openaiVoice = id
+        case .piper: settings.chat.tts.piperVoice = id
+        }
+        _ = try? bridge.saveSettings(settings)
+        tts.configure(settings.chat.tts)
+    }
+
+    /// Human-readable label for a voice id. System voices resolve to their
+    /// AVSpeech display name; Piper ids like `de_DE-thorsten-high` render as
+    /// `Thorsten — high`.
+    func voiceLabel(_ id: String) -> String {
+        if ttsProvider == .system {
+            return AVSpeechSynthesisVoice(identifier: id)?.name ?? id
+        }
+        let parts = id.split(separator: "-")
+        guard parts.count >= 2 else { return id }
+        let name = parts[1].replacingOccurrences(of: "_", with: " ").capitalized
+        let quality = parts.count > 2 ? String(parts[2]) : ""
+        return quality.isEmpty ? name : "\(name) — \(quality)"
+    }
+
+    /// The active voice id for a TTS config's selected provider.
+    private static func voice(in tts: ChatTtsSettingsDTO) -> String {
+        switch tts.provider {
+        case .system: return tts.systemVoice
+        case .openAi: return tts.openaiVoice
+        case .piper: return tts.piperVoice
+        }
+    }
+
+    /// Loads the voices to offer for the configured provider. System voices are
+    /// narrowed to the user's preferred language so the menu stays manageable;
+    /// Piper ships its own curated set. `.openAi` is migrated to Piper (cloud TTS
+    /// removed), so it offers the Piper voices too. The current pick is always
+    /// kept present even if it isn't in the offered set.
+    private func reloadVoiceOptions() {
+        switch ttsProvider {
+        case .system:
+            let lang = Locale.preferredLanguages.first.map { String($0.prefix(2)) } ?? "en"
+            var ids = AVSpeechSynthesisVoice.speechVoices()
+                .filter { $0.language.lowercased().hasPrefix(lang.lowercased()) }
+                .map(\.identifier)
+            if ids.isEmpty {
+                ids = AVSpeechSynthesisVoice.speechVoices().map(\.identifier)
+            }
+            voiceOptions = ids
+        case .piper, .openAi:
+            voiceOptions = (try? bridge.ttsPiperVoices()) ?? []
+        }
+        if !selectedVoice.isEmpty, !voiceOptions.contains(selectedVoice) {
+            voiceOptions.insert(selectedVoice, at: 0)
+        }
     }
 
     /// Re-syncs the header picker to the active conversation's model when the
@@ -374,7 +450,20 @@ struct ChatWindowView: View {
             } label: {
                 Text("Model", bundle: .module)
             }
-            .frame(maxWidth: 320)
+            .frame(maxWidth: 300)
+
+            Picker(selection: Binding(
+                get: { chat.selectedVoice },
+                set: { chat.selectVoice($0) }
+            )) {
+                ForEach(chat.voiceOptions, id: \.self) { id in
+                    Text(chat.voiceLabel(id)).tag(id)
+                }
+            } label: {
+                Text("Voice", bundle: .module)
+            }
+            .frame(maxWidth: 240)
+
             Spacer()
         }
         .padding(12)
