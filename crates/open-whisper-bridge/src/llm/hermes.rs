@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 
 use super::{
     LlmProvider, USER_AGENT, build_http_client_with_timeout, build_system_prompt, join_base_url,
+    stream_chat_completion,
 };
 
 /// Agent tools (terminal, web search, file ops) can take a long time per turn,
@@ -88,6 +89,46 @@ impl HermesAgentProvider {
 
         parse_chat_completion(&value)
     }
+
+    /// Streaming counterpart of [`complete`]: requests `stream: true` and
+    /// forwards SSE deltas to `on_chunk`.
+    fn complete_stream(
+        &self,
+        system_message: &str,
+        user_text: &str,
+        session_key: Option<&str>,
+        temperature: f32,
+        cancelled: &std::sync::Arc<AtomicBool>,
+        on_chunk: &mut dyn FnMut(&str),
+    ) -> Result<String, String> {
+        let client = build_http_client_with_timeout(HERMES_TIMEOUT)?;
+        let url = join_base_url(&self.base_url, "/v1/chat/completions");
+
+        let mut request = client
+            .post(&url)
+            .header(reqwest::header::USER_AGENT, USER_AGENT);
+        if let Some(key) = self.api_key.as_deref().filter(|key| !key.is_empty()) {
+            request = request.bearer_auth(key);
+        }
+        if let Some(scope) = sanitize_session_key(session_key) {
+            request = request.header("X-Hermes-Session-Key", scope);
+        }
+
+        let response = request
+            .json(&json!({
+                "model": self.model_name,
+                "temperature": temperature,
+                "stream": true,
+                "messages": [
+                    { "role": "system", "content": system_message },
+                    { "role": "user", "content": user_text },
+                ]
+            }))
+            .send()
+            .map_err(|err| format!("Hermes request could not be started: {err}"))?;
+
+        stream_chat_completion(response, "Hermes agent", cancelled, on_chunk)
+    }
 }
 
 impl LlmProvider for HermesAgentProvider {
@@ -109,6 +150,17 @@ impl LlmProvider for HermesAgentProvider {
         _cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String> {
         self.complete(system_prompt, user_text, session_key, 0.7)
+    }
+
+    fn chat_stream(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        session_key: Option<&str>,
+        cancelled: &Arc<AtomicBool>,
+        on_chunk: &mut dyn FnMut(&str),
+    ) -> Result<String, String> {
+        self.complete_stream(system_prompt, user_text, session_key, 0.7, cancelled, on_chunk)
     }
 }
 

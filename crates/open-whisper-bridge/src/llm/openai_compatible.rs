@@ -10,7 +10,7 @@ use std::sync::{Arc, atomic::AtomicBool};
 use open_whisper_core::OpenAiCompatibleProvider;
 use serde_json::{Value, json};
 
-use super::{LlmProvider, USER_AGENT, build_http_client, build_system_prompt};
+use super::{LlmProvider, USER_AGENT, build_http_client, build_system_prompt, stream_chat_completion};
 
 pub(super) struct OpenAiCompatibleProviderImpl {
     provider: OpenAiCompatibleProvider,
@@ -80,6 +80,43 @@ impl OpenAiCompatibleProviderImpl {
 
         parse_chat_completion(&value)
     }
+
+    /// Streaming counterpart of [`complete`]: requests `stream: true` and
+    /// forwards SSE deltas to `on_chunk`.
+    fn complete_stream(
+        &self,
+        system_message: &str,
+        user_text: &str,
+        temperature: f32,
+        cancelled: &Arc<AtomicBool>,
+        on_chunk: &mut dyn FnMut(&str),
+    ) -> Result<String, String> {
+        let client = build_http_client()?;
+        let url = format!("{}/chat/completions", base_url(self.provider));
+
+        let response = client
+            .post(&url)
+            .header(reqwest::header::USER_AGENT, USER_AGENT)
+            .bearer_auth(&self.api_key)
+            .json(&json!({
+                "model": self.model_name,
+                "temperature": temperature,
+                "stream": true,
+                "messages": [
+                    { "role": "system", "content": system_message },
+                    { "role": "user", "content": user_text },
+                ]
+            }))
+            .send()
+            .map_err(|err| format!("Cloud request could not be started: {err}"))?;
+
+        stream_chat_completion(
+            response,
+            self.provider.backend_kind().label(),
+            cancelled,
+            on_chunk,
+        )
+    }
 }
 
 impl LlmProvider for OpenAiCompatibleProviderImpl {
@@ -102,6 +139,17 @@ impl LlmProvider for OpenAiCompatibleProviderImpl {
     ) -> Result<String, String> {
         // Higher temperature: chat should feel natural, not robotic.
         self.complete(system_prompt, user_text, 0.7)
+    }
+
+    fn chat_stream(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        _session_key: Option<&str>,
+        cancelled: &Arc<AtomicBool>,
+        on_chunk: &mut dyn FnMut(&str),
+    ) -> Result<String, String> {
+        self.complete_stream(system_prompt, user_text, 0.7, cancelled, on_chunk)
     }
 }
 

@@ -72,6 +72,18 @@ pub trait PluginHost {
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String>;
 
+    /// Streaming variant of [`chat`]: `on_chunk` receives text deltas as they
+    /// arrive; returns the full accumulated answer.
+    fn chat_stream(
+        &self,
+        model: &LlmModelRef,
+        system_prompt: &str,
+        user_text: &str,
+        session_key: Option<&str>,
+        cancelled: &Arc<AtomicBool>,
+        on_chunk: &mut dyn FnMut(&str),
+    ) -> Result<String, String>;
+
     /// Instructional generation: `role_prompt` frames a transform/rewrite task
     /// over `user_text` (post-processing style).
     fn generate(
@@ -125,6 +137,24 @@ impl PluginHost for BridgeHost {
             user_text,
             session_key,
             cancelled,
+        )
+    }
+
+    fn chat_stream(
+        &self,
+        model: &LlmModelRef,
+        system_prompt: &str,
+        user_text: &str,
+        session_key: Option<&str>,
+        cancelled: &Arc<AtomicBool>,
+        on_chunk: &mut dyn FnMut(&str),
+    ) -> Result<String, String> {
+        llm::provider_for(model, &self.settings)?.chat_stream(
+            system_prompt,
+            user_text,
+            session_key,
+            cancelled,
+            on_chunk,
         )
     }
 

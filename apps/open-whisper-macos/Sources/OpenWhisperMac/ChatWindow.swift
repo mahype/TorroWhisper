@@ -16,7 +16,10 @@ final class ChatViewModel: ObservableObject {
     private let tts = ChatTtsPlayer()
     private let thinking = ChatThinkingSound()
     private var timer: Timer?
-    private var spokenAssistantCount = 0
+    /// Streaming TTS bookkeeping: index of the assistant message currently being
+    /// spoken, and how many characters of it have already been dispatched.
+    private var ttsMsgIndex = -1
+    private var spokenOffset = 0
     private var loadedOnce = false
     private var lastActiveSessionId = ""
 
@@ -158,25 +161,75 @@ final class ChatViewModel: ObservableObject {
             // Switched to / loaded a different conversation — reflect its pinned
             // model/agent and don't re-speak its existing answers.
             syncSelection(to: fresh.activeModelRef)
-            spokenAssistantCount = fresh.messages.filter { $0.role == .assistant }.count
+            markAllSpoken()
             tts.stop()
         } else {
-            speakNewAnswers()
+            pumpStreamingTts()
         }
     }
 
-    private func speakNewAnswers() {
-        let answers = state.messages.filter { $0.role == .assistant }
-        guard answers.count > spokenAssistantCount else { return }
-        // Re-read the TTS config so a provider/voice change in Settings takes
-        // effect without reopening the chat window.
-        if let freshTts = (try? bridge.loadSettings())?.chat.tts {
-            tts.configure(freshTts)
+    /// Speaks the active conversation's latest assistant answer as it streams in:
+    /// complete sentences are spoken while generation continues; the remainder is
+    /// flushed once it finishes. Successive answers and successive sentences are
+    /// queued in order by the player.
+    private func pumpStreamingTts() {
+        guard let lastIndex = state.messages.indices.last,
+              state.messages[lastIndex].role == .assistant else {
+            return
         }
-        for answer in answers[spokenAssistantCount...] {
-            tts.speak(answer.content)
+        // A new assistant message → start fresh + re-read TTS config so a
+        // voice/speed change in Settings takes effect without reopening.
+        if lastIndex != ttsMsgIndex {
+            ttsMsgIndex = lastIndex
+            spokenOffset = 0
+            if let freshTts = (try? bridge.loadSettings())?.chat.tts {
+                tts.configure(freshTts)
+            }
         }
-        spokenAssistantCount = answers.count
+
+        let chars = Array(state.messages[lastIndex].content)
+        // Text started arriving → drop the "thinking" cue.
+        if !chars.isEmpty { thinking.stop() }
+        if spokenOffset > chars.count { spokenOffset = chars.count }
+        let pending = String(chars[spokenOffset...])
+
+        if state.phase == .generating {
+            // Speak only up to the last completed sentence; keep the tail buffered.
+            guard let upto = Self.lastSentenceBoundary(in: pending) else { return }
+            let ready = String(pending.prefix(upto))
+            let chunk = ready.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !chunk.isEmpty { tts.speak(chunk) }
+            spokenOffset += ready.count
+        } else {
+            // Generation finished — flush whatever is left.
+            let chunk = pending.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !chunk.isEmpty { tts.speak(chunk) }
+            spokenOffset = chars.count
+        }
+    }
+
+    /// Marks the active conversation's current text as already spoken (used on
+    /// session switch so loading a conversation doesn't re-read its answers).
+    private func markAllSpoken() {
+        if let lastIndex = state.messages.indices.last,
+           state.messages[lastIndex].role == .assistant {
+            ttsMsgIndex = lastIndex
+            spokenOffset = state.messages[lastIndex].content.count
+        } else {
+            ttsMsgIndex = -1
+            spokenOffset = 0
+        }
+    }
+
+    /// Character offset just past the last sentence-ending punctuation, or `nil`
+    /// if none yet — so only complete sentences are spoken during streaming.
+    private static func lastSentenceBoundary(in text: String) -> Int? {
+        let terminators: Set<Character> = [".", "!", "?", ":", ";", "…", "\n"]
+        var boundary: Int? = nil
+        for (i, ch) in text.enumerated() where terminators.contains(ch) {
+            boundary = i + 1
+        }
+        return boundary
     }
 }
 

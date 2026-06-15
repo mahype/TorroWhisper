@@ -17,10 +17,16 @@ mod openai_compatible;
 pub(crate) mod registry;
 
 use std::{
+    io::{BufRead, BufReader},
     path::PathBuf,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
+
+use serde_json::Value;
 
 use open_whisper_core::{AppSettings, CustomLlmSource, LlmBackendKind, LlmModelRef, LlmPreset};
 use reqwest::blocking::Client;
@@ -61,6 +67,26 @@ pub trait LlmProvider {
         session_key: Option<&str>,
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String>;
+
+    /// Streaming variant of [`chat`]: `on_chunk` is called with each text delta
+    /// as it arrives, and the full accumulated answer is returned. The default
+    /// produces the whole answer up front and emits it as a single chunk — so
+    /// non-streaming backends still work through the streaming path; SSE-capable
+    /// backends (Hermes, OpenAI-compatible) override this.
+    fn chat_stream(
+        &self,
+        system_prompt: &str,
+        user_text: &str,
+        session_key: Option<&str>,
+        cancelled: &Arc<AtomicBool>,
+        on_chunk: &mut dyn FnMut(&str),
+    ) -> Result<String, String> {
+        let full = self.chat(system_prompt, user_text, session_key, cancelled)?;
+        if !full.is_empty() {
+            on_chunk(&full);
+        }
+        Ok(full)
+    }
 }
 
 /// Resolves a [`LlmModelRef`] into a runnable provider. The single dispatch
@@ -238,6 +264,62 @@ pub(crate) fn build_http_client_with_timeout(timeout: Duration) -> Result<Client
         .timeout(timeout)
         .build()
         .map_err(|err| format!("HTTP client for the language model could not be created: {err}"))
+}
+
+/// Reads an OpenAI-style streaming Chat-Completions response (`text/event-stream`
+/// with `data: {chunk}` lines, terminated by `data: [DONE]`), forwarding each
+/// `choices[0].delta.content` delta to `on_chunk` and returning the full
+/// accumulated text. Shared by the Hermes and OpenAI-compatible backends.
+pub(crate) fn stream_chat_completion(
+    response: reqwest::blocking::Response,
+    label: &str,
+    cancelled: &Arc<AtomicBool>,
+    on_chunk: &mut dyn FnMut(&str),
+) -> Result<String, String> {
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("{label} returned HTTP {status}."));
+    }
+
+    let mut full = String::new();
+    let reader = BufReader::new(response);
+    for line in reader.lines() {
+        if cancelled.load(Ordering::Relaxed) {
+            break;
+        }
+        let line = line.map_err(|err| format!("{label} stream could not be read: {err}"))?;
+        let Some(data) = line.strip_prefix("data:") else {
+            continue; // event:, id:, comments, blank separators
+        };
+        let data = data.trim();
+        if data.is_empty() {
+            continue;
+        }
+        if data == "[DONE]" {
+            break;
+        }
+        let Ok(value) = serde_json::from_str::<Value>(data) else {
+            continue; // tolerate non-JSON keep-alive / progress events
+        };
+        if let Some(delta) = value
+            .get("choices")
+            .and_then(Value::as_array)
+            .and_then(|choices| choices.first())
+            .and_then(|choice| choice.get("delta"))
+            .and_then(|delta| delta.get("content"))
+            .and_then(Value::as_str)
+        {
+            if !delta.is_empty() {
+                full.push_str(delta);
+                on_chunk(delta);
+            }
+        }
+    }
+
+    if full.trim().is_empty() {
+        return Err(format!("{label} stream contained no answer text."));
+    }
+    Ok(full)
 }
 
 /// Wraps the mode's role prompt into a system prompt for chat-style APIs that

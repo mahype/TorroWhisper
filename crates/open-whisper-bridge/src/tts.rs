@@ -84,9 +84,12 @@ pub fn prepare_piper(voice: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Synthesizes `text` with a local Piper voice and returns WAV bytes.
+/// Synthesizes `text` with a local Piper voice and returns WAV bytes. The text
+/// is first normalized for speech (markdown/abbreviations/lists → spoken prose).
 pub fn piper_speech(text: &str, voice: &str, rate: f32) -> Result<Vec<u8>, String> {
     let voice = normalize_voice(voice).to_owned();
+    let text = crate::speech_text::normalize_for_speech(text);
+    let text = text.as_str();
     prepare_piper(&voice)?;
 
     let cli = sherpa_root()?;

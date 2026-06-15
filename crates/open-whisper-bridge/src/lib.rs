@@ -28,6 +28,7 @@ mod pipeline;
 mod remote_models;
 #[allow(dead_code)]
 mod settings_store;
+mod speech_text;
 #[allow(dead_code)]
 mod text_inserter;
 mod tts;
@@ -1794,7 +1795,13 @@ pub extern "C" fn ow_chat_stop_listening() -> *mut c_char {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_chat_get_state() -> *mut c_char {
-    response_ok(with_runtime_value(|runtime| runtime.chat_state()))
+    // Drain streamed chunks on the chat window's own (fast) poll loop so the
+    // answer grows + speaks smoothly. Only the chat queue is drained here — the
+    // download/status queues stay with the main `runtime_status` poll.
+    response_ok(with_runtime_value(|runtime| {
+        runtime.chat.poll();
+        runtime.chat_state()
+    }))
 }
 
 #[unsafe(no_mangle)]

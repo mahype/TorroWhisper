@@ -33,16 +33,33 @@ use open_whisper_core::{
 use crate::plugin_api::{BridgeHost, LogLevel, PluginHost};
 use crate::{plugin_log, sessions_store};
 
-const DEFAULT_SYSTEM_PROMPT: &str = "You are a friendly voice assistant. Answer briefly and conversationally, as if speaking aloud. Avoid markdown, lists and code blocks unless explicitly asked.";
+const DEFAULT_SYSTEM_PROMPT: &str = "You are a friendly voice assistant. Answer briefly and conversationally, as if speaking aloud.";
+
+/// Always appended to the (default or user-configured) system prompt: the answer
+/// is read aloud by TTS, so it must be natural spoken prose — not bullet points
+/// or abbreviations, which are hard to listen to. A best-effort instruction;
+/// `speech_text::normalize_for_speech` is the model-independent safety net.
+const SPEAK_STYLE: &str = "Your reply is read aloud by text-to-speech, so write it the way a person actually speaks: natural, flowing full sentences. Do not use bullet points, numbered lists, headings, markdown, tables, code blocks, emoji or symbols. Write abbreviations out in full (for example say \"zum Beispiel\" instead of \"z. B.\", \"und so weiter\" instead of \"usw.\"). Do not read out URLs or code. Keep sentences short and easy to follow by ear. Reply in the user's language.";
 
 /// Max characters of the first user message kept as a session title.
 const TITLE_MAX_CHARS: usize = 40;
 
+/// Events streamed from the generation worker thread to [`ChatController::poll`].
+enum GenEvent {
+    /// An incremental text delta of the answer.
+    Chunk(String),
+    /// Generation finished: the full answer, or an error.
+    Done(Result<String, String>),
+}
+
 pub struct ChatController {
     sessions: Vec<ChatSession>,
     active_id: String,
-    generation_rx: Option<Receiver<Result<String, String>>>,
+    generation_rx: Option<Receiver<GenEvent>>,
     generating: bool,
+    /// True once the in-progress assistant message for the current generation has
+    /// been appended (on the first streamed chunk).
+    generating_msg_open: bool,
     /// Session the in-flight answer belongs to, so it lands in the right place
     /// even if the user switches sessions while it generates.
     generating_session_id: String,
@@ -75,6 +92,7 @@ impl ChatController {
             active_id,
             generation_rx: None,
             generating: false,
+            generating_msg_open: false,
             generating_session_id: String::new(),
             cancelled: Arc::new(AtomicBool::new(false)),
             revision: 0,
@@ -118,6 +136,7 @@ impl ChatController {
             .store(true, std::sync::atomic::Ordering::Relaxed);
         self.generation_rx = None;
         self.generating = false;
+        self.generating_msg_open = false;
         self.cancelled = Arc::new(AtomicBool::new(false));
     }
 
@@ -228,54 +247,117 @@ impl ChatController {
         self.start_generation(settings);
     }
 
-    /// Drained from `BridgeRuntime::poll()`. Collects a finished generation.
+    /// Drained from `BridgeRuntime::poll()`. Consumes streamed chunks (growing
+    /// the in-progress answer) and the final completion. Drains all queued events
+    /// per call so the UI sees the latest text promptly.
     pub fn poll(&mut self) {
-        let Some(rx) = &self.generation_rx else {
-            return;
-        };
-        match rx.try_recv() {
-            Ok(Ok(answer)) => {
-                let trimmed = answer.trim().to_owned();
-                self.generation_rx = None;
-                self.generating = false;
-                if trimmed.is_empty() {
-                    plugin_log::warn("chat", "model returned an empty answer");
-                    self.error = Some("The model returned an empty answer.".to_owned());
-                } else {
-                    plugin_log::info(
-                        "chat",
-                        &format!("answer received ({} chars)", trimmed.chars().count()),
-                    );
-                    // Route to the session this answer was generated for.
-                    if let Some(index) = self
-                        .sessions
-                        .iter()
-                        .position(|s| s.id == self.generating_session_id)
-                    {
-                        self.sessions[index].messages.push(ChatMessageDto {
-                            role: ChatRole::Assistant,
-                            content: trimmed,
-                        });
-                        self.sessions[index].updated_at = now_unix();
-                        self.persist();
-                    }
+        loop {
+            let Some(rx) = &self.generation_rx else {
+                return;
+            };
+            match rx.try_recv() {
+                Ok(GenEvent::Chunk(delta)) => {
+                    self.append_chunk(&delta);
+                    self.revision += 1;
                 }
-                self.revision += 1;
-            }
-            Ok(Err(err)) => {
-                self.generation_rx = None;
-                self.generating = false;
-                self.error = Some(err);
-                self.revision += 1;
-            }
-            Err(TryRecvError::Empty) => {}
-            Err(TryRecvError::Disconnected) => {
-                self.generation_rx = None;
-                self.generating = false;
-                self.error = Some("Chat generation stopped unexpectedly.".to_owned());
-                self.revision += 1;
+                Ok(GenEvent::Done(Ok(answer))) => {
+                    self.complete_generation(answer);
+                }
+                Ok(GenEvent::Done(Err(err))) => {
+                    self.fail_generation(err);
+                }
+                Err(TryRecvError::Empty) => return,
+                Err(TryRecvError::Disconnected) => {
+                    self.generation_rx = None;
+                    self.generating = false;
+                    self.generating_msg_open = false;
+                    self.error = Some("Chat generation stopped unexpectedly.".to_owned());
+                    self.revision += 1;
+                    return;
+                }
             }
         }
+    }
+
+    /// Index of the session the in-flight generation belongs to.
+    fn generating_index(&self) -> Option<usize> {
+        self.sessions
+            .iter()
+            .position(|s| s.id == self.generating_session_id)
+    }
+
+    /// Appends a streamed delta, creating the assistant message on the first one.
+    fn append_chunk(&mut self, delta: &str) {
+        let Some(index) = self.generating_index() else {
+            return;
+        };
+        if !self.generating_msg_open {
+            self.sessions[index].messages.push(ChatMessageDto {
+                role: ChatRole::Assistant,
+                content: String::new(),
+            });
+            self.generating_msg_open = true;
+        }
+        if let Some(last) = self.sessions[index].messages.last_mut() {
+            last.content.push_str(delta);
+        }
+        self.sessions[index].updated_at = now_unix();
+        // Persist once on completion, not per chunk.
+    }
+
+    fn complete_generation(&mut self, answer: String) {
+        let trimmed = answer.trim().to_owned();
+        self.generation_rx = None;
+        self.generating = false;
+        if let Some(index) = self.generating_index() {
+            if self.generating_msg_open {
+                if trimmed.is_empty() {
+                    // Drop the empty streamed bubble.
+                    if matches!(self.sessions[index].messages.last(), Some(m) if m.role == ChatRole::Assistant)
+                    {
+                        self.sessions[index].messages.pop();
+                    }
+                } else if let Some(last) = self.sessions[index].messages.last_mut() {
+                    last.content = trimmed.clone();
+                }
+            } else if !trimmed.is_empty() {
+                // No chunks arrived (defensive) — append the whole answer.
+                self.sessions[index].messages.push(ChatMessageDto {
+                    role: ChatRole::Assistant,
+                    content: trimmed.clone(),
+                });
+            }
+            self.sessions[index].updated_at = now_unix();
+            self.persist();
+        }
+        if trimmed.is_empty() {
+            plugin_log::warn("chat", "model returned an empty answer");
+            self.error = Some("The model returned an empty answer.".to_owned());
+        } else {
+            plugin_log::info(
+                "chat",
+                &format!("answer received ({} chars)", trimmed.chars().count()),
+            );
+        }
+        self.generating_msg_open = false;
+        self.revision += 1;
+    }
+
+    fn fail_generation(&mut self, err: String) {
+        self.generation_rx = None;
+        self.generating = false;
+        // Drop an empty in-progress bubble; keep any partial text already streamed.
+        if self.generating_msg_open {
+            if let Some(index) = self.generating_index() {
+                if matches!(self.sessions[index].messages.last(), Some(m) if m.role == ChatRole::Assistant && m.content.trim().is_empty())
+                {
+                    self.sessions[index].messages.pop();
+                }
+            }
+        }
+        self.generating_msg_open = false;
+        self.error = Some(err);
+        self.revision += 1;
     }
 
     /// Builds the snapshot for the UI. `listening`/`transcribing` come from the
@@ -341,7 +423,9 @@ impl ChatController {
         } else {
             configured_prompt
         };
-        let system = build_system_with_history(base_prompt, &messages);
+        // Always enforce speakable prose, even with a custom prompt.
+        let base_prompt = format!("{base_prompt}\n\n{SPEAK_STYLE}");
+        let system = build_system_with_history(&base_prompt, &messages);
         let latest_user = messages
             .iter()
             .rev()
@@ -363,19 +447,25 @@ impl ChatController {
         let session_key = self.active_id.clone();
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
-            let result = host.chat(
+            let chunk_tx = tx.clone();
+            let mut on_chunk = move |delta: &str| {
+                let _ = chunk_tx.send(GenEvent::Chunk(delta.to_owned()));
+            };
+            let result = host.chat_stream(
                 &model_ref,
                 &system,
                 &latest_user,
                 Some(session_key.as_str()),
                 &cancelled,
+                &mut on_chunk,
             );
             if let Err(err) = &result {
                 host.log(LogLevel::Error, &format!("generation failed: {err}"));
             }
-            let _ = tx.send(result);
+            let _ = tx.send(GenEvent::Done(result));
         });
         self.generating_session_id = self.active_id.clone();
+        self.generating_msg_open = false;
         self.generation_rx = Some(rx);
         self.generating = true;
     }
