@@ -19,11 +19,15 @@ final class ChatViewModel: ObservableObject {
     private var loadedOnce = false
     private var lastActiveSessionId = ""
 
-    /// Models worth offering for chat: anything Ready (local on disk or a cloud
-    /// model with a key). Falls back to the full list if nothing is ready.
+    /// Models worth offering for chat. Starts from the app-wide enabled set the
+    /// user curated in Settings → language models (an empty set means "show all",
+    /// so a fresh install isn't empty), then prefers models Ready to run right now
+    /// (local on disk or a cloud model with a key), falling back to the whole set.
     var selectableModels: [LlmRegistryEntryDTO] {
-        let ready = registry.filter { $0.availability == .ready }
-        return ready.isEmpty ? registry : ready
+        let enabled = registry.filter { $0.enabled }
+        let pool = enabled.isEmpty ? registry : enabled
+        let ready = pool.filter { $0.availability == .ready }
+        return ready.isEmpty ? pool : ready
     }
 
     func start() {

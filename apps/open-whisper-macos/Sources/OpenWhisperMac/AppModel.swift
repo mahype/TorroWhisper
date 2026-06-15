@@ -16,6 +16,10 @@ final class AppModel: ObservableObject {
     @Published var lmStudioModels: [RemoteModelDTO] = []
     @Published var ollamaModelsError: String?
     @Published var lmStudioModelsError: String?
+    /// Unified model registry (local presets, custom GGUF, cloud, enabled remote),
+    /// each entry carrying its app-wide `enabled` flag. Source for the cloud rows
+    /// and enable state in the language-models manager.
+    @Published var llmRegistry: [LlmRegistryEntryDTO] = []
     @Published var diagnostics: DiagnosticsDTO = .empty
     @Published var runtime: RuntimeStatusDTO = .empty
     @Published var bridgeError: String?
@@ -260,6 +264,30 @@ final class AppModel: ObservableObject {
                     self.settings.plugins[index].enabled = newValue
                 } else {
                     self.settings.plugins.append(PluginConfigDTO(id: id, enabled: newValue))
+                }
+                self.requestAutoSave()
+            }
+        )
+    }
+
+    /// Whether `stableId` is currently enabled app-wide (literal membership).
+    func isModelEnabled(_ stableId: String) -> Bool {
+        settings.enabledModelIds.contains(stableId)
+    }
+
+    /// On/off binding for a model's app-wide enable state, keyed by its stable id.
+    /// Toggling on appends the id; off removes it. Saved via the normal autosave
+    /// flow, which reloads the registry so `enabled` flags refresh everywhere.
+    func modelEnabledBinding(stableId: String) -> Binding<Bool> {
+        Binding(
+            get: { self.settings.enabledModelIds.contains(stableId) },
+            set: { newValue in
+                if newValue {
+                    if !self.settings.enabledModelIds.contains(stableId) {
+                        self.settings.enabledModelIds.append(stableId)
+                    }
+                } else {
+                    self.settings.enabledModelIds.removeAll { $0 == stableId }
                 }
                 self.requestAutoSave()
             }
@@ -602,6 +630,7 @@ final class AppModel: ObservableObject {
             modelStatusList = (try? bridge.getModelStatusList()) ?? []
             llmStatusList = (try? bridge.getLlmStatusList()) ?? []
             customLlmStatusList = (try? bridge.getCustomLlmStatusList()) ?? []
+            llmRegistry = (try? bridge.getLlmRegistry()) ?? []
             diagnostics = try bridge.runPermissionDiagnostics()
             runtime = try bridge.getRuntimeStatus()
             lastSeenMicSwitchEventCount = runtime.micSwitchEventCount

@@ -256,6 +256,16 @@ enum LlmPreset: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// Token used in `LlmModelRef::stable_id` (`local_preset:<token>`). Rust derives
+    /// it from `LlmPreset::label()`, which is capitalized — MUST match exactly.
+    var stableToken: String {
+        switch self {
+        case .small: return "Small"
+        case .medium: return "Medium"
+        case .large: return "Large"
+        }
+    }
+
     var displayName: String {
         switch self {
         case .small: return "Gemma 4 E2B (3.5 GB)"
@@ -701,6 +711,18 @@ enum OpenAiCompatibleProviderDTO: String, Codable, Hashable {
     case mistral
     case deepSeek = "deep_seek"
     case grok
+
+    /// Lowercase token used in `LlmModelRef::stable_id`. Distinct from `rawValue`
+    /// (the snake_case wire form): Rust uses `openai`/`deepseek`, not
+    /// `open_ai`/`deep_seek`. MUST stay in sync with Rust `LlmBackendKind::label_id`.
+    var stableToken: String {
+        switch self {
+        case .openAi: return "openai"
+        case .mistral: return "mistral"
+        case .deepSeek: return "deepseek"
+        case .grok: return "grok"
+        }
+    }
 }
 
 /// Which backend serves a model. Raw values match Rust `LlmBackendKind`.
@@ -825,6 +847,22 @@ enum LlmModelRefDTO: Codable, Hashable {
             try container.encode(name, forKey: .modelName)
         }
     }
+
+    /// Canonical selection token. MUST match Rust `LlmModelRef::stable_id` exactly
+    /// — it is the cross-language key into `AppSettings.enabledModelIds` and the
+    /// registry's `stableId`.
+    var stableId: String {
+        switch self {
+        case .localPreset(let preset): return "local_preset:\(preset.stableToken)"
+        case .localCustom(let id): return "local_custom:\(id)"
+        case .ollama(let name): return "ollama:\(name)"
+        case .lmStudio(let name): return "lmstudio:\(name)"
+        case .openAiCompatible(let provider, let modelName):
+            return "\(provider.stableToken):\(modelName)"
+        case .anthropic(let name): return "anthropic:\(name)"
+        case .gemini(let name): return "gemini:\(name)"
+        }
+    }
 }
 
 struct LlmRegistryEntryDTO: Codable, Hashable, Identifiable {
@@ -834,6 +872,10 @@ struct LlmRegistryEntryDTO: Codable, Hashable, Identifiable {
     var displayName: String
     var detail: String
     var availability: LlmAvailability
+    /// Whether the user enabled this model app-wide (mirrors Rust
+    /// `LlmRegistryEntryDto.enabled`). Literal toggle state; pickers apply the
+    /// "empty curation = show all" fallback themselves.
+    var enabled: Bool = false
     var progressBasisPoints: UInt16?
 
     var id: String { stableId }
@@ -984,6 +1026,9 @@ struct AppSettings: Codable, Equatable {
     /// Registry-selected post-processing model (incl. cloud). nil = legacy
     /// PostProcessingChoice resolution.
     var activePostProcessingModel: LlmModelRefDTO?
+    /// Stable IDs of models enabled app-wide. Mirrors Rust
+    /// `AppSettings.enabled_model_ids`. Empty = "show all" (the pickers' fallback).
+    var enabledModelIds: [String]
     var ollama: ExternalProviderSettings
     var lmStudio: ExternalProviderSettings
     var postProcessingEnabled: Bool
@@ -1030,6 +1075,7 @@ struct AppSettings: Codable, Equatable {
         activeCustomLlmId: "",
         customLlmModels: [],
         activePostProcessingModel: nil,
+        enabledModelIds: [],
         ollama: ExternalProviderSettings(endpoint: "http://127.0.0.1:11434", modelName: "whisper"),
         lmStudio: ExternalProviderSettings(endpoint: "http://127.0.0.1:1234", modelName: "openai/whisper-small"),
         postProcessingEnabled: false,

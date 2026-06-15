@@ -54,12 +54,20 @@ struct CloudModelsSheet: View {
         .onAppear(perform: reload)
     }
 
+    /// Models offered for post-processing: the app-wide enabled set the user
+    /// curated in the language-models manager (empty = show all, so this is never
+    /// empty on a fresh install).
+    private var selectableRegistry: [LlmRegistryEntryDTO] {
+        let enabled = registry.filter { $0.enabled }
+        return enabled.isEmpty ? registry : enabled
+    }
+
     private var modelSection: some View {
         Section {
             Picker(selection: selectionBinding) {
                 Text("Default (local / legacy)", bundle: .module)
                     .tag(String?.none)
-                ForEach(registry) { entry in
+                ForEach(selectableRegistry) { entry in
                     Text(entryLabel(entry)).tag(String?.some(entry.stableId))
                 }
             } label: {
@@ -67,7 +75,7 @@ struct CloudModelsSheet: View {
             }
 
             Text(
-                "Pick any model for post-processing. Already-downloaded local models are reused; cloud models need an API key below.",
+                "Pick a post-processing model from the ones enabled in the language-models manager. Already-downloaded local models are reused; cloud models need an API key below.",
                 bundle: .module
             )
             .font(.caption)
