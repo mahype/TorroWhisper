@@ -318,11 +318,13 @@
 /* Bridge status: footer / tray status line */
 "Open Whisper is starting." = "Open Whisper is starting.";
 "History cleared." = "History cleared.";
+"Hide Sidebar" = "Hide Sidebar";
 "Local transcription complete." = "Local transcription complete.";
 "Transcript ready." = "Transcript ready.";
 "Transcript inserted into the active app." = "Transcript inserted into the active app.";
 "No text available to copy." = "No text available to copy.";
 "No text available to paste." = "No text available to paste.";
+"Show Sidebar" = "Show Sidebar";
 "Post-processing cancelled." = "Post-processing cancelled.";
 "Post-processing returned no text." = "Post-processing returned no text.";
 "Recording already in progress." = "Recording already in progress.";

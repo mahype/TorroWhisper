@@ -380,11 +380,14 @@ struct ChatWindowView: View {
     @ObservedObject var chat: ChatViewModel
     @Environment(\.locale) private var locale
     @State private var draft = ""
+    @State private var sidebarVisible = true
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-        } detail: {
+        HStack(spacing: 0) {
+            if sidebarVisible {
+                sidebar
+                Divider()
+            }
             VStack(spacing: 0) {
                 header
                 Divider()
@@ -392,8 +395,19 @@ struct ChatWindowView: View {
                 Divider()
                 inputBar
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationSplitViewStyle(.balanced)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    toggleSidebar()
+                } label: {
+                    Image(systemName: "sidebar.left")
+                }
+                .help(sidebarToggleLabel)
+                .accessibilityLabel(sidebarToggleLabel)
+            }
+        }
         .frame(minWidth: 680, idealWidth: 760, minHeight: 480, idealHeight: 580)
         .onAppear { chat.start() }
         .onDisappear { chat.stop() }
@@ -427,8 +441,7 @@ struct ChatWindowView: View {
             }
         }
         .listStyle(.sidebar)
-        .frame(minWidth: 200, idealWidth: 220)
-        .navigationSplitViewColumnWidth(220)
+        .frame(width: 220)
         .safeAreaInset(edge: .top) {
             Button {
                 chat.newSession()
@@ -453,6 +466,16 @@ struct ChatWindowView: View {
         session.messageCount == 0
             ? L("Empty", locale: locale)
             : "\(session.messageCount) " + L("messages", locale: locale)
+    }
+
+    private func toggleSidebar() {
+        withAnimation {
+            sidebarVisible.toggle()
+        }
+    }
+
+    private var sidebarToggleLabel: String {
+        sidebarVisible ? L("Hide Sidebar", locale: locale) : L("Show Sidebar", locale: locale)
     }
 
     // MARK: Detail

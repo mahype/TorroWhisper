@@ -420,6 +420,8 @@
 "file damaged" = "Datei beschädigt";
 "needs API key" = "API-Schlüssel nötig";
 "Chat shortcut" = "Chat-Kürzel";
+"Hide Sidebar" = "Seitenleiste ausblenden";
+"Show Sidebar" = "Seitenleiste einblenden";
 "This shortcut is already used for dictation." = "Dieses Kürzel wird bereits fürs Diktat verwendet.";
 "System prompt" = "System-Prompt";
 "New chat" = "Neuer Chat";
