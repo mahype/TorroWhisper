@@ -98,14 +98,14 @@ jobs:
         run: |
           set -euo pipefail
           version="${TAG#v}"
-          ./scripts/smoke-test-dmg.sh "dist/Donny-${version}.dmg"
+          ./scripts/smoke-test-dmg.sh "dist/DonnyWhisper-${version}.dmg"
 
       - name: Verify Sparkle sign_update is available
         run: |
           set -euo pipefail
-          sign_update="$(find apps/donny-macos/.build -type f -name sign_update 2>/dev/null | head -1 || true)"
+          sign_update="$(find apps/donnywhisper-macos/.build -type f -name sign_update 2>/dev/null | head -1 || true)"
           if [[ ! -x "$sign_update" ]]; then
-            echo "error: sign_update not found under apps/donny-macos/.build — the Sparkle SPM artifact was not materialised by the earlier build step." >&2
+            echo "error: sign_update not found under apps/donnywhisper-macos/.build — the Sparkle SPM artifact was not materialised by the earlier build step." >&2
             exit 1
           fi
           echo "sign_update: $sign_update"
@@ -124,7 +124,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           files: |
-            dist/Donny-*.dmg
+            dist/DonnyWhisper-*.dmg
             dist/SHA256SUMS.txt
 
       - name: Fetch release notes for appcast
@@ -150,9 +150,9 @@ jobs:
           set -euo pipefail
           version="${TAG#v}"
           ./scripts/update-appcast.sh \
-            "dist/Donny-${version}.dmg" \
+            "dist/DonnyWhisper-${version}.dmg" \
             "$version" \
-            "https://github.com/mahype/donny/releases/tag/${TAG}" \
+            "https://github.com/mahype/DonnyWhisper/releases/tag/${TAG}" \
             "gh-pages/appcast.xml" \
             "release-notes.md"
 

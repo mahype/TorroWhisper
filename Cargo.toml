@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "crates/donny-bridge",
-    "crates/donny-core",
-    "crates/donny-llm-helper",
+    "crates/donnywhisper-bridge",
+    "crates/donnywhisper-core",
+    "crates/donnywhisper-llm-helper",
 ]
 resolver = "2"
 

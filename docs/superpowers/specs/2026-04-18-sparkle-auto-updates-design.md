@@ -6,7 +6,7 @@
 
 ## Goal
 
-Donny checks for new releases automatically and offers them to the user. Users should see a pending update within a day of publication, with a one-click restart to install — without the developer having to maintain custom update plumbing.
+DonnyWhisper checks for new releases automatically and offers them to the user. Users should see a pending update within a day of publication, with a one-click restart to install — without the developer having to maintain custom update plumbing.
 
 ## Non-Goals
 
@@ -27,7 +27,7 @@ Donny checks for new releases automatically and offers them to the user. Users s
 
 ```
 ┌────────────────────────────┐       ┌─────────────────────────────────────────┐
-│  Donny (running)    │       │  https://mahype.github.io/donny/ │
+│  DonnyWhisper (running)    │       │  https://mahype.github.io/DonnyWhisper/ │
 │                            │──GET─▶│  appcast.xml  (gh-pages branch)         │
 │  SPUStandardUpdaterController      └───────────────────┬─────────────────────┘
 │  (Sparkle, check every 24h)│                           │
@@ -38,9 +38,9 @@ Donny checks for new releases automatically and offers them to the user. Users s
      newer available                                     │
            │                                             ▼
            │                          ┌─────────────────────────────────────────┐
-           ├─────────────────────────▶│  github.com/mahype/donny/        │
+           ├─────────────────────────▶│  github.com/mahype/DonnyWhisper/        │
            │  download DMG            │  releases/download/vX.Y.Z/              │
-           │                          │  Donny-X.Y.Z.dmg                  │
+           │                          │  DonnyWhisper-X.Y.Z.dmg                  │
            │                          └─────────────────────────────────────────┘
            ▼
      verify Ed25519 signature against
@@ -60,18 +60,18 @@ Donny checks for new releases automatically and offers them to the user. Users s
 
 ### 1. Swift app side
 
-**New SPM dependency** in `apps/donny-macos/Package.swift`:
+**New SPM dependency** in `apps/donnywhisper-macos/Package.swift`:
 - Product: `Sparkle` from `https://github.com/sparkle-project/Sparkle`
 - Version rule: `from: "2.6.0"` (latest stable 2.x at design time; any 2.x is acceptable as long as SPM support is present)
 
-**New file** `apps/donny-macos/Sources/Donny/UpdaterController.swift`:
+**New file** `apps/donnywhisper-macos/Sources/DonnyWhisper/UpdaterController.swift`:
 - Thin wrapper around `SPUStandardUpdaterController`
 - Owns the updater instance for the lifetime of the app (required — Sparkle will stop checking if the controller is deallocated)
 - Exposes:
   - `checkForUpdates()` — manual trigger
   - `automaticallyChecksForUpdates: Bool` — pass-through to `updater.automaticallyChecksForUpdates`
 
-**AppDelegate integration** (`AppDelegate.swift`, optionally reflected in `DonnyApp.swift`):
+**AppDelegate integration** (`AppDelegate.swift`, optionally reflected in `DonnyWhisperApp.swift`):
 - Instantiate `UpdaterController` in `applicationDidFinishLaunching`
 - Hold the reference on the delegate (property, not local)
 
@@ -85,11 +85,11 @@ Donny checks for new releases automatically and offers them to the user. Users s
 - Button: **Check Now** — calls `UpdaterController.checkForUpdates()`
 - No version label in this spec (keep minimal; can be added later if needed)
 
-**`Info.plist` additions** (`apps/donny-macos/Resources/Info.plist`):
+**`Info.plist` additions** (`apps/donnywhisper-macos/Resources/Info.plist`):
 
 | Key | Value |
 | --- | --- |
-| `SUFeedURL` | `https://mahype.github.io/donny/appcast.xml` |
+| `SUFeedURL` | `https://mahype.github.io/DonnyWhisper/appcast.xml` |
 | `SUPublicEDKey` | Base64 of Ed25519 public key (literal string, from `generate_keys` output) |
 | `SUEnableAutomaticChecks` | `YES` |
 | `SUAutomaticallyUpdate` | `YES` |
@@ -106,15 +106,15 @@ Sparkle persists user preferences under its own keys in `NSUserDefaults` — no 
   <?xml version="1.0" standalone="yes"?>
   <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
     <channel>
-      <title>Donny</title>
-      <link>https://mahype.github.io/donny/appcast.xml</link>
-      <description>Official update feed for Donny.</description>
+      <title>DonnyWhisper</title>
+      <link>https://mahype.github.io/DonnyWhisper/appcast.xml</link>
+      <description>Official update feed for DonnyWhisper.</description>
       <language>en</language>
     </channel>
   </rss>
   ```
 - **GitHub Pages:** Repo → *Settings → Pages* → Source `gh-pages`, folder `/ (root)`
-- **Public URL:** `https://mahype.github.io/donny/appcast.xml`
+- **Public URL:** `https://mahype.github.io/DonnyWhisper/appcast.xml`
 
 ### 3. Key management
 
@@ -176,9 +176,9 @@ Implementation: pure shell + `awk`/`sed` for XML munging is brittle. Use a small
      run: |
        version="${TAG#v}"
        ./scripts/update-appcast.sh \
-         "dist/Donny-${version}.dmg" \
+         "dist/DonnyWhisper-${version}.dmg" \
          "$version" \
-         "https://github.com/mahype/donny/releases/tag/${TAG}" \
+         "https://github.com/mahype/DonnyWhisper/releases/tag/${TAG}" \
          "gh-pages/appcast.xml"
    ```
 3. **Commit and push the appcast update**
@@ -193,7 +193,7 @@ Implementation: pure shell + `awk`/`sed` for XML munging is brittle. Use a small
        git push origin gh-pages
    ```
 
-The Sparkle CLI binaries (`sign_update`, `generate_keys`) are part of the Sparkle SPM checkout and appear under the build products directory. The script should locate them via `swift package --package-path apps/donny-macos describe --type json` or by downloading the Sparkle release tarball. Downloading the pinned release archive is simpler and faster — a step earlier in the workflow caches it.
+The Sparkle CLI binaries (`sign_update`, `generate_keys`) are part of the Sparkle SPM checkout and appear under the build products directory. The script should locate them via `swift package --package-path apps/donnywhisper-macos describe --type json` or by downloading the Sparkle release tarball. Downloading the pinned release archive is simpler and faster — a step earlier in the workflow caches it.
 
 **Note on permissions:** `.github/workflows/release.yml` already sets `permissions.contents: write`. That scope is sufficient to push to `gh-pages`.
 

@@ -1,9 +1,9 @@
 included:
-  - apps/donny-macos/Sources
+  - apps/donnywhisper-macos/Sources
 
 excluded:
-  - apps/donny-macos/.build
-  - apps/donny-macos/Tests
+  - apps/donnywhisper-macos/.build
+  - apps/donnywhisper-macos/Tests
   - target
   - dist
 

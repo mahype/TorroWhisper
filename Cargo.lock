@@ -459,14 +459,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "donny-bridge"
+name = "donnywhisper-bridge"
 version = "0.4.2"
 dependencies = [
  "arboard",
  "auto-launch",
  "cpal",
  "directories",
- "donny-core",
+ "donnywhisper-core",
  "enigo",
  "global-hotkey",
  "log",
@@ -482,7 +482,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "donny-core"
+name = "donnywhisper-core"
 version = "0.4.2"
 dependencies = [
  "serde",
@@ -490,7 +490,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "donny-llm-helper"
+name = "donnywhisper-llm-helper"
 version = "0.4.2"
 dependencies = [
  "encoding_rs",

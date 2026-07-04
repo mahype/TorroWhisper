@@ -1,4 +1,0 @@
-module DonnyBridgeFFI [system] {
-    header "DonnyBridgeFFI.h"
-    export *
-}

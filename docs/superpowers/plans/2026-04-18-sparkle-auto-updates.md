@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship Donny with an in-app auto-updater (Sparkle 2.x) wired into the existing signed-and-notarized release pipeline. Updates are checked in the background every 24 h, downloaded automatically, and applied on user confirmation.
+**Goal:** Ship DonnyWhisper with an in-app auto-updater (Sparkle 2.x) wired into the existing signed-and-notarized release pipeline. Updates are checked in the background every 24 h, downloaded automatically, and applied on user confirmation.
 
 **Architecture:** Sparkle framework embedded via SPM. A gh-pages-hosted `appcast.xml` advertises new releases. The existing `release.yml` workflow is extended to sign each DMG with an Ed25519 key and append an entry to the appcast. No backwards-compat concerns since the v0.1.0 draft will be re-cut with Sparkle included.
 
@@ -16,7 +16,7 @@
 
 The plan assumes:
 - You are on `main` with a clean working tree.
-- `gh` CLI is authenticated and points at `mahype/donny`.
+- `gh` CLI is authenticated and points at `mahype/DonnyWhisper`.
 - The user has already set the Apple-signing secrets (`APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `MACOS_CERTIFICATE_P12`, `MACOS_CERTIFICATE_PASSWORD`).
 - The v0.1.0 tag and draft release currently exist and will be recreated after Sparkle is wired in.
 
@@ -34,41 +34,41 @@ Kill the running app once you've confirmed it launched.
 ## Task 1: Add Sparkle as an SPM dependency
 
 **Files:**
-- Modify: `apps/donny-macos/Package.swift`
+- Modify: `apps/donnywhisper-macos/Package.swift`
 
 - [ ] **Step 1: Edit `Package.swift` to add the Sparkle package**
 
-Replace the contents of `apps/donny-macos/Package.swift` with:
+Replace the contents of `apps/donnywhisper-macos/Package.swift` with:
 
 ```swift
 // swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
-    name: "Donny",
+    name: "DonnyWhisper",
     platforms: [
         .macOS(.v14),
     ],
     products: [
-        .executable(name: "Donny", targets: ["Donny"]),
+        .executable(name: "DonnyWhisper", targets: ["DonnyWhisper"]),
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
     ],
     targets: [
         .systemLibrary(
-            name: "DonnyBridgeFFI",
+            name: "DonnyWhisperBridgeFFI",
             path: "Bridge"
         ),
         .executableTarget(
-            name: "Donny",
+            name: "DonnyWhisper",
             dependencies: [
-                "DonnyBridgeFFI",
+                "DonnyWhisperBridgeFFI",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
-            path: "Sources/Donny",
+            path: "Sources/DonnyWhisper",
             linkerSettings: [
-                .unsafeFlags(["-L", "../../target/debug", "-ldonny_bridge"]),
+                .unsafeFlags(["-L", "../../target/debug", "-ldonnywhisper_bridge"]),
                 .linkedLibrary("c++"),
                 .linkedFramework("Accelerate"),
                 .linkedFramework("AppKit"),
@@ -85,7 +85,7 @@ let package = Package(
 
 - [ ] **Step 2: Resolve the new dependency**
 
-Run: `swift package --package-path apps/donny-macos resolve`
+Run: `swift package --package-path apps/donnywhisper-macos resolve`
 
 Expected: Sparkle is fetched and `Package.resolved` is updated/created. No errors.
 
@@ -98,7 +98,7 @@ Expected: app launches normally.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add apps/donny-macos/Package.swift apps/donny-macos/Package.resolved
+git add apps/donnywhisper-macos/Package.swift apps/donnywhisper-macos/Package.resolved
 git commit -m "deps: add Sparkle 2.x for auto-updates"
 ```
 
@@ -107,11 +107,11 @@ git commit -m "deps: add Sparkle 2.x for auto-updates"
 ## Task 2: Create `UpdaterController`
 
 **Files:**
-- Create: `apps/donny-macos/Sources/Donny/UpdaterController.swift`
+- Create: `apps/donnywhisper-macos/Sources/DonnyWhisper/UpdaterController.swift`
 
 - [ ] **Step 1: Create the file**
 
-Write `apps/donny-macos/Sources/Donny/UpdaterController.swift`:
+Write `apps/donnywhisper-macos/Sources/DonnyWhisper/UpdaterController.swift`:
 
 ```swift
 import Foundation
@@ -145,14 +145,14 @@ final class UpdaterController {
 
 - [ ] **Step 2: Verify it compiles**
 
-Run: `swift build --package-path apps/donny-macos`
+Run: `swift build --package-path apps/donnywhisper-macos`
 
 Expected: build succeeds.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add apps/donny-macos/Sources/Donny/UpdaterController.swift
+git add apps/donnywhisper-macos/Sources/DonnyWhisper/UpdaterController.swift
 git commit -m "feat(updates): add UpdaterController wrapping Sparkle"
 ```
 
@@ -161,7 +161,7 @@ git commit -m "feat(updates): add UpdaterController wrapping Sparkle"
 ## Task 3: Wire `UpdaterController` into `AppDelegate` and add the menu item
 
 **Files:**
-- Modify: `apps/donny-macos/Sources/Donny/AppDelegate.swift`
+- Modify: `apps/donnywhisper-macos/Sources/DonnyWhisper/AppDelegate.swift`
 
 - [ ] **Step 1: Add the `updaterController` property**
 
@@ -232,7 +232,7 @@ Manual verification: open the menu-bar icon → confirm the new item **„Nach U
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/donny-macos/Sources/Donny/AppDelegate.swift
+git add apps/donnywhisper-macos/Sources/DonnyWhisper/AppDelegate.swift
 git commit -m "feat(updates): add Check-for-Updates menu item"
 ```
 
@@ -241,9 +241,9 @@ git commit -m "feat(updates): add Check-for-Updates menu item"
 ## Task 4: Add Updates settings tab
 
 **Files:**
-- Modify: `apps/donny-macos/Sources/Donny/AppUIComponents.swift:3-46`
-- Modify: `apps/donny-macos/Sources/Donny/SettingsView.swift:41-56`
-- Create: `apps/donny-macos/Sources/Donny/UpdatesSettingsView.swift`
+- Modify: `apps/donnywhisper-macos/Sources/DonnyWhisper/AppUIComponents.swift:3-46`
+- Modify: `apps/donnywhisper-macos/Sources/DonnyWhisper/SettingsView.swift:41-56`
+- Create: `apps/donnywhisper-macos/Sources/DonnyWhisper/UpdatesSettingsView.swift`
 
 - [ ] **Step 1: Extend `SettingsSection` enum**
 
@@ -303,7 +303,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
 - [ ] **Step 2: Create `UpdatesSettingsView.swift`**
 
-Write `apps/donny-macos/Sources/Donny/UpdatesSettingsView.swift`:
+Write `apps/donnywhisper-macos/Sources/DonnyWhisper/UpdatesSettingsView.swift`:
 
 ```swift
 import AppKit
@@ -339,7 +339,7 @@ struct UpdatesSettingsView: View {
 
         Section {
             Text("""
-            Donny prüft beim Start und danach alle 24 Stunden auf neue \
+            DonnyWhisper prüft beim Start und danach alle 24 Stunden auf neue \
             Versionen. Updates werden im Hintergrund heruntergeladen und installiert, \
             sobald du neu startest.
             """)
@@ -405,9 +405,9 @@ Manual: open Settings → sidebar shows a new **„Updates"** entry with the `ar
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/donny-macos/Sources/Donny/AppUIComponents.swift \
-        apps/donny-macos/Sources/Donny/SettingsView.swift \
-        apps/donny-macos/Sources/Donny/UpdatesSettingsView.swift
+git add apps/donnywhisper-macos/Sources/DonnyWhisper/AppUIComponents.swift \
+        apps/donnywhisper-macos/Sources/DonnyWhisper/SettingsView.swift \
+        apps/donnywhisper-macos/Sources/DonnyWhisper/UpdatesSettingsView.swift
 git commit -m "feat(updates): add Updates tab in Settings"
 ```
 
@@ -416,7 +416,7 @@ git commit -m "feat(updates): add Updates tab in Settings"
 ## Task 5: Generate Ed25519 keypair and wire Info.plist
 
 **Files:**
-- Modify: `apps/donny-macos/Resources/Info.plist`
+- Modify: `apps/donnywhisper-macos/Resources/Info.plist`
 
 This task requires the **developer** (not the agent) to handle the private key.
 
@@ -425,15 +425,15 @@ This task requires the **developer** (not the agent) to handle the private key.
 After Task 1 resolved Sparkle via SPM, the binaries live under the SPM checkout:
 
 ```bash
-find apps/donny-macos/.build -type f -name generate_keys 2>/dev/null | head -1
+find apps/donnywhisper-macos/.build -type f -name generate_keys 2>/dev/null | head -1
 ```
 
-Expected: a path like `apps/donny-macos/.build/artifacts/sparkle/Sparkle/Sparkle.app/Contents/MacOS/generate_keys`. If not found, run `swift build --package-path apps/donny-macos` first (Sparkle artifacts are pulled lazily).
+Expected: a path like `apps/donnywhisper-macos/.build/artifacts/sparkle/Sparkle/Sparkle.app/Contents/MacOS/generate_keys`. If not found, run `swift build --package-path apps/donnywhisper-macos` first (Sparkle artifacts are pulled lazily).
 
 - [ ] **Step 2: Generate the keypair (developer action)**
 
 ```bash
-GEN="$(find apps/donny-macos/.build -type f -name generate_keys | head -1)"
+GEN="$(find apps/donnywhisper-macos/.build -type f -name generate_keys | head -1)"
 "$GEN"
 ```
 
@@ -448,11 +448,11 @@ Public key (SUPublicEDKey value):
 
 - [ ] **Step 3: Add the Sparkle keys to `Info.plist`**
 
-Edit `apps/donny-macos/Resources/Info.plist`. Insert the following keys immediately before the closing `</dict>` (replace `<THE_PUBLIC_KEY_FROM_STEP_2>` with the actual Base64 string):
+Edit `apps/donnywhisper-macos/Resources/Info.plist`. Insert the following keys immediately before the closing `</dict>` (replace `<THE_PUBLIC_KEY_FROM_STEP_2>` with the actual Base64 string):
 
 ```xml
     <key>SUFeedURL</key>
-    <string>https://mahype.github.io/donny/appcast.xml</string>
+    <string>https://mahype.github.io/DonnyWhisper/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string><THE_PUBLIC_KEY_FROM_STEP_2></string>
     <key>SUEnableAutomaticChecks</key>
@@ -466,7 +466,7 @@ Edit `apps/donny-macos/Resources/Info.plist`. Insert the following keys immediat
 - [ ] **Step 4: Export the private key and push it as a GitHub secret (developer action)**
 
 ```bash
-GEN="$(find apps/donny-macos/.build -type f -name generate_keys | head -1)"
+GEN="$(find apps/donnywhisper-macos/.build -type f -name generate_keys | head -1)"
 "$GEN" -x /tmp/sparkle-private.key
 gh secret set SPARKLE_ED_PRIVATE_KEY < /tmp/sparkle-private.key
 rm -P /tmp/sparkle-private.key
@@ -485,8 +485,8 @@ Expected: the secret is listed with a recent timestamp.
 
 ```bash
 ./scripts/build-macos-app.sh
-/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "dist/Donny.app/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "dist/Donny.app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "dist/DonnyWhisper.app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "dist/DonnyWhisper.app/Contents/Info.plist"
 ```
 
 Expected: the feed URL and the public-key Base64 are printed.
@@ -494,7 +494,7 @@ Expected: the feed URL and the public-key Base64 are printed.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add apps/donny-macos/Resources/Info.plist
+git add apps/donnywhisper-macos/Resources/Info.plist
 git commit -m "feat(updates): add Sparkle feed URL and public key to Info.plist"
 ```
 
@@ -519,9 +519,9 @@ cat > appcast.xml <<'XML'
 <?xml version="1.0" standalone="yes"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>Donny</title>
-    <link>https://mahype.github.io/donny/appcast.xml</link>
-    <description>Official update feed for Donny.</description>
+    <title>DonnyWhisper</title>
+    <link>https://mahype.github.io/DonnyWhisper/appcast.xml</link>
+    <description>Official update feed for DonnyWhisper.</description>
     <language>en</language>
   </channel>
 </rss>
@@ -537,7 +537,7 @@ git worktree remove /tmp/ow-gh-pages
 - [ ] **Step 2: Enable GitHub Pages (developer action via gh CLI)**
 
 ```bash
-gh api --method POST /repos/mahype/donny/pages \
+gh api --method POST /repos/mahype/DonnyWhisper/pages \
   -f source.branch=gh-pages -f source.path=/
 ```
 
@@ -547,7 +547,7 @@ Verify the site is public:
 
 ```bash
 sleep 30  # Pages takes a minute on first setup
-curl -sI https://mahype.github.io/donny/appcast.xml | head -3
+curl -sI https://mahype.github.io/DonnyWhisper/appcast.xml | head -3
 ```
 
 Expected: `HTTP/2 200`. If 404, wait 2–3 minutes and retry — Pages' initial deploy is slow.
@@ -555,7 +555,7 @@ Expected: `HTTP/2 200`. If 404, wait 2–3 minutes and retry — Pages' initial 
 - [ ] **Step 3: Sanity check from the app's perspective**
 
 ```bash
-curl -s https://mahype.github.io/donny/appcast.xml | head -5
+curl -s https://mahype.github.io/DonnyWhisper/appcast.xml | head -5
 ```
 
 Expected: the XML you committed, starting with `<?xml version="1.0" ...`.
@@ -666,7 +666,7 @@ Write `scripts/update-appcast.sh`:
 # to an existing appcast.xml.
 #
 # Positional arguments:
-#   1  DMG path                       e.g. dist/Donny-0.1.0.dmg
+#   1  DMG path                       e.g. dist/DonnyWhisper-0.1.0.dmg
 #   2  Version (no `v` prefix)         e.g. 0.1.0
 #   3  Release-notes URL               e.g. https://github.com/.../releases/tag/v0.1.0
 #   4  Appcast path                    e.g. gh-pages/appcast.xml
@@ -699,11 +699,11 @@ fi
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [[ -z "${SIGN_UPDATE:-}" ]]; then
-    SIGN_UPDATE="$(find "$repo_root/apps/donny-macos/.build" \
+    SIGN_UPDATE="$(find "$repo_root/apps/donnywhisper-macos/.build" \
         -type f -name sign_update 2>/dev/null | head -1)"
 fi
 if [[ ! -x "${SIGN_UPDATE:-}" ]]; then
-    echo "error: sign_update binary not found (tried $SIGN_UPDATE). Run 'swift build --package-path apps/donny-macos' first." >&2
+    echo "error: sign_update binary not found (tried $SIGN_UPDATE). Run 'swift build --package-path apps/donnywhisper-macos' first." >&2
     exit 1
 fi
 
@@ -723,7 +723,7 @@ if [[ -z "$ed_sig" || -z "$length" ]]; then
 fi
 
 dmg_filename="$(basename "$DMG_PATH")"
-dmg_url="https://github.com/mahype/donny/releases/download/v${VERSION}/${dmg_filename}"
+dmg_url="https://github.com/mahype/DonnyWhisper/releases/download/v${VERSION}/${dmg_filename}"
 pub_date="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')"
 
 APPCAST_PATH="$APPCAST_PATH" \
@@ -753,9 +753,9 @@ cat > "$tmp/appcast.xml" <<'XML'
 <?xml version="1.0" standalone="yes"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>Donny</title>
-    <link>https://mahype.github.io/donny/appcast.xml</link>
-    <description>Official update feed for Donny.</description>
+    <title>DonnyWhisper</title>
+    <link>https://mahype.github.io/DonnyWhisper/appcast.xml</link>
+    <description>Official update feed for DonnyWhisper.</description>
     <language>en</language>
   </channel>
 </rss>
@@ -763,8 +763,8 @@ XML
 
 APPCAST_PATH="$tmp/appcast.xml" \
 VERSION="0.1.0" \
-RELEASE_NOTES_URL="https://github.com/mahype/donny/releases/tag/v0.1.0" \
-DMG_URL="https://github.com/mahype/donny/releases/download/v0.1.0/Donny-0.1.0.dmg" \
+RELEASE_NOTES_URL="https://github.com/mahype/DonnyWhisper/releases/tag/v0.1.0" \
+DMG_URL="https://github.com/mahype/DonnyWhisper/releases/download/v0.1.0/DonnyWhisper-0.1.0.dmg" \
 DMG_LENGTH="1234567" \
 DMG_ED_SIGNATURE="FakeSignatureBase64==" \
 MIN_SYSTEM_VERSION="14.0" \
@@ -804,8 +804,8 @@ In `.github/workflows/release.yml`, after the existing **Build DMG** step and **
       - name: Build Sparkle tools
         run: |
           # Ensure sign_update and friends are built so update-appcast.sh can find them.
-          swift build --package-path apps/donny-macos --product Sparkle >/dev/null 2>&1 || true
-          find apps/donny-macos/.build -type f -name sign_update | head -1
+          swift build --package-path apps/donnywhisper-macos --product Sparkle >/dev/null 2>&1 || true
+          find apps/donnywhisper-macos/.build -type f -name sign_update | head -1
 
       - name: Checkout gh-pages for appcast
         uses: actions/checkout@v4
@@ -821,9 +821,9 @@ In `.github/workflows/release.yml`, after the existing **Build DMG** step and **
           set -euo pipefail
           version="${TAG#v}"
           ./scripts/update-appcast.sh \
-            "dist/Donny-${version}.dmg" \
+            "dist/DonnyWhisper-${version}.dmg" \
             "$version" \
-            "https://github.com/mahype/donny/releases/tag/${TAG}" \
+            "https://github.com/mahype/DonnyWhisper/releases/tag/${TAG}" \
             "gh-pages/appcast.xml"
 
       - name: Publish appcast
@@ -912,10 +912,10 @@ Before cutting the release tag, verify the end-to-end build chain still works lo
 
 ```bash
 VERSION="0.0.1" ./scripts/build-macos-app.sh
-open "dist/Donny.app"
+open "dist/DonnyWhisper.app"
 ```
 
-Expected: app launches as a menu-bar app. The new *Nach Updates suchen...* item is present. Clicking it triggers a Sparkle network check against `https://mahype.github.io/donny/appcast.xml` — with the current empty appcast, Sparkle will report "You're up to date". That's the right answer: the check itself works, there just isn't a newer version yet.
+Expected: app launches as a menu-bar app. The new *Nach Updates suchen...* item is present. Clicking it triggers a Sparkle network check against `https://mahype.github.io/DonnyWhisper/appcast.xml` — with the current empty appcast, Sparkle will report "You're up to date". That's the right answer: the check itself works, there just isn't a newer version yet.
 
 - [ ] **Step 2: Quit the local test build**
 
@@ -930,7 +930,7 @@ The real end-to-end flow (check finds a real newer version, downloads, verifies,
 - [ ] **Step 1: Create the annotated tag on the current `main` HEAD**
 
 ```bash
-git tag -a v0.1.0 -m "Donny 0.1.0 — first macOS release with auto-updates"
+git tag -a v0.1.0 -m "DonnyWhisper 0.1.0 — first macOS release with auto-updates"
 git push origin v0.1.0
 ```
 
@@ -949,7 +949,7 @@ If any step fails, read the log, fix, re-tag (`git tag -f` is OK because the tag
 
 ```bash
 sleep 30   # give Pages' CDN a moment to refresh
-curl -s https://mahype.github.io/donny/appcast.xml | grep -A2 shortVersionString
+curl -s https://mahype.github.io/DonnyWhisper/appcast.xml | grep -A2 shortVersionString
 ```
 
 Expected: the appcast contains `<sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>` plus a real `edSignature`.
@@ -958,7 +958,7 @@ Expected: the appcast contains `<sparkle:shortVersionString>0.1.0</sparkle:short
 
 ```bash
 VERSION="0.0.1" ./scripts/build-macos-app.sh
-open "dist/Donny.app"
+open "dist/DonnyWhisper.app"
 ```
 
 Manual verification:
@@ -985,7 +985,7 @@ Expected: `Updated release ...`. The release is now public and the DMG is linked
 gh release view v0.1.0 --json isDraft,assets
 ```
 
-Expected: `"isDraft": false`, assets include `Donny-0.1.0.dmg` and `SHA256SUMS.txt`.
+Expected: `"isDraft": false`, assets include `DonnyWhisper-0.1.0.dmg` and `SHA256SUMS.txt`.
 
 - [ ] **Step 7: No commit — the release itself is the artifact**
 

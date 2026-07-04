@@ -1,0 +1,5 @@
+"CFBundleDisplayName" = "DonnyWhisper";
+"CFBundleName" = "DonnyWhisper";
+"NSHumanReadableCopyright" = "Copyright © Sven Wagener. Alle Rechte vorbehalten.";
+"NSMicrophoneUsageDescription" = "DonnyWhisper nimmt deine Stimme auf, um sie lokal zu transkribieren.";
+"NSAppleEventsUsageDescription" = "DonnyWhisper nutzt Apple Events, um transkribierten Text in die aktive App einzufügen.";

@@ -1,5 +1,0 @@
-"CFBundleDisplayName" = "Donny";
-"CFBundleName" = "Donny";
-"NSHumanReadableCopyright" = "Copyright © Sven Wagener. All rights reserved.";
-"NSMicrophoneUsageDescription" = "Donny records your voice so it can be transcribed locally.";
-"NSAppleEventsUsageDescription" = "Donny uses Apple Events to paste transcribed text into the active application.";
