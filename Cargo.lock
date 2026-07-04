@@ -459,6 +459,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "donny-bridge"
+version = "0.4.2"
+dependencies = [
+ "arboard",
+ "auto-launch",
+ "cpal",
+ "directories",
+ "donny-core",
+ "enigo",
+ "global-hotkey",
+ "log",
+ "mp3lame-encoder",
+ "regex",
+ "reqwest",
+ "security-framework 2.11.1",
+ "serde",
+ "serde_json",
+ "sys-locale",
+ "sysinfo",
+ "whisper-rs",
+]
+
+[[package]]
+name = "donny-core"
+version = "0.4.2"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "donny-llm-helper"
+version = "0.4.2"
+dependencies = [
+ "encoding_rs",
+ "llama-cpp-2",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1732,47 +1773,6 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
-
-[[package]]
-name = "open-whisper-bridge"
-version = "0.4.2"
-dependencies = [
- "arboard",
- "auto-launch",
- "cpal",
- "directories",
- "enigo",
- "global-hotkey",
- "log",
- "mp3lame-encoder",
- "open-whisper-core",
- "regex",
- "reqwest",
- "security-framework 2.11.1",
- "serde",
- "serde_json",
- "sys-locale",
- "sysinfo",
- "whisper-rs",
-]
-
-[[package]]
-name = "open-whisper-core"
-version = "0.4.2"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "open-whisper-llm-helper"
-version = "0.4.2"
-dependencies = [
- "encoding_rs",
- "llama-cpp-2",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "openssl-probe"

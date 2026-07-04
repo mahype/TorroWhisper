@@ -16,7 +16,7 @@ Chat-Plugin (#17) als erste Referenz-Implementierung.
 ## 1. Überblick
 
 Ein Plugin bekommt vom Host genau drei Dinge — gebündelt im Trait
-[`PluginHost`](../crates/open-whisper-bridge/src/plugin_api.rs):
+[`PluginHost`](../crates/donny-bridge/src/plugin_api.rs):
 
 1. **Modelle entdecken** — die einheitliche Modell-Registry (lokale Presets,
    eigene GGUF-Modelle, Cloud-Modelle), jeweils mit Verfügbarkeits-Status.
@@ -35,7 +35,7 @@ Plugin  ──►  PluginHost (Trait)  ──►  llm::provider_for  ──►  
 ```
 
 Der konkrete Host ist
-[`BridgeHost`](../crates/open-whisper-bridge/src/plugin_api.rs). Er hält einen
+[`BridgeHost`](../crates/donny-bridge/src/plugin_api.rs). Er hält einen
 **Settings-Snapshot** und ist damit `Send` — er kann in den Arbeits-Thread eines
 Plugins wandern (z. B. läuft die Chat-Generierung außerhalb der Hauptschleife).
 
@@ -43,7 +43,7 @@ Plugins wandern (z. B. läuft die Chat-Generierung außerhalb der Hauptschleife)
 
 ## 2. Der Vertrag: `PluginHost`
 
-Definiert in `crates/open-whisper-bridge/src/plugin_api.rs`.
+Definiert in `crates/donny-bridge/src/plugin_api.rs`.
 
 ```rust
 pub const PLUGIN_API_VERSION: u32 = 1;
@@ -78,7 +78,7 @@ pub trait PluginHost {
 ### Host bauen
 
 ```rust
-use open_whisper_bridge::plugin_api::{BridgeHost, PluginHost, LogLevel};
+use donny_bridge::plugin_api::{BridgeHost, PluginHost, LogLevel};
 
 // settings: AppSettings — ein Snapshot, der in den Plugin-Thread wandern darf.
 let host = BridgeHost::new("mein_plugin", settings.clone());
@@ -86,14 +86,14 @@ let host = BridgeHost::new("mein_plugin", settings.clone());
 
 `"mein_plugin"` ist die Plugin-ID. Sie taucht in jeder Log-Zeile als
 `plugin:mein_plugin` auf und sollte zur ID im Plugin-Katalog passen
-(siehe `builtin_plugin_catalog()` in `crates/open-whisper-core/src/lib.rs`).
+(siehe `builtin_plugin_catalog()` in `crates/donny-core/src/lib.rs`).
 
 ---
 
 ## 3. Modelle entdecken: die Registry
 
 `available_models()` liefert dieselbe Liste, die auch die Einstellungs-UI zeigt —
-zusammengebaut in `crates/open-whisper-bridge/src/llm/registry.rs`. Sie enthält:
+zusammengebaut in `crates/donny-bridge/src/llm/registry.rs`. Sie enthält:
 
 - **Lokale Presets** — Gemma-Varianten (`LlmPreset::Small/Medium/Large`).
 - **Eigene GGUF-Modelle** — alles aus `AppSettings.custom_llm_models`.
@@ -101,7 +101,7 @@ zusammengebaut in `crates/open-whisper-bridge/src/llm/registry.rs`. Sie enthält
   DeepSeek, Grok, Gemini).
 
 Jeder Eintrag ist ein `LlmRegistryEntryDto`
-(`crates/open-whisper-core/src/lib.rs`):
+(`crates/donny-core/src/lib.rs`):
 
 | Feld | Bedeutung |
 |------|-----------|
@@ -169,7 +169,7 @@ has not been downloaded yet.“ oder „API key for OpenAI is not configured.“
 
 `host.log(LogLevel::Info, "…")` schreibt unter das Ziel `plugin:<id>` in das eine
 gemeinsame App-Log (Implementierung:
-`crates/open-whisper-bridge/src/plugin_log.rs`). So lässt sich später exakt
+`crates/donny-bridge/src/plugin_log.rs`). So lässt sich später exakt
 nachvollziehen, was ein Plugin getan hat oder warum es fehlschlug. Plugins
 sollten **nicht** direkt `log::` aufrufen, sondern immer `host.log(...)`.
 
@@ -196,7 +196,7 @@ verweigern, statt undefiniert zu laufen.
 
 Plugins, die in die **Nachbearbeitungs-Pipeline** einklinken, implementieren
 zusätzlich den Stage-Vertrag aus
-`crates/open-whisper-bridge/src/pipeline/mod.rs`:
+`crates/donny-bridge/src/pipeline/mod.rs`:
 
 | Bestandteil | Rolle |
 |-------------|-------|
@@ -209,7 +209,7 @@ zusätzlich den Stage-Vertrag aus
   `plugin:translate.deepl`). Unbekannte Stage-IDs werden **geloggt und
   übersprungen**, nie als harter Fehler behandelt.
 - **Konfiguration** je Schritt: `PipelineStepConfig`
-  (`crates/open-whisper-core/src/lib.rs`) trägt `stage_id`, `enabled` und ein
+  (`crates/donny-core/src/lib.rs`) trägt `stage_id`, `enabled` und ein
   **opakes JSON-Feld `config`**, das das Plugin frei interpretiert. Der Host
   schaut da nicht hinein.
 
@@ -236,11 +236,11 @@ Der Speicher-Fluss ist in beiden Fällen: UI ändert `AppSettings` → `requestA
 
 Zwei Konsumenten laufen heute durch den Vertrag — gute Vorlagen:
 
-- **Chat-Plugin** — `crates/open-whisper-bridge/src/chat.rs`,
+- **Chat-Plugin** — `crates/donny-bridge/src/chat.rs`,
   `ChatController::start_generation`. Baut `BridgeHost::new("chat", …)`, loggt über
   den Host und ruft `host.chat(...)` im Worker-Thread.
 - **LLM-Nachbearbeitungs-Stage** —
-  `crates/open-whisper-bridge/src/pipeline/stages/llm.rs`, `LlmStage::run`. Baut
+  `crates/donny-bridge/src/pipeline/stages/llm.rs`, `LlmStage::run`. Baut
   `BridgeHost::new("post_processing", …)` und ruft `host.generate(...)`.
 
 ---
@@ -251,9 +251,9 @@ Ein Plugin, das mit dem ersten lauffähigen Modell antwortet:
 
 ```rust
 use std::sync::{Arc, atomic::AtomicBool};
-use open_whisper_bridge::plugin_api::{BridgeHost, PluginHost, LogLevel};
+use donny_bridge::plugin_api::{BridgeHost, PluginHost, LogLevel};
 
-fn answer(settings: open_whisper_core::AppSettings, frage: &str) -> Result<String, String> {
+fn answer(settings: donny_core::AppSettings, frage: &str) -> Result<String, String> {
     let host = BridgeHost::new("beispiel", settings);
 
     // Erstes sofort nutzbares Modell wählen.
@@ -276,12 +276,12 @@ fn answer(settings: open_whisper_core::AppSettings, frage: &str) -> Result<Strin
 
 | Zweck | Datei |
 |-------|-------|
-| Host-Vertrag (`PluginHost`, `BridgeHost`) | `crates/open-whisper-bridge/src/plugin_api.rs` |
-| Modell-Registry-Bau | `crates/open-whisper-bridge/src/llm/registry.rs` |
-| Backend-Dispatch | `crates/open-whisper-bridge/src/llm/mod.rs` (`provider_for`) |
-| Modell-Typen / Verfügbarkeit | `crates/open-whisper-core/src/lib.rs` (`LlmModelRef`, `LlmRegistryEntryDto`, `LlmAvailability`) |
-| Logging-Fassade | `crates/open-whisper-bridge/src/plugin_log.rs` |
-| Pipeline-Stage-Verträge | `crates/open-whisper-bridge/src/pipeline/mod.rs` |
-| Plugin-Katalog (IDs, Metadaten) | `crates/open-whisper-core/src/lib.rs` (`builtin_plugin_catalog`) |
-| Referenz: Chat-Plugin | `crates/open-whisper-bridge/src/chat.rs` |
-| Referenz: LLM-Stage | `crates/open-whisper-bridge/src/pipeline/stages/llm.rs` |
+| Host-Vertrag (`PluginHost`, `BridgeHost`) | `crates/donny-bridge/src/plugin_api.rs` |
+| Modell-Registry-Bau | `crates/donny-bridge/src/llm/registry.rs` |
+| Backend-Dispatch | `crates/donny-bridge/src/llm/mod.rs` (`provider_for`) |
+| Modell-Typen / Verfügbarkeit | `crates/donny-core/src/lib.rs` (`LlmModelRef`, `LlmRegistryEntryDto`, `LlmAvailability`) |
+| Logging-Fassade | `crates/donny-bridge/src/plugin_log.rs` |
+| Pipeline-Stage-Verträge | `crates/donny-bridge/src/pipeline/mod.rs` |
+| Plugin-Katalog (IDs, Metadaten) | `crates/donny-core/src/lib.rs` (`builtin_plugin_catalog`) |
+| Referenz: Chat-Plugin | `crates/donny-bridge/src/chat.rs` |
+| Referenz: LLM-Stage | `crates/donny-bridge/src/pipeline/stages/llm.rs` |

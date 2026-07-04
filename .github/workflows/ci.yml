@@ -61,16 +61,16 @@ jobs:
         run: brew install swiftlint
 
       - name: SwiftLint
-        run: swiftlint lint --reporter github-actions-logging apps/open-whisper-macos/Sources
+        run: swiftlint lint --reporter github-actions-logging apps/donny-macos/Sources
 
       - name: swift-format lint
-        run: swift format lint --recursive apps/open-whisper-macos/Sources
+        run: swift format lint --recursive apps/donny-macos/Sources
 
       - name: Build Rust bridge (debug)
-        run: cargo build -p open-whisper-bridge
+        run: cargo build -p donny-bridge
 
       - name: Build Swift app (debug)
-        run: swift build --package-path apps/open-whisper-macos
+        run: swift build --package-path apps/donny-macos
 
       - name: Swift tests
-        run: swift test --package-path apps/open-whisper-macos
+        run: swift test --package-path apps/donny-macos

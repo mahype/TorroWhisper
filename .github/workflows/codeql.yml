@@ -51,14 +51,14 @@ jobs:
           languages: ${{ matrix.language }}
 
       - name: Build Rust bridge (required for Swift linker)
-        run: cargo build -p open-whisper-bridge
+        run: cargo build -p donny-bridge
 
       # Explicit --arch arm64: macos-15 is Apple Silicon and the Rust
       # bridge is built for arm64 only. Without this, CodeQL's Swift
       # tracer has been observed to default to x86_64 on hosted runners,
       # which then fails to link against the arm64 static lib.
       - name: Build Swift app for analysis
-        run: swift build --package-path apps/open-whisper-macos --arch arm64
+        run: swift build --package-path apps/donny-macos --arch arm64
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4

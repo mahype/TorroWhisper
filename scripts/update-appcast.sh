@@ -3,7 +3,7 @@
 # to an existing appcast.xml.
 #
 # Positional arguments:
-#   1  DMG path                       e.g. dist/OpenWhisper-0.1.0.dmg
+#   1  DMG path                       e.g. dist/Donny-0.1.0.dmg
 #   2  Version (no `v` prefix)         e.g. 0.1.0
 #   3  Release-notes URL               e.g. https://github.com/.../releases/tag/v0.1.0
 #   4  Appcast path                    e.g. gh-pages/appcast.xml
@@ -52,11 +52,11 @@ fi
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
 if [[ -z "${SIGN_UPDATE:-}" ]]; then
-    SIGN_UPDATE="$(find "$repo_root/apps/open-whisper-macos/.build" \
+    SIGN_UPDATE="$(find "$repo_root/apps/donny-macos/.build" \
         -type f -name sign_update 2>/dev/null | head -1)"
 fi
 if [[ ! -x "${SIGN_UPDATE:-}" ]]; then
-    echo "error: sign_update binary not found under $repo_root/apps/open-whisper-macos/.build. Run 'swift build --package-path apps/open-whisper-macos' first to materialise the Sparkle artifacts." >&2
+    echo "error: sign_update binary not found under $repo_root/apps/donny-macos/.build. Run 'swift build --package-path apps/donny-macos' first to materialise the Sparkle artifacts." >&2
     exit 1
 fi
 
@@ -76,7 +76,7 @@ if [[ -z "$ed_sig" || -z "$length" ]]; then
 fi
 
 dmg_filename="$(basename "$DMG_PATH")"
-dmg_url="https://github.com/mahype/open-whisper/releases/download/v${VERSION}/${dmg_filename}"
+dmg_url="https://github.com/mahype/donny/releases/download/v${VERSION}/${dmg_filename}"
 pub_date="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')"
 
 set +e

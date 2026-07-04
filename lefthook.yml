@@ -5,13 +5,13 @@ pre-commit:
       glob: "*.rs"
       run: cargo fmt --check -- {staged_files}
     swiftlint:
-      glob: "apps/open-whisper-macos/Sources/**/*.swift"
+      glob: "apps/donny-macos/Sources/**/*.swift"
       run: swiftlint lint --quiet --strict {staged_files}
       skip:
         - merge
         - rebase
     swift-format:
-      glob: "apps/open-whisper-macos/Sources/**/*.swift"
+      glob: "apps/donny-macos/Sources/**/*.swift"
       run: swift format lint {staged_files}
       skip:
         - merge

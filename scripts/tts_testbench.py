@@ -43,7 +43,7 @@ class EngineUnavailable(RuntimeError):
 DEFAULT_SAMPLES = [
     Sample(
         "kurzer-gruss",
-        "Hallo, ich bin Open Whisper. Diese Stimme wird komplett lokal erzeugt.",
+        "Hallo, ich bin Donny. Diese Stimme wird komplett lokal erzeugt.",
     ),
     Sample(
         "zahlen-und-abkuerzungen",
@@ -129,7 +129,7 @@ def run_piper(job, args):
     if missing:
         lines = "\n".join(f"  - {path}" for path in missing)
         raise EngineUnavailable(
-            "Piper assets are missing. Download the voice once in Open Whisper, "
+            "Piper assets are missing. Download the voice once in Donny, "
             f"or pass --piper-root. Missing:\n{lines}"
         )
 
@@ -246,7 +246,7 @@ def default_piper_root():
         Path.home()
         / "Library"
         / "Application Support"
-        / "dev.awesome.open-whisper"
+        / "dev.awesome.donny"
         / "tts"
     )
 
@@ -277,12 +277,12 @@ def build_parser():
     parser.add_argument(
         "--piper-root",
         default=default_piper_root(),
-        help="Open Whisper TTS asset directory containing the sherpa-onnx Piper bundle.",
+        help="Donny TTS asset directory containing the sherpa-onnx Piper bundle.",
     )
     parser.add_argument(
         "--piper-voice",
         default=DEFAULT_PIPER_VOICE,
-        help="Piper voice id already downloaded by Open Whisper.",
+        help="Piper voice id already downloaded by Donny.",
     )
     parser.add_argument(
         "--mms-model",

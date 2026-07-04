@@ -28,11 +28,11 @@ Steps, in order:
 7. **`cargo test --workspace`** — runs Rust unit tests in both crates.
 8. **`cargo audit`** — `rustsec/audit-check@v2`. Fails on any unpatched advisory in the dependency graph.
 9. **`cargo deny`** — `cargo-deny` is installed via `taiki-e/install-action@v2` (the official `EmbarkStudios/cargo-deny-action` is a container action and therefore Linux-only, which does not fit our `macos-15` runner). Runs `check bans licenses sources` against [`deny.toml`](../deny.toml). Fails on license violations, banned crates, or unknown registries.
-10. **SwiftLint** — installed via `brew install swiftlint`, runs against `apps/open-whisper-macos/Sources`. Configured in [`.swiftlint.yml`](../.swiftlint.yml). Currently **non-strict** — warnings do not fail the build. See [Strictness roadmap](#strictness-roadmap) below.
+10. **SwiftLint** — installed via `brew install swiftlint`, runs against `apps/donny-macos/Sources`. Configured in [`.swiftlint.yml`](../.swiftlint.yml). Currently **non-strict** — warnings do not fail the build. See [Strictness roadmap](#strictness-roadmap) below.
 11. **`swift format lint --recursive`** — Apple's swift-format (bundled with Xcode 16), configured in [`.swift-format`](../.swift-format). Also non-strict for now.
-12. **`cargo build -p open-whisper-bridge`** — produces the static lib that the Swift package links against.
-13. **`swift build --package-path apps/open-whisper-macos`** — compiles the Swift app against the Rust bridge.
-14. **`swift test --package-path apps/open-whisper-macos`** — runs the `OpenWhisperMacTests` target. See [Swift tests](#swift-tests).
+12. **`cargo build -p donny-bridge`** — produces the static lib that the Swift package links against.
+13. **`swift build --package-path apps/donny-macos`** — compiles the Swift app against the Rust bridge.
+14. **`swift test --package-path apps/donny-macos`** — runs the `DonnyTests` target. See [Swift tests](#swift-tests).
 
 ### Strictness roadmap
 
@@ -45,25 +45,25 @@ Until then, warnings show up as annotations on the PR (via the `github-actions-l
 
 ### Swift tests
 
-The package has one test target, `OpenWhisperMacTests`, at [apps/open-whisper-macos/Tests/OpenWhisperMacTests/](../apps/open-whisper-macos/Tests/OpenWhisperMacTests/):
+The package has one test target, `DonnyTests`, at [apps/donny-macos/Tests/DonnyTests/](../apps/donny-macos/Tests/DonnyTests/):
 
 - **`SmokeTests.swift`** — minimum harness test; proves `swift test` works end-to-end.
 - **`BridgeIntegrationTests.swift`** — calls `ow_validate_hotkey` through the FFI and checks the JSON envelope. Protects against accidental FFI symbol drift between Rust and Swift.
 
-The test target links against the Rust static lib (`target/debug/libopen_whisper_bridge.a`) and the same macOS frameworks as the main executable — see [Package.swift](../apps/open-whisper-macos/Package.swift).
+The test target links against the Rust static lib (`target/debug/libdonny_bridge.a`) and the same macOS frameworks as the main executable — see [Package.swift](../apps/donny-macos/Package.swift).
 
 Locally, `swift test` requires **Xcode.app** (not just Command Line Tools) because `XCTest` ships with the Xcode developer toolchain:
 
 ```bash
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
-    xcrun swift test --package-path apps/open-whisper-macos
+    xcrun swift test --package-path apps/donny-macos
 ```
 
 In CI, `maxim-lobanov/setup-xcode@v1` handles this automatically.
 
 ## CodeQL workflow (`codeql.yml`)
 
-Static analysis for Swift, run against `macos-15`. Building the Swift target requires the Rust bridge, so the workflow builds `cargo build -p open-whisper-bridge` before `swift build`.
+Static analysis for Swift, run against `macos-15`. Building the Swift target requires the Rust bridge, so the workflow builds `cargo build -p donny-bridge` before `swift build`.
 
 Findings appear under **Security → Code scanning** in the GitHub UI. A scheduled run happens every Monday at 04:00 UTC so advisories that appear after the last commit still surface.
 
@@ -107,7 +107,7 @@ lefthook install
 The hook runs on `pre-commit` for the staged files:
 
 - `cargo fmt --check` on any staged `*.rs`.
-- `swiftlint lint --quiet --strict` on staged Swift sources under `apps/open-whisper-macos/Sources`.
+- `swiftlint lint --quiet --strict` on staged Swift sources under `apps/donny-macos/Sources`.
 - `swift format lint` on the same set.
 
 Configuration: [`lefthook.yml`](../lefthook.yml). Uninstall: `lefthook uninstall`.
@@ -130,6 +130,6 @@ Configuration: [`lefthook.yml`](../lefthook.yml). Uninstall: `lefthook uninstall
 - **`cargo deny` license failure** — either update [`deny.toml`](../deny.toml) to add the license to the `allow` list (if it is compatible with this project's license) or replace the offending crate.
 - **`cargo deny` bans / sources** — investigate whether the new crate or git source is intentional.
 - **SwiftLint / swift-format** — currently non-strict; warnings are informational. Once strict mode is on, run the tools locally and apply the auto-fix where possible (`swift format --in-place --recursive`).
-- **`swift test`** — fix the test. The FFI integration test fails when a Rust symbol is renamed or a JSON envelope shape changes; update the matching C header at [apps/open-whisper-macos/Bridge/OpenWhisperBridgeFFI.h](../apps/open-whisper-macos/Bridge/OpenWhisperBridgeFFI.h) and the Swift call site together.
+- **`swift test`** — fix the test. The FFI integration test fails when a Rust symbol is renamed or a JSON envelope shape changes; update the matching C header at [apps/donny-macos/Bridge/DonnyBridgeFFI.h](../apps/donny-macos/Bridge/DonnyBridgeFFI.h) and the Swift call site together.
 - **CodeQL** — treat findings as real. Resolve in code or, if a false positive, dismiss with justification in the Code scanning UI.
 - **Release smoke test** — inspect `codesign`, `spctl`, or `stapler` output in the Actions log. Usually a signing identity problem (see [RELEASING.md](./RELEASING.md) §Troubleshooting) or a notarization delay.

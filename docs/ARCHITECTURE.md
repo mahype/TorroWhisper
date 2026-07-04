@@ -1,23 +1,23 @@
 # Architecture
 
-Open Whisper is split into a **shared Rust core**, an **FFI bridge** that exposes JSON-over-C to native UIs, and **platform-specific UI shells** (currently just macOS). The UI layers are kept thin: everything stateful — settings, dictation, model management, hotkeys — lives in the bridge.
+Donny is split into a **shared Rust core**, an **FFI bridge** that exposes JSON-over-C to native UIs, and **platform-specific UI shells** (currently just macOS). The UI layers are kept thin: everything stateful — settings, dictation, model management, hotkeys — lives in the bridge.
 
 ## High-level diagram
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  apps/open-whisper-macos  (SwiftUI + AppKit menu bar)   │
+│  apps/donny-macos  (SwiftUI + AppKit menu bar)   │
 │                                                         │
-│  OpenWhisperMacApp → AppDelegate → SettingsView, …      │
+│  DonnyApp → AppDelegate → SettingsView, …      │
 │       │                                                 │
 │       ▼                                                 │
 │  BridgeClient  (Swift wrapper around the C functions)   │
 └───────────┬─────────────────────────────────────────────┘
             │   C FFI: JSON-in, JSON-out strings
-            │   Header: Bridge/OpenWhisperBridgeFFI.h
+            │   Header: Bridge/DonnyBridgeFFI.h
             ▼
 ┌─────────────────────────────────────────────────────────┐
-│  crates/open-whisper-bridge  (staticlib + rlib)         │
+│  crates/donny-bridge  (staticlib + rlib)         │
 │                                                         │
 │  lib.rs          FFI entry points, BridgeRuntime        │
 │  dictation.rs    cpal capture + whisper-rs transcription│
@@ -34,7 +34,7 @@ Open Whisper is split into a **shared Rust core**, an **FFI bridge** that expose
        │    │ line-based JSON over stdin/stdout
        │    ▼
        │ ┌──────────────────────────────────────────────┐
-       │ │  crates/open-whisper-llm-helper (executable) │
+       │ │  crates/donny-llm-helper (executable) │
        │ │  llama-cpp-2 (Gemma 4, Metal) in its own     │
        │ │  process — whisper-rs and llama-cpp-2 bundle │
        │ │  incompatible ggml revisions and must never  │
@@ -43,7 +43,7 @@ Open Whisper is split into a **shared Rust core**, an **FFI bridge** that expose
        │ pure-Rust types & enums
        ▼
 ┌─────────────────────────────────────────────────────────┐
-│  crates/open-whisper-core  (no_std-friendly domain)     │
+│  crates/donny-core  (no_std-friendly domain)     │
 │                                                         │
 │  AppSettings, ModelPreset, LlmPreset,                   │
 │  ProcessingMode, PostProcessingChoice,                  │
@@ -55,7 +55,7 @@ Open Whisper is split into a **shared Rust core**, an **FFI bridge** that expose
 
 ## Crates
 
-### `open-whisper-core`
+### `donny-core`
 
 Pure-Rust domain types shared between the bridge and any future shells or tools. No I/O, no OS calls — just `serde`-friendly DTOs, enums, and configuration structs.
 
@@ -72,7 +72,7 @@ Key types:
 - `WaveformStyle`, `WaveformColor` — recording-indicator presentation.
 - `DeviceDto`, `RuntimeStatusDto`, `RecordingLevelsDto`, `DiagnosticsDto`.
 
-### `open-whisper-bridge`
+### `donny-bridge`
 
 Built as both `staticlib` (for Swift linkage) and `rlib` (for Rust-side testing). All public surface goes through `extern "C"` functions in `src/lib.rs` that take and return UTF-8 JSON strings.
 
@@ -80,44 +80,44 @@ Module responsibilities:
 
 | Module | Responsibility |
 | --- | --- |
-| [lib.rs](../crates/open-whisper-bridge/src/lib.rs) | FFI entry points, the `BridgeRuntime` aggregate that owns all subsystems |
-| [dictation.rs](../crates/open-whisper-bridge/src/dictation.rs) | Mic capture via `cpal`, VAD-based silence detection, whisper.cpp transcription |
-| [model_manager.rs](../crates/open-whisper-bridge/src/model_manager.rs) | Download, list, and delete Whisper `.bin` models |
-| [llm_model_manager.rs](../crates/open-whisper-bridge/src/llm_model_manager.rs) | Download, list, and delete local LLM GGUF files (Gemma 4 presets and user-added custom models) |
-| [local_llm.rs](../crates/open-whisper-bridge/src/local_llm.rs) | Client for the `open-whisper-llm-helper` process (line-based JSON over stdin/stdout); idle-based auto-unload and cancellation by killing the helper. llama-cpp-2 lives only in the helper: its bundled ggml is incompatible with whisper-rs's, and linking both into one binary mixes the duplicated symbols and crashes the app |
-| [post_processing.rs](../crates/open-whisper-bridge/src/post_processing.rs) | Applies the active `ProcessingMode`'s prompt via the resolved `PostProcessingChoice` — dispatches to `local_llm` or to Ollama / LM Studio over HTTP; 45 s timeout; cancellable |
-| [remote_models.rs](../crates/open-whisper-bridge/src/remote_models.rs) | Lists models exposed by a running Ollama or LM Studio endpoint for the backend picker |
-| [autostart.rs](../crates/open-whisper-bridge/src/autostart.rs) | `auto-launch` crate wrapper; writes a `LaunchAgent` plist on macOS, XDG autostart on Linux, registry on Windows. Used as a fallback when the app is **not** running from a `.app` bundle. |
-| [settings_store.rs](../crates/open-whisper-bridge/src/settings_store.rs) | Reads/writes `~/Library/Application Support/open-whisper/settings.json` |
-| [text_inserter.rs](../crates/open-whisper-bridge/src/text_inserter.rs) | `arboard` (clipboard) + `enigo` (simulated paste); clipboard fallback when paste fails |
-| [permission_diagnostics.rs](../crates/open-whisper-bridge/src/permission_diagnostics.rs) | Platform-specific permission probing (TCC on macOS) |
+| [lib.rs](../crates/donny-bridge/src/lib.rs) | FFI entry points, the `BridgeRuntime` aggregate that owns all subsystems |
+| [dictation.rs](../crates/donny-bridge/src/dictation.rs) | Mic capture via `cpal`, VAD-based silence detection, whisper.cpp transcription |
+| [model_manager.rs](../crates/donny-bridge/src/model_manager.rs) | Download, list, and delete Whisper `.bin` models |
+| [llm_model_manager.rs](../crates/donny-bridge/src/llm_model_manager.rs) | Download, list, and delete local LLM GGUF files (Gemma 4 presets and user-added custom models) |
+| [local_llm.rs](../crates/donny-bridge/src/local_llm.rs) | Client for the `donny-llm-helper` process (line-based JSON over stdin/stdout); idle-based auto-unload and cancellation by killing the helper. llama-cpp-2 lives only in the helper: its bundled ggml is incompatible with whisper-rs's, and linking both into one binary mixes the duplicated symbols and crashes the app |
+| [post_processing.rs](../crates/donny-bridge/src/post_processing.rs) | Applies the active `ProcessingMode`'s prompt via the resolved `PostProcessingChoice` — dispatches to `local_llm` or to Ollama / LM Studio over HTTP; 45 s timeout; cancellable |
+| [remote_models.rs](../crates/donny-bridge/src/remote_models.rs) | Lists models exposed by a running Ollama or LM Studio endpoint for the backend picker |
+| [autostart.rs](../crates/donny-bridge/src/autostart.rs) | `auto-launch` crate wrapper; writes a `LaunchAgent` plist on macOS, XDG autostart on Linux, registry on Windows. Used as a fallback when the app is **not** running from a `.app` bundle. |
+| [settings_store.rs](../crates/donny-bridge/src/settings_store.rs) | Reads/writes `~/Library/Application Support/donny/settings.json` |
+| [text_inserter.rs](../crates/donny-bridge/src/text_inserter.rs) | `arboard` (clipboard) + `enigo` (simulated paste); clipboard fallback when paste fails |
+| [permission_diagnostics.rs](../crates/donny-bridge/src/permission_diagnostics.rs) | Platform-specific permission probing (TCC on macOS) |
 
-### `apps/open-whisper-macos`
+### `apps/donny-macos`
 
-Swift Package (SPM) producing a single executable, `OpenWhisperMac`. Uses SwiftUI for onboarding/settings windows, AppKit for the menu bar integration. Links to `libopen_whisper_bridge.a` from the target directory via unsafe linker flags in `Package.swift`.
+Swift Package (SPM) producing a single executable, `Donny`. Uses SwiftUI for onboarding/settings windows, AppKit for the menu bar integration. Links to `libdonny_bridge.a` from the target directory via unsafe linker flags in `Package.swift`.
 
 Key files:
 
 | File | Responsibility |
 | --- | --- |
-| [OpenWhisperMacApp.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/OpenWhisperMacApp.swift) | `@main` entry point |
-| [AppDelegate.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/AppDelegate.swift) | Menu bar icon, window lifecycle, login-item bootstrap |
-| [BridgeClient.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/BridgeClient.swift) | Typed wrapper around every `ow_*` FFI call |
-| [BridgeModels.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/BridgeModels.swift) | `Codable` DTOs matching the Rust side |
-| [AppModel.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/AppModel.swift) | Observable state for the UI |
-| [SettingsView.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/SettingsView.swift) | Settings window with a sidebar-driven `SettingsSection` switch (Recording, Modes, Language Models, Start & Behavior, Updates, Diagnostics, Help) |
-| [AppUIComponents.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/AppUIComponents.swift) | Shared settings primitives and the Mode-Editor sheet (create / edit / delete a `ProcessingMode`) |
-| [LanguageModelsManagerSheet.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/LanguageModelsManagerSheet.swift) | Unified Whisper + local LLM model management (download / delete / import custom GGUF) |
-| [RecordingIndicatorView.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/RecordingIndicatorView.swift) | Floating live waveform indicator with phase-specific styling (recording / transcribing / post-processing / model-not-ready) |
-| [HotkeyRecorderField.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/HotkeyRecorderField.swift) / [HotkeyAssignmentAdvisor.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/HotkeyAssignmentAdvisor.swift) | Inline hotkey capture with collision and single-key warnings |
-| [UpdaterController.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/UpdaterController.swift), [UpdatesSettingsView.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/UpdatesSettingsView.swift) | Sparkle integration (see *Auto-updates* below) |
-| [OnboardingView.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/OnboardingView.swift) | First-run guided setup; re-launchable from the Help tab |
-| [Localization.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/Localization.swift) | `L(_:locale:)` string helper, `LocalizedRoot` environment wrapper, and `AppSettings.effectiveLocale` — drives the DE/EN UI (see *Localization* below) |
-| [FeedbackView.swift](../apps/open-whisper-macos/Sources/OpenWhisperMac/FeedbackView.swift) | Feedback dialog surfaced from the Help tab |
+| [DonnyApp.swift](../apps/donny-macos/Sources/Donny/DonnyApp.swift) | `@main` entry point |
+| [AppDelegate.swift](../apps/donny-macos/Sources/Donny/AppDelegate.swift) | Menu bar icon, window lifecycle, login-item bootstrap |
+| [BridgeClient.swift](../apps/donny-macos/Sources/Donny/BridgeClient.swift) | Typed wrapper around every `ow_*` FFI call |
+| [BridgeModels.swift](../apps/donny-macos/Sources/Donny/BridgeModels.swift) | `Codable` DTOs matching the Rust side |
+| [AppModel.swift](../apps/donny-macos/Sources/Donny/AppModel.swift) | Observable state for the UI |
+| [SettingsView.swift](../apps/donny-macos/Sources/Donny/SettingsView.swift) | Settings window with a sidebar-driven `SettingsSection` switch (Recording, Modes, Language Models, Start & Behavior, Updates, Diagnostics, Help) |
+| [AppUIComponents.swift](../apps/donny-macos/Sources/Donny/AppUIComponents.swift) | Shared settings primitives and the Mode-Editor sheet (create / edit / delete a `ProcessingMode`) |
+| [LanguageModelsManagerSheet.swift](../apps/donny-macos/Sources/Donny/LanguageModelsManagerSheet.swift) | Unified Whisper + local LLM model management (download / delete / import custom GGUF) |
+| [RecordingIndicatorView.swift](../apps/donny-macos/Sources/Donny/RecordingIndicatorView.swift) | Floating live waveform indicator with phase-specific styling (recording / transcribing / post-processing / model-not-ready) |
+| [HotkeyRecorderField.swift](../apps/donny-macos/Sources/Donny/HotkeyRecorderField.swift) / [HotkeyAssignmentAdvisor.swift](../apps/donny-macos/Sources/Donny/HotkeyAssignmentAdvisor.swift) | Inline hotkey capture with collision and single-key warnings |
+| [UpdaterController.swift](../apps/donny-macos/Sources/Donny/UpdaterController.swift), [UpdatesSettingsView.swift](../apps/donny-macos/Sources/Donny/UpdatesSettingsView.swift) | Sparkle integration (see *Auto-updates* below) |
+| [OnboardingView.swift](../apps/donny-macos/Sources/Donny/OnboardingView.swift) | First-run guided setup; re-launchable from the Help tab |
+| [Localization.swift](../apps/donny-macos/Sources/Donny/Localization.swift) | `L(_:locale:)` string helper, `LocalizedRoot` environment wrapper, and `AppSettings.effectiveLocale` — drives the DE/EN UI (see *Localization* below) |
+| [FeedbackView.swift](../apps/donny-macos/Sources/Donny/FeedbackView.swift) | Feedback dialog surfaced from the Help tab |
 
 ## FFI contract
 
-All functions in [OpenWhisperBridgeFFI.h](../apps/open-whisper-macos/Bridge/OpenWhisperBridgeFFI.h) follow the same shape:
+All functions in [DonnyBridgeFFI.h](../apps/donny-macos/Bridge/DonnyBridgeFFI.h) follow the same shape:
 
 ```c
 char *ow_do_something(const char *input_json);   // or no args
@@ -137,19 +137,19 @@ The `BridgeRuntime` lives in a `thread_local! RefCell` on the bridge side. All F
 
 | Location | Content |
 | --- | --- |
-| `~/Library/Application Support/open-whisper/settings.json` | `AppSettings` — hotkey, input device, Whisper / LLM presets, Modes, post-processing backend, startup behavior, waveform, VAD |
-| `~/Library/Application Support/open-whisper/models/` | Downloaded Whisper `.bin` files **and** local LLM `.gguf` files (Gemma 4 presets plus any user-added custom models) |
-| `~/Library/LaunchAgents/open-whisper.plist` | *Dev fallback* — written by the `auto-launch` crate when the app runs outside a `.app` bundle |
+| `~/Library/Application Support/donny/settings.json` | `AppSettings` — hotkey, input device, Whisper / LLM presets, Modes, post-processing backend, startup behavior, waveform, VAD |
+| `~/Library/Application Support/donny/models/` | Downloaded Whisper `.bin` files **and** local LLM `.gguf` files (Gemma 4 presets plus any user-added custom models) |
+| `~/Library/LaunchAgents/donny.plist` | *Dev fallback* — written by the `auto-launch` crate when the app runs outside a `.app` bundle |
 | macOS Login Items database (`sfltool dumpbtm`) | *Production* — registered via `SMAppService` from the Swift side when the app runs from a signed bundle |
 
 The bridge is the source of truth for settings; the Swift UI reads via `ow_load_settings` and writes via `ow_save_settings`. The UI does not keep its own copy.
 
 ## Autostart: two paths, one user-facing switch
 
-macOS offers two autostart mechanisms, and Open Whisper uses both depending on how it was launched:
+macOS offers two autostart mechanisms, and Donny uses both depending on how it was launched:
 
-1. **`SMAppService.mainApp`** (production, macOS 13+) — used when the executable lives inside `Open Whisper.app/Contents/MacOS/`. The Swift layer calls `register()`/`unregister()` directly; the user-facing switch in Settings routes to this path.
-2. **`LaunchAgent` plist** (dev fallback) — used when running via `swift run` during development. The Rust `auto-launch` crate writes `~/Library/LaunchAgents/open-whisper.plist` pointing at the raw executable.
+1. **`SMAppService.mainApp`** (production, macOS 13+) — used when the executable lives inside `Donny.app/Contents/MacOS/`. The Swift layer calls `register()`/`unregister()` directly; the user-facing switch in Settings routes to this path.
+2. **`LaunchAgent` plist** (dev fallback) — used when running via `swift run` during development. The Rust `auto-launch` crate writes `~/Library/LaunchAgents/donny.plist` pointing at the raw executable.
 
 The Swift UI picks the mechanism based on the `autostart_mechanism` field returned by the bridge. Users never see the distinction — they just see *Launch at login* in Settings.
 
@@ -173,12 +173,12 @@ All backends respect a **45-second timeout** and a shared `Arc<AtomicBool>` canc
 
 ## Auto-updates (Sparkle)
 
-Open Whisper embeds [Sparkle 2.x](https://sparkle-project.org) as a Swift Package Manager dependency. The framework is copied into `Open Whisper.app/Contents/Frameworks/` during `scripts/build-macos-app.sh`.
+Donny embeds [Sparkle 2.x](https://sparkle-project.org) as a Swift Package Manager dependency. The framework is copied into `Donny.app/Contents/Frameworks/` during `scripts/build-macos-app.sh`.
 
 - `UpdaterController.swift` is a thin wrapper around `SPUStandardUpdaterController`. It refuses to start when Sparkle would otherwise show *"Unable to check for updates"* — specifically when the process is not running from a `.app` bundle (dev runs) or when `SUFeedURL` is missing from the `Info.plist`.
 - `UpdatesSettingsView.swift` drives the Updates tab: a *Check Now* button, an *Automatically check for updates* toggle, and a read-out of the current feed URL and version. A *Check for Updates…* entry is also available from the menu bar.
 - Relevant `Info.plist` keys:
-  - `SUFeedURL` → `https://mahype.github.io/open-whisper/appcast.xml`
+  - `SUFeedURL` → `https://mahype.github.io/donny/appcast.xml`
   - `SUPublicEDKey` → the Ed25519 public key bundled with the app
   - `SUEnableAutomaticChecks` → `true`
   - `SUScheduledCheckInterval` → `86400` (24 h)
@@ -191,8 +191,8 @@ The app ships with **English (source)** and **German** translations. The Rust br
 - String catalogs live next to the Swift sources: `Resources/Localizable.xcstrings` is the source of truth; the `en.lproj` and `de.lproj` `Localizable.strings` files are generated siblings. `InfoPlist.strings` per-locale handles the permission prompt copy.
 - `Localization.swift` exposes `L(_:locale:)` for imperative lookups and `LocalizedRoot` for setting the SwiftUI `\.locale` environment on every hosting root (Settings, Onboarding, Feedback, the recording indicator panel).
 - Enum `label(locale:)` functions on core types (`StartupBehavior`, `TriggerMode`, `WaveformStyle`, `WaveformColor`, `ModelPreset`, `LlmPreset`, `PostProcessingBackend`, `DiagnosticStatus`, `PostProcessingChoice`, …) produce localized display strings on demand — no pre-computed labels live in state.
-- Language selection: `AppSettings.ui_language` is a `UiLanguage` enum (`System` / `En` / `De`). `OpenWhisperMacApp.init` writes `AppleLanguages` into `UserDefaults` on launch so the bundle resolves the right `.lproj`. Changing the picker requires an app restart; system-language detection at launch is transparent.
+- Language selection: `AppSettings.ui_language` is a `UiLanguage` enum (`System` / `En` / `De`). `DonnyApp.init` writes `AppleLanguages` into `UserDefaults` on launch so the bundle resolves the right `.lproj`. Changing the picker requires an app restart; system-language detection at launch is transparent.
 
 ## Cross-platform outlook
 
-The bridge already has `#[cfg(target_os = …)]` blocks for Linux and Windows in `autostart.rs` and `permission_diagnostics.rs`. What's missing is a UI shell for each. The same `libopen_whisper_bridge` static library and the same FFI contract will back those shells — only the UI layer changes.
+The bridge already has `#[cfg(target_os = …)]` blocks for Linux and Windows in `autostart.rs` and `permission_diagnostics.rs`. What's missing is a UI shell for each. The same `libdonny_bridge` static library and the same FFI contract will back those shells — only the UI layer changes.

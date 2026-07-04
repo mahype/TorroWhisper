@@ -12,17 +12,17 @@ export RUST_LOG
 
 cat <<'BANNER'
 ────────────────────────────────────────────────────────────────
- Open Whisper — dev loop
+ Donny — dev loop
  This launches outside a .app bundle. Autostart falls back to a
  LaunchAgent plist; SMAppService registration is unavailable.
  For realistic autostart testing, run ./scripts/build-macos-app.sh
 ────────────────────────────────────────────────────────────────
 BANNER
 
-cargo build -p open-whisper-bridge -p open-whisper-llm-helper
+cargo build -p donny-bridge -p donny-llm-helper
 
 # The app looks for the LLM helper next to its own executable; in the SPM dev
 # loop the helper lives in target/, so point the bridge at it explicitly.
-export OW_LLM_HELPER="$repo_root/target/debug/open-whisper-llm-helper"
+export OW_LLM_HELPER="$repo_root/target/debug/donny-llm-helper"
 
-swift run --package-path apps/open-whisper-macos OpenWhisperMac
+swift run --package-path apps/donny-macos Donny

@@ -1,5 +1,0 @@
-"CFBundleDisplayName" = "Open Whisper";
-"CFBundleName" = "Open Whisper";
-"NSHumanReadableCopyright" = "Copyright © Sven Wagener. Alle Rechte vorbehalten.";
-"NSMicrophoneUsageDescription" = "Open Whisper nimmt deine Stimme auf, um sie lokal zu transkribieren.";
-"NSAppleEventsUsageDescription" = "Open Whisper nutzt Apple Events, um transkribierten Text in die aktive App einzufügen.";
