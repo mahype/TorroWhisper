@@ -64,7 +64,7 @@ python3 scripts/tts_testbench.py --engines bark
 ```
 
 Piper can be included as the current baseline after its voice has been
-downloaded once in DonnyWhisper:
+downloaded once in TorroWhisper:
 
 ```bash
 python3 scripts/tts_testbench.py --engines piper,xtts,mms,bark --speaker-wav /path/to/reference-voice.wav

@@ -19,17 +19,17 @@ Optional but recommended:
 ## Clone and run
 
 ```bash
-git clone git@github.com:mahype/DonnyWhisper.git
-cd donnywhisper
+git clone git@github.com:mahype/TorroWhisper.git
+cd torrowhisper
 ./scripts/dev.sh
 ```
 
 `dev.sh` is the fast iteration loop:
 
-1. `cargo build -p donnywhisper-bridge` — produces `target/debug/libdonnywhisper_bridge.a`
-2. `swift run --package-path apps/donnywhisper-macos DonnyWhisper` — launches the app
+1. `cargo build -p torrowhisper-bridge` — produces `target/debug/libtorrowhisper_bridge.a`
+2. `swift run --package-path apps/torrowhisper-macos TorroWhisper` — launches the app
 
-The Swift package links against `target/debug/libdonnywhisper_bridge.a` via the hard-coded linker flag in [Package.swift](../apps/donnywhisper-macos/Package.swift). Release builds go through the build script below instead.
+The Swift package links against `target/debug/libtorrowhisper_bridge.a` via the hard-coded linker flag in [Package.swift](../apps/torrowhisper-macos/Package.swift). Release builds go through the build script below instead.
 
 > **Heads-up:** when launched via `swift run`, the executable runs outside a `.app` bundle. The SMAppService-based autostart path is disabled in that mode — a LaunchAgent fallback is used. For realistic autostart testing, build the bundle (next section).
 
@@ -40,19 +40,19 @@ The Swift package links against `target/debug/libdonnywhisper_bridge.a` via the 
 open dist/Open\ Whisper.app
 ```
 
-This produces a **universal** (Apple Silicon + Intel), **release** build, and assembles a complete bundle at `dist/DonnyWhisper.app` with Info.plist, entitlements, and resources. The bundle is signed **ad-hoc** by default — good enough to run on your own machine, but Gatekeeper will flag it on other Macs. For a proper signed + notarized build, see [RELEASING.md](RELEASING.md).
+This produces a **universal** (Apple Silicon + Intel), **release** build, and assembles a complete bundle at `dist/TorroWhisper.app` with Info.plist, entitlements, and resources. The bundle is signed **ad-hoc** by default — good enough to run on your own machine, but Gatekeeper will flag it on other Macs. For a proper signed + notarized build, see [RELEASING.md](RELEASING.md).
 
 ## Project layout
 
 ```
-apps/donnywhisper-macos/
+apps/torrowhisper-macos/
 ├── Package.swift                       # SPM manifest
-├── Bridge/DonnyWhisperBridgeFFI.h       # C header for the Rust FFI surface
+├── Bridge/TorroWhisperBridgeFFI.h       # C header for the Rust FFI surface
 ├── Resources/                          # Info.plist, entitlements, AppIcon.icns
-└── Sources/DonnyWhisper/             # Swift UI and AppDelegate
+└── Sources/TorroWhisper/             # Swift UI and AppDelegate
 
 crates/
-├── donnywhisper-bridge/                # staticlib + rlib; cdylib-free
+├── torrowhisper-bridge/                # staticlib + rlib; cdylib-free
 │   └── src/
 │       ├── lib.rs                      # FFI entry points, runtime wiring
 │       ├── dictation.rs                # Audio capture + transcription loop
@@ -62,7 +62,7 @@ crates/
 │       ├── post_processing.rs          # Ollama/LM Studio post-processing
 │       ├── settings_store.rs           # settings.json read/write
 │       └── text_inserter.rs            # Clipboard + simulated paste
-└── donnywhisper-core/                  # Pure-Rust shared types (no I/O)
+└── torrowhisper-core/                  # Pure-Rust shared types (no I/O)
     └── src/lib.rs                      # AppSettings, presets, enums
 
 scripts/
@@ -74,7 +74,7 @@ scripts/
 
 ## FFI header
 
-The C header at [apps/donnywhisper-macos/Bridge/DonnyWhisperBridgeFFI.h](../apps/donnywhisper-macos/Bridge/DonnyWhisperBridgeFFI.h) is **hand-maintained** — we don't currently auto-generate it with cbindgen. When you add or change an `extern "C"` function in `crates/donnywhisper-bridge/src/lib.rs`, update the header by hand and keep the shape in sync.
+The C header at [apps/torrowhisper-macos/Bridge/TorroWhisperBridgeFFI.h](../apps/torrowhisper-macos/Bridge/TorroWhisperBridgeFFI.h) is **hand-maintained** — we don't currently auto-generate it with cbindgen. When you add or change an `extern "C"` function in `crates/torrowhisper-bridge/src/lib.rs`, update the header by hand and keep the shape in sync.
 
 Convention: every function takes UTF-8 JSON strings and returns a newly allocated UTF-8 JSON string owned by the caller. The caller must free it via `ow_string_free`.
 
@@ -86,7 +86,7 @@ Set `RUST_LOG` before launching:
 
 ```bash
 RUST_LOG=info ./scripts/dev.sh
-RUST_LOG=donnywhisper_bridge=debug ./scripts/dev.sh
+RUST_LOG=torrowhisper_bridge=debug ./scripts/dev.sh
 ```
 
 Logs go to stderr, which Xcode / Console.app / your terminal will display depending on how you launched.
@@ -96,7 +96,7 @@ Logs go to stderr, which Xcode / Console.app / your terminal will display depend
 Attach a debugger with Xcode:
 
 1. Run `./scripts/dev.sh` to produce the build artifacts.
-2. In Xcode, **Debug → Attach to Process by PID or Name…** → `DonnyWhisper`.
+2. In Xcode, **Debug → Attach to Process by PID or Name…** → `TorroWhisper`.
 
 Or add breakpoints and launch from Xcode directly by opening the Swift package folder.
 
@@ -104,8 +104,8 @@ Or add breakpoints and launch from Xcode directly by opening the Swift package f
 
 Runtime data is written to:
 
-- `~/Library/Application Support/donnywhisper/settings.json`
-- `~/Library/Application Support/donnywhisper/models/*.bin`
+- `~/Library/Application Support/torrowhisper/settings.json`
+- `~/Library/Application Support/torrowhisper/models/*.bin`
 
 Deleting these resets the app to a fresh-install state — handy for testing onboarding.
 
@@ -113,7 +113,7 @@ Deleting these resets the app to a fresh-install state — handy for testing onb
 
 ```bash
 cargo test --workspace
-swift test --package-path apps/donnywhisper-macos
+swift test --package-path apps/torrowhisper-macos
 ```
 
 Swift tests require Xcode.app (not only CommandLineTools) because `XCTest` ships with the Xcode developer toolchain. CI switches to Xcode 16 via `maxim-lobanov/setup-xcode`.

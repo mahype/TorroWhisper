@@ -1,5 +1,5 @@
 #!/usr/bin/env swift
-// Generates a placeholder AppIcon.icns for DonnyWhisper.
+// Generates a placeholder AppIcon.icns for TorroWhisper.
 // Run from the repo root: `swift scripts/generate-placeholder-icon.swift`.
 // Replace the resulting icns with a real brand icon when design is ready.
 //
@@ -15,7 +15,7 @@ import UniformTypeIdentifiers
 
 let fm = FileManager.default
 let cwd = fm.currentDirectoryPath
-let resourcesDir = "\(cwd)/apps/donnywhisper-macos/Resources"
+let resourcesDir = "\(cwd)/apps/torrowhisper-macos/Resources"
 let iconsetDir = "\(resourcesDir)/AppIcon.iconset"
 let icnsPath = "\(resourcesDir)/AppIcon.icns"
 

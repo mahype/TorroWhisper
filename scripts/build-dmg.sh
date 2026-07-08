@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Packages dist/DonnyWhisper.app into a distribution DMG with a drag-to-Applications
+# Packages dist/TorroWhisper.app into a distribution DMG with a drag-to-Applications
 # window layout. If signing credentials are set, the DMG itself is signed, notarized,
 # and stapled so the downloaded container passes Gatekeeper cleanly.
 #
@@ -16,7 +16,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-app="dist/DonnyWhisper.app"
+app="dist/TorroWhisper.app"
 
 if [[ ! -d "$app" ]]; then
     echo "error: $app not found — run scripts/build-macos-app.sh first" >&2
@@ -40,7 +40,7 @@ if [[ -z "${VERSION:-}" ]]; then
 fi
 export VERSION
 
-dmg="dist/DonnyWhisper-$VERSION.dmg"
+dmg="dist/TorroWhisper-$VERSION.dmg"
 echo "==> Building $dmg"
 
 # create-dmg refuses to overwrite an existing file.
@@ -53,12 +53,12 @@ trap 'rm -rf "$staging"' EXIT
 cp -R "$app" "$staging/"
 
 create-dmg \
-    --volname "DonnyWhisper $VERSION" \
+    --volname "TorroWhisper $VERSION" \
     --window-size 540 380 \
     --icon-size 128 \
-    --icon "DonnyWhisper.app" 140 190 \
+    --icon "TorroWhisper.app" 140 190 \
     --app-drop-link 400 190 \
-    --hide-extension "DonnyWhisper.app" \
+    --hide-extension "TorroWhisper.app" \
     --no-internet-enable \
     "$dmg" "$staging"
 
@@ -87,7 +87,7 @@ fi
 
 # --- Checksum -----------------------------------------------------------------
 
-( cd dist && shasum -a 256 "DonnyWhisper-$VERSION.dmg" > SHA256SUMS.txt )
+( cd dist && shasum -a 256 "TorroWhisper-$VERSION.dmg" > SHA256SUMS.txt )
 echo "==> SHA256: $(cat dist/SHA256SUMS.txt)"
 
 echo "==> Done: $dmg"

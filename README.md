@@ -1,4 +1,4 @@
-# DonnyWhisper
+# TorroWhisper
 
 **Dictate anywhere on your Mac — 100% local.**
 
@@ -11,11 +11,11 @@ Press a hotkey, speak, and your words land in whatever app has focus: mail, chat
 ## How it works
 
 1. **Press** your global hotkey (push-to-talk or toggle).
-2. **Speak** — DonnyWhisper records from your chosen mic.
+2. **Speak** — TorroWhisper records from your chosen mic.
 3. **Clean up** — an optional local LLM pass (Gemma 4 via llama.cpp) fixes punctuation, capitalization, and recognition errors according to the active Mode's prompt.
 4. **Done** — the result is pasted into the focused app, with a clipboard fallback if paste is blocked.
 
-DonnyWhisper lives in your menu bar. No Dock icon, no window clutter.
+TorroWhisper lives in your menu bar. No Dock icon, no window clutter.
 
 ---
 
@@ -23,15 +23,15 @@ DonnyWhisper lives in your menu bar. No Dock icon, no window clutter.
 
 **Requires macOS 14+ on Apple Silicon or Intel.**
 
-1. Download the [latest DMG](https://github.com/mahype/DonnyWhisper/releases/latest).
-2. Drag **DonnyWhisper.app** into **Applications** and launch it.
+1. Download the [latest DMG](https://github.com/mahype/TorroWhisper/releases/latest).
+2. Drag **TorroWhisper.app** into **Applications** and launch it.
 3. Follow the onboarding — mic, model download, hotkey, autostart.
 
 Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md](docs/INSTALL.md)
 
 | Platform | Status |
 | --- | --- |
-| macOS 14+ (Apple Silicon & Intel) | Stable — [download](https://github.com/mahype/DonnyWhisper/releases/latest) |
+| macOS 14+ (Apple Silicon & Intel) | Stable — [download](https://github.com/mahype/TorroWhisper/releases/latest) |
 | Windows | Planned |
 | Linux | Planned |
 
@@ -85,18 +85,18 @@ Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md
 Prereqs: **Rust 1.88+**, **Swift 6 / Xcode 16+**, **Xcode Command Line Tools**, and **CMake** (`brew install cmake`).
 
 ```bash
-git clone git@github.com:mahype/DonnyWhisper.git
-cd donnywhisper
+git clone git@github.com:mahype/TorroWhisper.git
+cd torrowhisper
 ./scripts/dev.sh
 ```
 
-`dev.sh` is the fast inner loop: it builds the Rust bridge (`cargo build -p donnywhisper-bridge`) and launches the Swift app via SwiftPM. No bundle, no signing — ideal for iterating.
+`dev.sh` is the fast inner loop: it builds the Rust bridge (`cargo build -p torrowhisper-bridge`) and launches the Swift app via SwiftPM. No bundle, no signing — ideal for iterating.
 
 ### Build a real `.app` bundle
 
 ```bash
 ./scripts/build-macos-app.sh
-open "dist/DonnyWhisper.app"
+open "dist/TorroWhisper.app"
 ```
 
 Universal (Apple Silicon + Intel), release build, ad-hoc signed — good for running on your own Mac. For signed + notarized releases, see [docs/RELEASING.md](docs/RELEASING.md).
@@ -108,11 +108,11 @@ Full toolchain, debugging tips, and project walk-through: → [docs/DEVELOPMENT.
 ## Project layout
 
 ```
-donnywhisper/
-├── apps/donnywhisper-macos/       # SwiftUI + AppKit menu bar app
+torrowhisper/
+├── apps/torrowhisper-macos/       # SwiftUI + AppKit menu bar app
 ├── crates/
-│   ├── donnywhisper-bridge/       # JSON-over-FFI static library (staticlib + rlib)
-│   └── donnywhisper-core/         # Shared Rust domain types (settings, presets, DTOs)
+│   ├── torrowhisper-bridge/       # JSON-over-FFI static library (staticlib + rlib)
+│   └── torrowhisper-core/         # Shared Rust domain types (settings, presets, DTOs)
 ├── scripts/                       # Dev, build, sign, DMG packaging
 └── docs/                          # Long-form documentation
 ```
@@ -147,7 +147,7 @@ Larger feature ideas under discussion — chat / voice-assistant mode, custom di
 
 Copyright (C) 2026 Sven Wagener.
 
-DonnyWhisper is free software: you can redistribute it and/or modify it under
+TorroWhisper is free software: you can redistribute it and/or modify it under
 the terms of the **GNU General Public License** as published by the Free
 Software Foundation, either version 3 of the License, or (at your option) any
 later version. See [LICENSE](LICENSE) for the full text.

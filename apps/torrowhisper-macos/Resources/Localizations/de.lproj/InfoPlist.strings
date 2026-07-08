@@ -1,0 +1,5 @@
+"CFBundleDisplayName" = "TorroWhisper";
+"CFBundleName" = "TorroWhisper";
+"NSHumanReadableCopyright" = "Copyright © Sven Wagener. Alle Rechte vorbehalten.";
+"NSMicrophoneUsageDescription" = "TorroWhisper nimmt deine Stimme auf, um sie lokal zu transkribieren.";
+"NSAppleEventsUsageDescription" = "TorroWhisper nutzt Apple Events, um transkribierten Text in die aktive App einzufügen.";

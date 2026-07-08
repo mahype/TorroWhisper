@@ -1,4 +1,4 @@
-# WCAG 2.1 Accessibility Audit — DonnyWhisper (macOS)
+# WCAG 2.1 Accessibility Audit — TorroWhisper (macOS)
 
 **Datum:** 2026-06-10 · **Basis:** Code-Audit aller SwiftUI/AppKit-UI-Dateien.
 **Hinweis:** WCAG 2.1 gilt formal für Web-Inhalte. Für native Software gilt
@@ -44,10 +44,10 @@ Accessibility Inspector, „Reduce Motion" und „Increase Contrast".
 - **Fix:** `@Environment(\.accessibilityReduceMotion)` auswerten: statischer Dot, eingefrorene/gedimmte Waveform. Blinkfrequenz generell auf ≤1–2 Hz senken.
 
 ### 4. Menüleisten-Icon: Zustand nur visuell
-`AppDelegate.swift` (`statusImage()`): `megaphone` vs. `megaphone.fill`, `accessibilityDescription` immer „DonnyWhisper".
+`AppDelegate.swift` (`statusImage()`): `megaphone` vs. `megaphone.fill`, `accessibilityDescription` immer „TorroWhisper".
 - VoiceOver-Nutzer hören nie, ob Aufnahme läuft.
 - **WCAG:** 1.4.1 (Use of Color/visuell allein, A), 4.1.2 (A)
-- **Fix:** Description zustandsabhängig setzen („DonnyWhisper — Aufnahme läuft"), Tooltip ebenso.
+- **Fix:** Description zustandsabhängig setzen („TorroWhisper — Aufnahme läuft"), Tooltip ebenso.
 
 ### 5. Status nur über Farbe signalisiert
 - `SettingsView.swift` (~623–685): Runtime-Status-Circle rot/grün/orange/lila ohne Accessibility-Label am Indikator; Text daneben existiert nur teilweise.

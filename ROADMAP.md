@@ -1,4 +1,4 @@
-# DonnyWhisper — Roadmap
+# TorroWhisper — Roadmap
 
 Sammlung geplanter Features und Ideen. Der Abschnitt **Umsetzungs-Roadmap** unten
 legt die Reihenfolge der größeren Arbeitspakete fest; darunter folgen die
@@ -13,12 +13,12 @@ GitHub-Issue ausformuliert. Status: ☐ offen · ◐ in Arbeit · ☑ erledigt.
 
 | Phase | Paket | Issues | Status |
 |---|---|---|---|
-| **0 — Stabilität & Logging** | Bug-Fixes + Logging-Infrastruktur, bevor die großen Refactors starten | [#11](https://github.com/mahype/DonnyWhisper/issues/11), [#12](https://github.com/mahype/DonnyWhisper/issues/12) | ◐ (PR [#18](https://github.com/mahype/DonnyWhisper/pull/18)) |
-| **1 — LLM-Fundament** | Zentrales LLM-Modell-Management (Provider-Abstraktion, Cloud, Registry) **+** Ollama/LM-Studio-Modelle wiederverwenden | [#14](https://github.com/mahype/DonnyWhisper/issues/14) + [#6](https://github.com/mahype/DonnyWhisper/issues/6) | ☐ |
-| **2 — Nachbearbeitungs-Pipeline** | Geordnete, konfigurierbare Stages mit Context (Laravel-Style) | [#16](https://github.com/mahype/DonnyWhisper/issues/16) | ☐ |
-| **3 — Plugin-System** | Extension-Points, Plugin-Übersicht & Konfig-Dialoge (Phase 1 intern) | [#15](https://github.com/mahype/DonnyWhisper/issues/15) | ☐ |
-| **4 — Chat-Plugin** | KI-Voice-Chat (Sprache → LLM → TTS, Streaming) — erstes Plugin | [#17](https://github.com/mahype/DonnyWhisper/issues/17) | ☐ |
-| **Querschnitt** | Accessibility / WCAG 2.1 (A/AA) — separat einplanbar, blockiert nichts | [#10](https://github.com/mahype/DonnyWhisper/issues/10) | ☐ |
+| **0 — Stabilität & Logging** | Bug-Fixes + Logging-Infrastruktur, bevor die großen Refactors starten | [#11](https://github.com/mahype/TorroWhisper/issues/11), [#12](https://github.com/mahype/TorroWhisper/issues/12) | ◐ (PR [#18](https://github.com/mahype/TorroWhisper/pull/18)) |
+| **1 — LLM-Fundament** | Zentrales LLM-Modell-Management (Provider-Abstraktion, Cloud, Registry) **+** Ollama/LM-Studio-Modelle wiederverwenden | [#14](https://github.com/mahype/TorroWhisper/issues/14) + [#6](https://github.com/mahype/TorroWhisper/issues/6) | ☐ |
+| **2 — Nachbearbeitungs-Pipeline** | Geordnete, konfigurierbare Stages mit Context (Laravel-Style) | [#16](https://github.com/mahype/TorroWhisper/issues/16) | ☐ |
+| **3 — Plugin-System** | Extension-Points, Plugin-Übersicht & Konfig-Dialoge (Phase 1 intern) | [#15](https://github.com/mahype/TorroWhisper/issues/15) | ☐ |
+| **4 — Chat-Plugin** | KI-Voice-Chat (Sprache → LLM → TTS, Streaming) — erstes Plugin | [#17](https://github.com/mahype/TorroWhisper/issues/17) | ☐ |
+| **Querschnitt** | Accessibility / WCAG 2.1 (A/AA) — separat einplanbar, blockiert nichts | [#10](https://github.com/mahype/TorroWhisper/issues/10) | ☐ |
 
 ### Abhängigkeiten
 
@@ -55,7 +55,7 @@ Phase 3 ─ Plugin-System        (#15) ───────┘
 **Status:** Konzept festgehalten, Detail-Plan in `~/.claude/plans/lass-uns-bitte-mal-gleaming-nest.md`
 
 ### Idee
-DonnyWhisper bekommt eine zweite Hauptfunktion neben dem Diktat: einen **Chat-Modus** mit eigenem, frei konfigurierbarem Shortcut. Statt den transkribierten Text in die aktive App einzufügen, spricht der User mit einer KI und bekommt eine **gesprochene Audio-Antwort**.
+TorroWhisper bekommt eine zweite Hauptfunktion neben dem Diktat: einen **Chat-Modus** mit eigenem, frei konfigurierbarem Shortcut. Statt den transkribierten Text in die aktive App einzufügen, spricht der User mit einer KI und bekommt eine **gesprochene Audio-Antwort**.
 
 ### Flow
 ```
@@ -119,7 +119,7 @@ Ein **benutzerdefiniertes Dictionary**, das nach der Transkription läuft und de
 ## 3. Adaptives Lernen aus Nachkorrekturen
 
 ### Idee
-Wenn der User den eingefügten Text **direkt nach dem Diktat** im Eingabefeld ändert, soll DonnyWhisper diese Änderung erkennen, lernen und beim nächsten Mal automatisch anwenden — eine wachsende Form des Dictionary aus Punkt 2, aber **automatisch befüllt**.
+Wenn der User den eingefügten Text **direkt nach dem Diktat** im Eingabefeld ändert, soll TorroWhisper diese Änderung erkennen, lernen und beim nächsten Mal automatisch anwenden — eine wachsende Form des Dictionary aus Punkt 2, aber **automatisch befüllt**.
 
 ### Flow (Konzept)
 1. Diktat fügt Text X in App ein
@@ -134,7 +134,7 @@ Wenn der User den eingefügten Text **direkt nach dem Diktat** im Eingabefeld ä
 - **Privacy**: Der gesehene Text darf nirgends persistiert werden außer im Dictionary nach Bestätigung.
 
 ### Mögliche Vereinfachung als v1
-- Kein Live-Beobachten, sondern: **manueller Lern-Shortcut** ("Mark last as correction") — User markiert nach manueller Korrektur, DonnyWhisper holt sich den letzten Insert + den aktuellen Eingabefeld-Inhalt, schlägt Dictionary-Eintrag vor.
+- Kein Live-Beobachten, sondern: **manueller Lern-Shortcut** ("Mark last as correction") — User markiert nach manueller Korrektur, TorroWhisper holt sich den letzten Insert + den aktuellen Eingabefeld-Inhalt, schlägt Dictionary-Eintrag vor.
 
 ---
 

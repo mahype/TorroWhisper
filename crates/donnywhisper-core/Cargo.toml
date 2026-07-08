@@ -1,9 +1,0 @@
-[package]
-name = "donnywhisper-core"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
-[dependencies]
-serde.workspace = true
-serde_json = "1"

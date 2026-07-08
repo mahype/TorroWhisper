@@ -459,47 +459,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "donnywhisper-bridge"
-version = "0.4.2"
-dependencies = [
- "arboard",
- "auto-launch",
- "cpal",
- "directories",
- "donnywhisper-core",
- "enigo",
- "global-hotkey",
- "log",
- "mp3lame-encoder",
- "regex",
- "reqwest",
- "security-framework 2.11.1",
- "serde",
- "serde_json",
- "sys-locale",
- "sysinfo",
- "whisper-rs",
-]
-
-[[package]]
-name = "donnywhisper-core"
-version = "0.4.2"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "donnywhisper-llm-helper"
-version = "0.4.2"
-dependencies = [
- "encoding_rs",
- "llama-cpp-2",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2638,6 +2597,47 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2abe9b86193656635d2411dc43050282ca48aa31c2451210f4202550afb7526"
 dependencies = [
  "winnow",
+]
+
+[[package]]
+name = "torrowhisper-bridge"
+version = "0.4.2"
+dependencies = [
+ "arboard",
+ "auto-launch",
+ "cpal",
+ "directories",
+ "enigo",
+ "global-hotkey",
+ "log",
+ "mp3lame-encoder",
+ "regex",
+ "reqwest",
+ "security-framework 2.11.1",
+ "serde",
+ "serde_json",
+ "sys-locale",
+ "sysinfo",
+ "torrowhisper-core",
+ "whisper-rs",
+]
+
+[[package]]
+name = "torrowhisper-core"
+version = "0.4.2"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "torrowhisper-llm-helper"
+version = "0.4.2"
+dependencies = [
+ "encoding_rs",
+ "llama-cpp-2",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
