@@ -247,6 +247,10 @@ final class BridgeClient {
         try decodeResponse(from: ow_reregister_hotkey())
     }
 
+    func suspendHotkey() throws -> String {
+        try decodeResponse(from: ow_suspend_hotkey())
+    }
+
     func loadHistory() throws -> [HistoryEntry] {
         try decodeResponse(from: ow_load_history())
     }

@@ -1032,6 +1032,23 @@ final class AppModel: ObservableObject {
         hotkeyCapturePreview = settings.hotkey
         hotkeyCaptureError = nil
         isCapturingHotkey = true
+        suspendHotkeyForCapture()
+    }
+
+    /// While a recorder field captures a combo, the bridge's global shortcuts
+    /// must be unregistered: the armed hotkey would otherwise be consumed
+    /// system-wide and start dictation (with no model installed, the blocked-
+    /// model bubble then pops over the settings window) instead of reaching
+    /// the capture field. Every capture exit path must call
+    /// `reregisterHotkey()` — a plain re-save can be skipped as a no-op when
+    /// the combo did not change.
+    func suspendHotkeyForCapture() {
+        do {
+            _ = try bridge.suspendHotkey()
+            bridgeError = nil
+        } catch {
+            publish(error)
+        }
     }
 
     func updateHotkeyCapturePreview(_ value: String) {
@@ -1051,6 +1068,7 @@ final class AppModel: ObservableObject {
             bridgeError = nil
             isCapturingHotkey = false
             flushAutoSave()
+            reregisterHotkey()
         } catch {
             failHotkeyCapture(error.localizedDescription)
         }
@@ -1061,6 +1079,7 @@ final class AppModel: ObservableObject {
         hotkeyCapturePreview = ""
         hotkeyCaptureError = nil
         isCapturingHotkey = false
+        reregisterHotkey()
     }
 
     func clearHotkeyCapture() {
@@ -1068,6 +1087,7 @@ final class AppModel: ObservableObject {
         hotkeyCapturePreview = ""
         hotkeyCaptureError = L("TorroWhisper needs a global hotkey. Empty input is not allowed.", locale: settings.effectiveLocale)
         isCapturingHotkey = false
+        reregisterHotkey()
     }
 
     func failHotkeyCapture(_ message: String) {

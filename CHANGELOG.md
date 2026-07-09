@@ -6,6 +6,9 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Fixed
+- **Hotkey capture no longer triggers dictation** — while recording a new shortcut in Settings or Onboarding (and for the chat shortcut in Plugins), the global hotkeys are temporarily unregistered. Previously the armed hotkey was consumed system-wide: pressing it started dictation instead of reaching the capture field, and with no Whisper model installed the blocked-model bubble popped up over the settings window and swallowed Escape, blocking the capture entirely. The registration is restored on commit, cancel, and clear.
+
 ### Changed
 - **Renamed to TorroWhisper** — the application, the bundle identifier (now `com.gettorro.TorroWhisper`), the on-disk data and Keychain locations, and the Sparkle update feed were all renamed from *DonnyWhisper*. Existing installs do **not** auto-migrate: reinstall TorroWhisper, then re-grant microphone and accessibility permissions and re-enter any cloud API keys.
 - **Renamed to DonnyWhisper** (from *Open Whisper*) — the application, the bundle identifier (then `com.getdonny.DonnyWhisper`), the on-disk data and Keychain locations, and the Sparkle update feed were all renamed. Existing installs did not auto-migrate. (Superseded by the TorroWhisper rename above.)

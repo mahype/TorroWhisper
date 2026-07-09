@@ -148,6 +148,7 @@ struct ChatSettingsSheet: View {
                     hotkeyCapturing = true
                     hotkeyError = nil
                     hotkeyPreview = ""
+                    model.suspendHotkeyForCapture()
                 },
                 onCommit: { hotkey in
                     hotkeyCapturing = false
@@ -156,21 +157,25 @@ struct ChatSettingsSheet: View {
                     // reject with feedback instead of silently failing.
                     guard hotkey != model.settings.hotkey else {
                         hotkeyError = L("This shortcut is already used for dictation.", locale: locale)
+                        model.reregisterHotkey()
                         return
                     }
                     hotkeyError = nil
                     model.settings.chat.chatHotkey = hotkey
-                    model.requestAutoSave()
+                    model.flushAutoSave()
+                    model.reregisterHotkey()
                 },
                 onCancel: {
                     hotkeyCapturing = false
                     hotkeyPreview = ""
+                    model.reregisterHotkey()
                 },
                 onClear: {
                     model.settings.chat.chatHotkey = ""
-                    model.requestAutoSave()
+                    model.flushAutoSave()
                     hotkeyCapturing = false
                     hotkeyPreview = ""
+                    model.reregisterHotkey()
                 },
                 onPreview: { hotkeyPreview = $0 },
                 onInvalid: { hotkeyError = $0 }

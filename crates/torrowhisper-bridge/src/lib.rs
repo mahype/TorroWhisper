@@ -772,6 +772,13 @@ impl BridgeRuntime {
         Ok(self.last_status.clone())
     }
 
+    fn suspend_hotkey(&mut self) -> Result<String, String> {
+        if let Some(hotkey) = &mut self.hotkey {
+            hotkey.suspend();
+        }
+        Ok(self.last_status.clone())
+    }
+
     fn notify_device_change(&mut self) -> Option<MicSwitchEvent> {
         self.poll();
         let previous_input_device = self.settings.input_device_name.clone();
@@ -1353,6 +1360,22 @@ mod hotkey {
             self.registered_text = None;
             self.registered_chat_text = None;
             self.apply_settings(settings)
+        }
+
+        /// Temporarily unregisters all global shortcuts — used while the
+        /// settings UI captures a new combo. Without this the current hotkey
+        /// stays armed system-wide: pressing it starts dictation instead of
+        /// reaching the capture field. `apply_settings`/`force_reapply`
+        /// restores the registrations.
+        pub fn suspend(&mut self) {
+            if let Some(old) = self.registered_hotkey.take() {
+                let _ = self.manager.unregister(old);
+            }
+            self.registered_text = None;
+            if let Some(old) = self.registered_chat_hotkey.take() {
+                let _ = self.manager.unregister(old);
+            }
+            self.registered_chat_text = None;
         }
 
         pub fn poll_actions(&mut self) -> Vec<HotKeyAction> {
@@ -2092,6 +2115,11 @@ pub extern "C" fn ow_validate_hotkey(request_json: *const c_char) -> *mut c_char
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_reregister_hotkey() -> *mut c_char {
     response_from_result(with_runtime(BridgeRuntime::reregister_hotkey))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_suspend_hotkey() -> *mut c_char {
+    response_from_result(with_runtime(BridgeRuntime::suspend_hotkey))
 }
 
 #[derive(Deserialize)]
