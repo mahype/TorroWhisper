@@ -31,6 +31,19 @@ struct OnboardingView: View {
         }
         .frame(width: 760, height: 520)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onChange(of: model.onboardingStep) { newStep in
+            // The diagnostics DTO is only computed at app start; re-run it when
+            // the user reaches the diagnostics step so it reflects the model
+            // and device choices made earlier in the wizard.
+            if newStep == Self.lastStep {
+                model.refreshDiagnostics()
+            }
+        }
+        .onAppear {
+            if model.onboardingStep == Self.lastStep {
+                model.refreshDiagnostics()
+            }
+        }
         .sheet(isPresented: $isManagingLanguageModels) {
             LanguageModelsManagerSheet(model: model, selectedTab: $managerTab) {
                 isManagingLanguageModels = false

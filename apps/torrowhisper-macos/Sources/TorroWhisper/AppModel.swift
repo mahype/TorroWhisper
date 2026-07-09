@@ -787,6 +787,9 @@ final class AppModel: ObservableObject {
     }
 
     func refreshDiagnostics() {
+        // Persist pending (debounced) settings changes first, otherwise the
+        // bridge diagnoses a stale model/device selection.
+        flushAutoSave()
         do {
             var loaded = try bridge.runPermissionDiagnostics()
             loaded.items.append(contentsOf: permissionDiagnosticItems())
