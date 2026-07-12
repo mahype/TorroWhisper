@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Signs dist/Open Whisper.app with a Developer ID certificate, submits it to
+# Signs dist/TorroWhisper.app with a Developer ID certificate, submits it to
 # Apple's notary service, and staples the ticket.
 #
 # Required environment variables:
@@ -15,9 +15,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 
-app="dist/Open Whisper.app"
-entitlements="apps/open-whisper-macos/Resources/OpenWhisper.entitlements"
-notarize_zip="dist/OpenWhisper-notarize.zip"
+app="dist/TorroWhisper.app"
+entitlements="apps/torrowhisper-macos/Resources/TorroWhisper.entitlements"
+notarize_zip="dist/TorroWhisper-notarize.zip"
 
 : "${MACOS_SIGN_IDENTITY:?MACOS_SIGN_IDENTITY must be set}"
 : "${APPLE_ID:?APPLE_ID must be set}"
@@ -34,7 +34,7 @@ echo "==> Signing $app with hardened runtime"
 # second Mach-O in Contents/MacOS as nested code.
 codesign --force --timestamp --options=runtime \
     --sign "$MACOS_SIGN_IDENTITY" \
-    "$app/Contents/MacOS/open-whisper-llm-helper"
+    "$app/Contents/MacOS/torrowhisper-llm-helper"
 codesign --force --deep --timestamp --options=runtime \
     --entitlements "$entitlements" \
     --sign "$MACOS_SIGN_IDENTITY" \

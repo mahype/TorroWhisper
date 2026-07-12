@@ -1,0 +1,4 @@
+module TorroWhisperBridgeFFI [system] {
+    header "TorroWhisperBridgeFFI.h"
+    export *
+}

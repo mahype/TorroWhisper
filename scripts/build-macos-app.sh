@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds a universal (arm64 + x86_64) release .app bundle at dist/Open Whisper.app.
+# Builds a universal (arm64 + x86_64) release .app bundle at dist/TorroWhisper.app.
 #
 # By default signs the bundle ad-hoc — good enough to run on the local machine.
 # For a signed + notarized release, chain this with scripts/codesign-macos.sh
@@ -27,14 +27,14 @@ if [[ -z "${VERSION:-}" ]]; then
     VERSION="$(awk -F'"' '/^version/ {print $2; exit}' Cargo.toml)"
 fi
 export VERSION
-echo "==> Building Open Whisper $VERSION"
+echo "==> Building TorroWhisper $VERSION"
 
 # --- Clean debug artifact so the release linker can't accidentally pick it ---
-# Package.swift hard-codes `-L ../../target/debug -lopen_whisper_bridge` for the
+# Package.swift hard-codes `-L ../../target/debug -ltorrowhisper_bridge` for the
 # dev loop; the release build overrides this with a `-Xlinker -L` that points at
 # the universal static lib. Removing the debug .a here is a belt-and-braces
 # safeguard so the release bundle can never link against a debug Rust lib.
-rm -f target/debug/libopen_whisper_bridge.a
+rm -f target/debug/libtorrowhisper_bridge.a
 
 # --- Detect whether we can build universal (requires full Xcode for xcbuild) --
 
@@ -67,41 +67,41 @@ esac
 
 if $build_universal; then
     echo "==> Building Rust static library + LLM helper for aarch64-apple-darwin"
-    cargo build --release --target aarch64-apple-darwin -p open-whisper-bridge -p open-whisper-llm-helper
+    cargo build --release --target aarch64-apple-darwin -p torrowhisper-bridge -p torrowhisper-llm-helper
 
     echo "==> Building Rust static library + LLM helper for x86_64-apple-darwin"
-    cargo build --release --target x86_64-apple-darwin -p open-whisper-bridge -p open-whisper-llm-helper
+    cargo build --release --target x86_64-apple-darwin -p torrowhisper-bridge -p torrowhisper-llm-helper
 
     echo "==> Lipo'ing universal Rust static library"
     mkdir -p target/universal/release
     lipo -create \
-        target/aarch64-apple-darwin/release/libopen_whisper_bridge.a \
-        target/x86_64-apple-darwin/release/libopen_whisper_bridge.a \
-        -output target/universal/release/libopen_whisper_bridge.a
+        target/aarch64-apple-darwin/release/libtorrowhisper_bridge.a \
+        target/x86_64-apple-darwin/release/libtorrowhisper_bridge.a \
+        -output target/universal/release/libtorrowhisper_bridge.a
 
     echo "==> Lipo'ing universal LLM helper"
     lipo -create \
-        target/aarch64-apple-darwin/release/open-whisper-llm-helper \
-        target/x86_64-apple-darwin/release/open-whisper-llm-helper \
-        -output target/universal/release/open-whisper-llm-helper
+        target/aarch64-apple-darwin/release/torrowhisper-llm-helper \
+        target/x86_64-apple-darwin/release/torrowhisper-llm-helper \
+        -output target/universal/release/torrowhisper-llm-helper
     rust_lib_dir="$repo_root/target/universal/release"
 else
     echo "==> Building Rust static library + LLM helper for $native_rust_target"
-    cargo build --release --target "$native_rust_target" -p open-whisper-bridge -p open-whisper-llm-helper
+    cargo build --release --target "$native_rust_target" -p torrowhisper-bridge -p torrowhisper-llm-helper
     rust_lib_dir="$repo_root/target/$native_rust_target/release"
 fi
-lipo -info "$rust_lib_dir/libopen_whisper_bridge.a"
-lipo -info "$rust_lib_dir/open-whisper-llm-helper"
+lipo -info "$rust_lib_dir/libtorrowhisper_bridge.a"
+lipo -info "$rust_lib_dir/torrowhisper-llm-helper"
 
 # --- Force the Swift executable to re-link against the fresh Rust lib ---------
 # The Rust static library is pulled in via raw `-Xlinker -L` flags, so SwiftPM
 # does NOT track it as a build input. When only the Rust side changes, `swift
 # build` sees the Swift sources unchanged and skips re-linking — shipping a
-# binary built against a STALE libopen_whisper_bridge.a (e.g. missing newly
+# binary built against a STALE libtorrowhisper_bridge.a (e.g. missing newly
 # added settings fields). Delete the linked executables so SwiftPM must relink.
 rm -f \
-    "apps/open-whisper-macos/.build/release/OpenWhisperMac" \
-    "apps/open-whisper-macos/.build/apple/Products/Release/OpenWhisperMac" \
+    "apps/torrowhisper-macos/.build/release/TorroWhisper" \
+    "apps/torrowhisper-macos/.build/apple/Products/Release/TorroWhisper" \
     2>/dev/null || true
 
 # --- Swift executable --------------------------------------------------------
@@ -111,16 +111,16 @@ if $build_universal; then
     swift build \
         -c release \
         --arch arm64 --arch x86_64 \
-        --package-path apps/open-whisper-macos \
+        --package-path apps/torrowhisper-macos \
         -Xlinker -L -Xlinker "$rust_lib_dir"
-    swift_build_bin="apps/open-whisper-macos/.build/apple/Products/Release/OpenWhisperMac"
+    swift_build_bin="apps/torrowhisper-macos/.build/apple/Products/Release/TorroWhisper"
 else
     echo "==> Building Swift executable ($native_arch only)"
     swift build \
         -c release \
-        --package-path apps/open-whisper-macos \
+        --package-path apps/torrowhisper-macos \
         -Xlinker -L -Xlinker "$rust_lib_dir"
-    swift_build_bin="apps/open-whisper-macos/.build/release/OpenWhisperMac"
+    swift_build_bin="apps/torrowhisper-macos/.build/release/TorroWhisper"
 fi
 
 if [[ ! -f "$swift_build_bin" ]]; then
@@ -144,25 +144,25 @@ fi
 
 # --- Assemble .app bundle -----------------------------------------------------
 
-app="dist/Open Whisper.app"
+app="dist/TorroWhisper.app"
 echo "==> Assembling $app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 
-cp "$swift_build_bin" "$app/Contents/MacOS/OpenWhisperMac"
-cp apps/open-whisper-macos/Resources/Info.plist "$app/Contents/Info.plist"
+cp "$swift_build_bin" "$app/Contents/MacOS/TorroWhisper"
+cp apps/torrowhisper-macos/Resources/Info.plist "$app/Contents/Info.plist"
 
 # The local LLM runs in its own process (ggml symbol isolation from whisper);
 # the bridge looks for the helper next to the main executable.
-cp "$rust_lib_dir/open-whisper-llm-helper" "$app/Contents/MacOS/open-whisper-llm-helper"
-chmod +x "$app/Contents/MacOS/open-whisper-llm-helper"
+cp "$rust_lib_dir/torrowhisper-llm-helper" "$app/Contents/MacOS/torrowhisper-llm-helper"
+chmod +x "$app/Contents/MacOS/torrowhisper-llm-helper"
 
-if [[ -f apps/open-whisper-macos/Resources/AppIcon.icns ]]; then
-    cp apps/open-whisper-macos/Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
+if [[ -f apps/torrowhisper-macos/Resources/AppIcon.icns ]]; then
+    cp apps/torrowhisper-macos/Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 fi
 
 # --- Copy in-app localization tables (Bundle.module) --------------------------
-# The OpenWhisperMac target does NOT declare `resources:` in Package.swift —
+# The TorroWhisper target does NOT declare `resources:` in Package.swift —
 # SwiftPM's generated Bundle.module accessor for an executable target points at
 # the .app ROOT (uncodesignable) and the build-machine path (absent on user
 # machines), so it crashed every shipped release at the first localized-string
@@ -172,7 +172,7 @@ fi
 # editing source.
 echo "==> Copying in-app localization tables into Contents/Resources"
 copied_localizable=false
-for lproj_dir in apps/open-whisper-macos/Sources/OpenWhisperMac/Resources/*.lproj; do
+for lproj_dir in apps/torrowhisper-macos/Sources/TorroWhisper/Resources/*.lproj; do
     if [[ -f "$lproj_dir/Localizable.strings" ]]; then
         lang_name="$(basename "$lproj_dir")"
         # A single bad escape (e.g. a stray ASCII quote in a value) makes macOS
@@ -189,14 +189,14 @@ for lproj_dir in apps/open-whisper-macos/Sources/OpenWhisperMac/Resources/*.lpro
     fi
 done
 if ! $copied_localizable; then
-    echo "error: no Localizable.strings found under Sources/OpenWhisperMac/Resources/*.lproj" >&2
+    echo "error: no Localizable.strings found under Sources/TorroWhisper/Resources/*.lproj" >&2
     exit 1
 fi
 
 # --- Copy InfoPlist localizations into main bundle ---------------------------
 # These are looked up by macOS for permission dialogs (NSMicrophoneUsageDescription,
 # etc.) and must live at Contents/Resources/{lang}.lproj/InfoPlist.strings.
-for lproj_dir in apps/open-whisper-macos/Resources/Localizations/*.lproj; do
+for lproj_dir in apps/torrowhisper-macos/Resources/Localizations/*.lproj; do
     if [[ -d "$lproj_dir" ]]; then
         lang_name="$(basename "$lproj_dir")"
         mkdir -p "$app/Contents/Resources/$lang_name"
@@ -210,10 +210,10 @@ done
 # SwiftPM only resolves it into the XCFramework artifact tree. Copy the
 # universal variant into Contents/Frameworks/ and add the conventional rpath.
 
-sparkle_framework_src="apps/open-whisper-macos/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+sparkle_framework_src="apps/torrowhisper-macos/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 if [[ ! -d "$sparkle_framework_src" ]]; then
     echo "error: Sparkle.framework not found at $sparkle_framework_src" >&2
-    echo "       run 'swift package --package-path apps/open-whisper-macos resolve' first" >&2
+    echo "       run 'swift package --package-path apps/torrowhisper-macos resolve' first" >&2
     exit 1
 fi
 
@@ -225,7 +225,7 @@ cp -R "$sparkle_framework_src" "$app/Contents/Frameworks/"
 # The binary was linked with @rpath/Sparkle.framework/... but SwiftPM does
 # not set @executable_path/../Frameworks as an rpath for executableTargets.
 # Add it so dyld can find the embedded framework at runtime.
-install_name_tool -add_rpath "@executable_path/../Frameworks" "$app/Contents/MacOS/OpenWhisperMac"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$app/Contents/MacOS/TorroWhisper"
 
 # Sparkle compares the appcast's sparkle:version against CFBundleVersion.
 # `git describe` suffixes (e.g. 0.4.0-4-g1a06bd2[-dirty]) compare as NEWER than
@@ -242,7 +242,7 @@ BUNDLE_VERSION="$(printf '%s' "$VERSION" | sed -E 's/-[0-9]+-g[0-9a-f]+(-dirty)?
 
 # --- Sign ---------------------------------------------------------------------
 
-entitlements="apps/open-whisper-macos/Resources/OpenWhisper.entitlements"
+entitlements="apps/torrowhisper-macos/Resources/TorroWhisper.entitlements"
 
 # The helper is a second Mach-O in Contents/MacOS; `codesign --deep` does not
 # reliably treat it as nested code, so sign it explicitly before the bundle.
@@ -250,14 +250,14 @@ if [[ -n "${MACOS_SIGN_IDENTITY:-}" ]]; then
     echo "==> Signing with \"$MACOS_SIGN_IDENTITY\" (hardened runtime)"
     codesign --force --timestamp --options=runtime \
         --sign "$MACOS_SIGN_IDENTITY" \
-        "$app/Contents/MacOS/open-whisper-llm-helper"
+        "$app/Contents/MacOS/torrowhisper-llm-helper"
     codesign --force --deep --timestamp --options=runtime \
         --entitlements "$entitlements" \
         --sign "$MACOS_SIGN_IDENTITY" \
         "$app"
 else
     echo "==> Ad-hoc signing (MACOS_SIGN_IDENTITY unset)"
-    codesign --force --sign - "$app/Contents/MacOS/open-whisper-llm-helper"
+    codesign --force --sign - "$app/Contents/MacOS/torrowhisper-llm-helper"
     codesign --force --deep --sign - \
         --entitlements "$entitlements" \
         "$app"

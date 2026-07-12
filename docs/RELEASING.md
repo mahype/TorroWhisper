@@ -1,6 +1,6 @@
 # Releasing
 
-This document is for maintainers. It describes how Open Whisper is versioned, built, signed, and published.
+This document is for maintainers. It describes how TorroWhisper is versioned, built, signed, and published.
 
 ## TL;DR
 
@@ -15,7 +15,7 @@ git push origin v0.2.2
 
 ## Versioning
 
-Open Whisper follows **SemVer**: `MAJOR.MINOR.PATCH`, optionally `-rc.N` for pre-releases.
+TorroWhisper follows **SemVer**: `MAJOR.MINOR.PATCH`, optionally `-rc.N` for pre-releases.
 
 The **Git tag is the source of truth** for the version. Before tagging:
 
@@ -35,11 +35,11 @@ On push of a `v*` tag, the GitHub Actions release workflow:
 
 1. Runs the full CI suite (Rust fmt/clippy/test, macOS app build).
 2. Builds a universal (arm64 + x86_64) Rust static library.
-3. Builds a universal Swift executable and assembles `Open Whisper.app`.
+3. Builds a universal Swift executable and assembles `TorroWhisper.app`.
 4. Injects the version from the tag into `Info.plist`.
 5. Signs the bundle with the **Developer ID Application** certificate.
 6. Submits to Apple's notary service via `notarytool` and staples the ticket.
-7. Packages the result into `OpenWhisper-<version>.dmg`.
+7. Packages the result into `TorroWhisper-<version>.dmg`.
 8. Runs a **DMG smoke test** ([scripts/smoke-test-dmg.sh](../scripts/smoke-test-dmg.sh)) that mounts the finished DMG and verifies `codesign`, Gatekeeper (`spctl`), and a valid stapled notarization ticket. A broken artifact halts the workflow **before** anything is published.
 9. Uploads the DMG and a `SHA256SUMS.txt` to a **published** GitHub Release with auto-generated release notes.
 10. Signs the DMG with the Sparkle Ed25519 key and appends a new `<item>` to `appcast.xml` on the `gh-pages` branch — with the release notes embedded as inline HTML — so existing installs see the update on their next check (see [Sparkle auto-updates](#sparkle-auto-updates)). The release is created first so the appcast never advertises a download URL that does not exist yet.
@@ -71,7 +71,7 @@ Configure these under **Settings → Secrets and variables → Actions**:
 
 ### Generating `APPLE_APP_SPECIFIC_PASSWORD`
 
-`notarytool` does not accept your main Apple ID password. Go to [appleid.apple.com](https://appleid.apple.com/) → *Sign-In and Security* → *App-Specific Passwords* → generate one labeled e.g. `open-whisper-notarization`.
+`notarytool` does not accept your main Apple ID password. Go to [appleid.apple.com](https://appleid.apple.com/) → *Sign-In and Security* → *App-Specific Passwords* → generate one labeled e.g. `torrowhisper-notarization`.
 
 ## Test a release build locally
 
@@ -92,13 +92,13 @@ export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"
 ./scripts/build-dmg.sh
 
 # 4. Verify Gatekeeper accepts the result
-spctl --assess --type open --context context:primary-signature "dist/Open Whisper.app"
+spctl --assess --type open --context context:primary-signature "dist/TorroWhisper.app"
 # Expected: "accepted, source=Notarized Developer ID"
 ```
 
 ## Sparkle auto-updates
 
-Open Whisper ships with [Sparkle](https://sparkle-project.org/); every released DMG is signed with an Ed25519 key and advertised through an appcast on the `gh-pages` branch.
+TorroWhisper ships with [Sparkle](https://sparkle-project.org/); every released DMG is signed with an Ed25519 key and advertised through an appcast on the `gh-pages` branch.
 
 ### One-time setup
 
@@ -106,10 +106,10 @@ Only needed once per project, or when rotating the signing key:
 
 ```bash
 # From the checkout root, with Sparkle resolved via SwiftPM:
-./apps/open-whisper-macos/.build/.../generate_keys
+./apps/torrowhisper-macos/.build/.../generate_keys
 ```
 
-The tool writes the key pair into your keychain and prints the **public key**. The public key is already embedded in [Info.plist](../apps/open-whisper-macos/Resources/Info.plist) as `SUPublicEDKey`. Store the **private key** as the `SPARKLE_ED_PRIVATE_KEY` GitHub secret — never commit it.
+The tool writes the key pair into your keychain and prints the **public key**. The public key is already embedded in [Info.plist](../apps/torrowhisper-macos/Resources/Info.plist) as `SUPublicEDKey`. Store the **private key** as the `SPARKLE_ED_PRIVATE_KEY` GitHub secret — never commit it.
 
 ### What happens on every release tag
 
@@ -130,7 +130,7 @@ If you need to pull an update without reverting the GitHub release itself, rever
 ### Verifying the feed locally
 
 ```bash
-curl -s https://mahype.github.io/open-whisper/appcast.xml | head -40
+curl -s https://mahype.github.io/TorroWhisper/appcast.xml | head -40
 ```
 
 The top `<item>` should match your latest tag with a non-empty `sparkle:edSignature` attribute.
