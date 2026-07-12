@@ -50,10 +50,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         NSApp.setActivationPolicy(.accessory)
 
         let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        BridgeClient().logMessage(
+        let bridgeClient = BridgeClient()
+        bridgeClient.logMessage(
             level: "info",
             message: "app launched (version \(appVersion), macOS \(ProcessInfo.processInfo.operatingSystemVersionString))"
         )
+        // Detects (and logs) a previous session that died without reaching
+        // applicationWillTerminate — crash, abort in native code, or kill.
+        bridgeClient.sessionStarted()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.imagePosition = .imageOnly
@@ -143,6 +147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 self.showOnboarding(nil)
             }
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        model.flushAutoSave()
+        BridgeClient().sessionEndedCleanly()
     }
 
     func menuWillOpen(_ menu: NSMenu) {

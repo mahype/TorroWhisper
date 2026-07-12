@@ -53,7 +53,7 @@ pub fn log_path() -> PathBuf {
     log_dir().join(LOG_FILE_NAME)
 }
 
-fn log_dir() -> PathBuf {
+pub(crate) fn log_dir() -> PathBuf {
     // Override for tests and debugging.
     if let Ok(dir) = std::env::var("OW_LOG_DIR")
         && !dir.trim().is_empty()
@@ -188,7 +188,7 @@ impl Log for FileLogger {
 
 /// Formats a `SystemTime` as `YYYY-MM-DDTHH:MM:SS.mmmZ` without pulling in a
 /// date-time crate. Uses the days-to-civil algorithm by Howard Hinnant.
-fn format_utc_timestamp(time: SystemTime) -> String {
+pub(crate) fn format_utc_timestamp(time: SystemTime) -> String {
     let duration = time.duration_since(UNIX_EPOCH).unwrap_or_default();
     let secs = duration.as_secs();
     let millis = duration.subsec_millis();

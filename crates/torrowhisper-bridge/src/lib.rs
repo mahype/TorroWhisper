@@ -26,6 +26,7 @@ mod sessions_store;
 #[allow(dead_code)]
 mod pipeline;
 mod remote_models;
+mod session_marker;
 #[allow(dead_code)]
 mod settings_store;
 mod speech_text;
@@ -1657,6 +1658,11 @@ struct TtsReadyResponse {
     ready: bool,
 }
 
+#[derive(Serialize)]
+struct SessionStartResponse {
+    previous_ended_abnormally: bool,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_log_path() -> *mut c_char {
     logging::init();
@@ -1700,6 +1706,27 @@ pub extern "C" fn ow_plugin_log(request_json: *const c_char) -> *mut c_char {
             "ok".to_owned()
         });
     response_from_result(result)
+}
+
+/// Records the start of an app session. Detects and logs a previous session
+/// that ended without a clean shutdown (crash, abort, kill); the returned
+/// flag mirrors that so the host app can surface it if desired.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_session_started() -> *mut c_char {
+    logging::init();
+    response_ok(SessionStartResponse {
+        previous_ended_abnormally: session_marker::session_started(),
+    })
+}
+
+/// Records a clean shutdown. The host app calls this from
+/// `applicationWillTerminate` so the next launch does not report an
+/// abnormal end.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_session_ended_cleanly() -> *mut c_char {
+    logging::init();
+    session_marker::session_ended_cleanly();
+    response_ok("ok".to_owned())
 }
 
 /// Writes a diagnostics snapshot (settings, hotkey, model inventories) into
