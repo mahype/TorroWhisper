@@ -10,7 +10,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var statusItem: NSStatusItem!
     private let statusMenu = NSMenu()
     private var dictationItem: NSMenuItem!
-    private var chatItem: NSMenuItem!
     private var settingsItem: NSMenuItem!
     private var modeSwitchItem: NSMenuItem!
     private var modelSwitchItem: NSMenuItem!
@@ -21,8 +20,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var checkForUpdatesItem: NSMenuItem!
     private var feedbackItem: NSMenuItem!
     private var settingsWindow: NSWindow?
-    private var chatWindow: NSWindow?
-    private let chatViewModel = ChatViewModel()
     private var onboardingWindow: NSWindow?
     private var feedbackWindow: NSWindow?
     private var recordingIndicatorWindow: NSWindow?
@@ -60,7 +57,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         statusItem.button?.toolTip = "TorroWhisper"
 
         dictationItem = NSMenuItem(title: "", action: #selector(toggleDictation), keyEquivalent: "")
-        chatItem = NSMenuItem(title: "", action: #selector(showChat), keyEquivalent: "")
         settingsItem = NSMenuItem(title: "", action: #selector(showSettings), keyEquivalent: ",")
         modeSwitchItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         modeSwitchItem.submenu = modeMenu
@@ -88,7 +84,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         statusMenu.items = [
             dictationItem,
             .separator(),
-            chatItem,
             settingsItem,
             .separator(),
             micSwitchItem,
@@ -109,9 +104,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         model.onMicSwitched = { [weak self] notification in
             self?.showMicSwitchToast(notification)
-        }
-        model.onChatTriggered = { [weak self] in
-            self?.showChat(nil)
         }
         refreshMenuState()
 
@@ -149,17 +141,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         refreshMenuState()
     }
 
-    /// Gates the "Chat…" entry on the chat plugin's enabled state. NSMenu's
-    /// automatic item enabling calls this on the responder chain; returning
-    /// false here is the only reliable way to disable an item with a live
-    /// action (a manual `.isEnabled = false` gets overwritten on display).
-    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if menuItem === chatItem {
-            return model.settings.plugins.first(where: { $0.id == "chat" })?.enabled ?? true
-        }
-        return true
-    }
-
     @objc private func toggleDictation() {
         model.toggleDictation()
     }
@@ -188,17 +169,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             return
         }
         model.flushAutoSave()
-    }
-
-    @objc private func showChat(_ sender: Any?) {
-        let window = chatWindow ?? makeWindow(
-            title: L("Chat", locale: currentLocale),
-            size: NSSize(width: 760, height: 580),
-            resizable: true,
-            rootView: ChatWindowView(chat: chatViewModel)
-        )
-        chatWindow = window
-        show(window)
     }
 
     @objc private func showFeedback(_ sender: Any?) {
@@ -266,10 +236,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         dictationItem.title = hotkeySuffix.isEmpty
             ? dictationLabel
             : "\(dictationLabel) — \(hotkeySuffix)"
-        chatItem.title = L("Chat…", locale: locale)
-        // Enable/disable of `chatItem` is driven by `validateMenuItem(_:)` —
-        // setting `.isEnabled` here would be clobbered by NSMenu's automatic
-        // item-enabling pass on display.
         settingsItem.title = L("Settings…", locale: locale)
         modeSwitchItem.title = L("Post-processing", locale: locale)
         modelSwitchItem.title = L("Transcription model", locale: locale)
@@ -424,7 +390,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func refreshWindowTitles() {
         let locale = currentLocale
         settingsWindow?.title = L("TorroWhisper Settings", locale: locale)
-        chatWindow?.title = L("Chat", locale: locale)
         onboardingWindow?.title = L("TorroWhisper Setup", locale: locale)
         feedbackWindow?.title = L("Send feedback", locale: locale)
     }
@@ -432,9 +397,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func updateRecordingIndicatorVisibility() {
         let runtime = model.runtime
         let phase: IndicatorPhase? = {
-            // A chat turn shows its state inside the chat window — suppress the
-            // floating dictation bubble so the two don't overlap.
-            if runtime.chatCapturing { return nil }
             if runtime.dictationBlockedByMissingModel {
                 let progress = runtime.blockedModelProgressBasisPoints.map { Double($0) / 10_000.0 }
                 return .modelNotReady(

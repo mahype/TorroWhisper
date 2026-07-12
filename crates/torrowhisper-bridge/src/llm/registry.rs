@@ -125,22 +125,6 @@ fn build_inner(
         ));
     }
 
-    // User-configured Hermes agents (#agent). Reachability can't be checked
-    // synchronously here, so a configured agent is reported `Ready` — a failed
-    // request surfaces its error in the chat instead.
-    for agent in &settings.hermes_agents {
-        entries.push(entry(
-            LlmModelRef::Hermes {
-                id: agent.id.clone(),
-            },
-            LlmBackendKind::Hermes,
-            agent.name.clone(),
-            format!("Hermes Agent · {}", agent_detail(&agent.base_url)),
-            LlmAvailability::Ready,
-            None,
-        ));
-    }
-
     // Remote Ollama / LM Studio models exist in the registry *only* once the user
     // enabled them — there is no static catalog to discover them from offline.
     // Reconstruct each enabled remote id into an entry without a network call (the
@@ -186,36 +170,15 @@ fn build_inner(
 
     // One final pass stamps the app-wide enable state onto every entry: literal
     // membership of `enabled_model_ids` (the "empty = show all" fallback lives in
-    // the pickers). User-configured Hermes agents are always enabled — adding one
-    // in Settings should surface it in the chat right away.
+    // the pickers).
     for item in &mut entries {
-        item.enabled = item.backend_kind == LlmBackendKind::Hermes
-            || settings
-                .enabled_model_ids
-                .iter()
-                .any(|id| id == &item.stable_id);
+        item.enabled = settings
+            .enabled_model_ids
+            .iter()
+            .any(|id| id == &item.stable_id);
     }
 
     entries
-}
-
-/// Compact, secret-free detail line for a Hermes agent: the host[:port] of its
-/// base URL, falling back to the raw value when it can't be parsed.
-fn agent_detail(base_url: &str) -> String {
-    let trimmed = base_url.trim();
-    let without_scheme = trimmed
-        .split_once("://")
-        .map(|(_, rest)| rest)
-        .unwrap_or(trimmed);
-    let host = without_scheme
-        .split(['/', '?'])
-        .next()
-        .unwrap_or(without_scheme);
-    if host.is_empty() {
-        trimmed.to_owned()
-    } else {
-        host.to_owned()
-    }
 }
 
 fn integrity_to_availability(integrity: LlmModelIntegrity) -> LlmAvailability {

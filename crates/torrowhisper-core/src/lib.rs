@@ -452,38 +452,6 @@ pub struct CustomLlmModel {
     pub source: CustomLlmSource,
 }
 
-/// A user-configured Hermes Agent (NousResearch) reachable over its
-/// OpenAI-compatible API server (`/v1/chat/completions`). Unlike the
-/// fixed-vendor [`OpenAiCompatibleProvider`] entries, every agent has its own
-/// base URL and an *optional* bearer token. The token lives in the Keychain
-/// (account `hermes_agent:<id>`) and never in `settings.json`; only the
-/// non-secret metadata below is persisted.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(default)]
-pub struct HermesAgent {
-    /// Stable identifier — UI selection token and Keychain account suffix.
-    pub id: String,
-    /// Display name shown in the chat model picker.
-    pub name: String,
-    /// Base URL of the agent's API server, e.g. `http://localhost:8642/v1`.
-    pub base_url: String,
-    /// Value sent in the request's `model` field. Hermes overrides it
-    /// server-side (config.yaml), so any value works; defaults to
-    /// `hermes-agent`.
-    pub model_name: String,
-}
-
-impl Default for HermesAgent {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            name: String::new(),
-            base_url: String::new(),
-            model_name: "hermes-agent".to_owned(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PostProcessingChoice {
@@ -520,9 +488,6 @@ pub enum LlmBackendKind {
     Grok,
     Anthropic,
     Gemini,
-    /// A user-configured Hermes Agent (NousResearch). Per-agent base URL and
-    /// optional bearer token; not a fixed cloud vendor.
-    Hermes,
 }
 
 impl LlmBackendKind {
@@ -537,7 +502,6 @@ impl LlmBackendKind {
             Self::Grok => "Grok (xAI)",
             Self::Anthropic => "Anthropic",
             Self::Gemini => "Gemini",
-            Self::Hermes => "Hermes Agent",
         }
     }
 
@@ -567,7 +531,7 @@ impl OpenAiCompatibleProvider {
 }
 
 /// Backend-independent identity of a language model that any feature
-/// (post-processing today, chat later) can reference. Replaces the scattered
+/// can reference. Replaces the scattered
 /// [`PostProcessingChoice`] dispatch with a single typed reference that the
 /// provider layer (`bridge::llm::provider_for`) turns into a runnable provider.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -596,12 +560,6 @@ pub enum LlmModelRef {
     Gemini {
         model_name: String,
     },
-    /// A user-configured Hermes Agent, referenced by its [`HermesAgent::id`].
-    /// The base URL and (optional) token are resolved from settings + Keychain
-    /// at request time.
-    Hermes {
-        id: String,
-    },
 }
 
 impl LlmModelRef {
@@ -613,7 +571,6 @@ impl LlmModelRef {
             Self::OpenAiCompatible { provider, .. } => provider.backend_kind(),
             Self::Anthropic { .. } => LlmBackendKind::Anthropic,
             Self::Gemini { .. } => LlmBackendKind::Gemini,
-            Self::Hermes { .. } => LlmBackendKind::Hermes,
         }
     }
 
@@ -640,7 +597,6 @@ impl LlmModelRef {
             } => format!("{}:{model_name}", provider.backend_kind().label_id()),
             Self::Anthropic { model_name } => format!("anthropic:{model_name}"),
             Self::Gemini { model_name } => format!("gemini:{model_name}"),
-            Self::Hermes { id } => format!("hermes:{id}"),
         }
     }
 }
@@ -658,7 +614,6 @@ impl LlmBackendKind {
             Self::Grok => "grok",
             Self::Anthropic => "anthropic",
             Self::Gemini => "gemini",
-            Self::Hermes => "hermes",
         }
     }
 }
@@ -683,15 +638,6 @@ pub struct ApiKeyStatusDto {
     pub has_key: bool,
 }
 
-/// Whether a configured Hermes agent currently has a bearer token stored in the
-/// Keychain. Per-agent counterpart of [`ApiKeyStatusDto`] — booleans only, the
-/// secret never crosses the FFI boundary.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct HermesKeyStatusDto {
-    pub id: String,
-    pub has_key: bool,
-}
-
 /// Availability of a model in the unified registry.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -708,10 +654,9 @@ pub enum LlmAvailability {
     NeedsApiKey,
 }
 
-/// One entry in the unified model registry that the UI and plugins query. Both
-/// post-processing and (later) chat pick a model from this single list, so a
-/// model that is already downloaded is offered once and reused — never
-/// re-downloaded.
+/// One entry in the unified model registry that the UI and plugins query.
+/// Post-processing picks a model from this single list, so a model that is
+/// already downloaded is offered once and reused — never re-downloaded.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LlmRegistryEntryDto {
     /// Canonical selection token ([`LlmModelRef::stable_id`]).
@@ -724,7 +669,7 @@ pub struct LlmRegistryEntryDto {
     pub availability: LlmAvailability,
     /// Whether the user enabled this model app-wide ([`AppSettings::enabled_model_ids`]).
     /// Literal membership — the "empty = show all" fallback lives in the consuming
-    /// pickers (chat, post-processing), not here, so the management UI reflects the
+    /// pickers (post-processing), not here, so the management UI reflects the
     /// true toggle state.
     #[serde(default)]
     pub enabled: bool,
@@ -846,84 +791,6 @@ pub struct StageCatalogEntryDto {
     pub is_plugin: bool,
 }
 
-// --- Chat plugin (#17) -------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ChatRole {
-    System,
-    User,
-    Assistant,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ChatMessageDto {
-    pub role: ChatRole,
-    pub content: String,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ChatPhase {
-    /// Awaiting input.
-    Idle,
-    /// Recording the user's speech.
-    Listening,
-    /// Whisper is transcribing.
-    Transcribing,
-    /// The LLM is producing an answer.
-    Generating,
-}
-
-/// One persisted chat conversation (#17 history sidebar).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(default)]
-pub struct ChatSession {
-    pub id: String,
-    /// Short title for the sidebar — derived from the first user message.
-    pub title: String,
-    pub messages: Vec<ChatMessageDto>,
-    /// Unix seconds of the last change; the sidebar sorts newest-first on it.
-    pub updated_at: i64,
-    /// Model/agent this conversation uses. `None` falls back to
-    /// `settings.chat.default_model_ref`, then the local preset. Persisted so
-    /// each conversation remembers its own pick (#agent).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub model_ref: Option<LlmModelRef>,
-}
-
-/// Lightweight session entry for the sidebar list (no message bodies).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ChatSessionDto {
-    pub id: String,
-    pub title: String,
-    pub updated_at: i64,
-    pub message_count: usize,
-}
-
-/// Snapshot of the chat session for the chat window's poll.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ChatStateDto {
-    pub phase: ChatPhase,
-    pub messages: Vec<ChatMessageDto>,
-    /// Bumped whenever the transcript or phase changes, so the UI only reloads
-    /// when something actually happened.
-    pub revision: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    /// All sessions (newest first) for the sidebar, carried on the same poll.
-    #[serde(default)]
-    pub sessions: Vec<ChatSessionDto>,
-    /// Id of the session currently shown in the transcript.
-    #[serde(default)]
-    pub active_session_id: String,
-    /// Model/agent the active session uses, so the chat window's picker can
-    /// re-sync when the user switches conversations. `None` = no explicit pick
-    /// (uses the configured default).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub active_model_ref: Option<LlmModelRef>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct DictionaryEntry {
@@ -980,170 +847,6 @@ pub struct PreferredDevice {
     pub last_selected_at: i64,
 }
 
-// --- Plugin system (#15) -----------------------------------------------------
-
-/// Per-plugin user state persisted in `AppSettings.plugins`. The catalog of
-/// *what exists* lives in [`builtin_plugin_catalog`] (Rust is the source of
-/// truth); this only carries the enable bit (and later, opaque config).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(default)]
-pub struct PluginConfig {
-    pub id: String,
-    pub enabled: bool,
-}
-
-impl Default for PluginConfig {
-    fn default() -> Self {
-        Self {
-            id: String::new(),
-            enabled: true,
-        }
-    }
-}
-
-/// Describes one available plugin for the Plugins overview UI. Built-in plugins
-/// are listed by [`builtin_plugin_catalog`]; Phase 2 third-party plugins will
-/// extend the same shape over the out-of-process protocol.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PluginDescriptorDto {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub version: String,
-    /// Whether the plugin exposes a configuration dialog (gear button).
-    pub configurable: bool,
-}
-
-/// IDs of the built-in plugins. Used by `normalize()` to seed enable entries
-/// and drop orphaned config for plugins that no longer exist.
-pub const BUILTIN_PLUGIN_IDS: &[&str] = &["chat"];
-
-/// The built-in plugin catalog — the single source of truth for *what plugins
-/// exist* in Phase 1. Surfaced to Swift via `ow_get_plugin_catalog`.
-pub fn builtin_plugin_catalog() -> Vec<PluginDescriptorDto> {
-    vec![PluginDescriptorDto {
-        id: "chat".to_owned(),
-        name: "Voice Chat".to_owned(),
-        description: "Talk to an AI assistant by voice — speak a question and hear the answer."
-            .to_owned(),
-        version: env!("CARGO_PKG_VERSION").to_owned(),
-        configurable: true,
-    }]
-}
-
-// --- Chat plugin settings (#17) ----------------------------------------------
-
-/// Which backend speaks the chat answers. `Piper` is the default: a fast,
-/// fully-local neural voice (run via the sherpa-onnx subprocess). `System` is
-/// the offline macOS voice (`AVSpeechSynthesizer`), kept as an automatic
-/// fallback when the Piper model isn't downloaded yet. `OpenAi` is retained only
-/// so old settings still deserialize — it is migrated to `Piper` in `normalize`.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum ChatTtsProvider {
-    System,
-    OpenAi,
-    #[default]
-    Piper,
-}
-
-/// Default local Piper voice (German, highest quality). Shared by the settings
-/// default and the bridge's synthesizer.
-pub const DEFAULT_PIPER_VOICE: &str = "de_DE-thorsten-high";
-
-/// Curated set of downloadable Piper voices (those packaged by sherpa-onnx).
-/// Ids follow `{lang}-{voice}-{quality}`; the UI parses them into
-/// language → voice → quality pickers. German is covered fully; a representative
-/// set of other languages is included. Extend as needed.
-pub const PIPER_VOICE_IDS: &[&str] = &[
-    // German
-    "de_DE-thorsten-high",
-    "de_DE-thorsten-medium",
-    "de_DE-thorsten-low",
-    "de_DE-thorsten_emotional-medium",
-    "de_DE-eva_k-x_low",
-    "de_DE-karlsson-low",
-    "de_DE-kerstin-low",
-    "de_DE-pavoque-low",
-    "de_DE-ramona-low",
-    "de_DE-miro-high",
-    // English (US)
-    "en_US-amy-medium",
-    "en_US-ryan-high",
-    "en_US-lessac-high",
-    "en_US-hfc_female-medium",
-    "en_US-libritts_r-medium",
-    // English (UK)
-    "en_GB-alan-medium",
-    "en_GB-cori-high",
-    "en_GB-jenny_dioco-medium",
-    "en_GB-northern_english_male-medium",
-    // French
-    "fr_FR-siwis-medium",
-    "fr_FR-tom-medium",
-    "fr_FR-upmc-medium",
-    // Spanish
-    "es_ES-davefx-medium",
-    "es_ES-sharvard-medium",
-    // Italian
-    "it_IT-paola-medium",
-    "it_IT-riccardo-x_low",
-];
-
-/// How chat answers are spoken. Voices are kept per provider so switching back
-/// and forth preserves each choice.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(default)]
-pub struct ChatTtsSettings {
-    pub provider: ChatTtsProvider,
-    /// `AVSpeechSynthesisVoice` identifier for the system fallback backend.
-    /// Empty = the OS default voice for the utterance language.
-    pub system_voice: String,
-    /// OpenAI voice name — vestigial (cloud TTS was removed); kept so old
-    /// settings still deserialize.
-    pub openai_voice: String,
-    /// Selected local Piper voice id (`{lang}-{voice}-{quality}`).
-    #[serde(default = "default_piper_voice")]
-    pub piper_voice: String,
-    /// Speaking rate, normalized 0.0–1.0. Swift maps it onto the backend's native
-    /// range; the bridge maps it onto Piper's length-scale.
-    pub rate: f32,
-}
-
-fn default_piper_voice() -> String {
-    DEFAULT_PIPER_VOICE.to_owned()
-}
-
-impl Default for ChatTtsSettings {
-    fn default() -> Self {
-        Self {
-            provider: ChatTtsProvider::Piper,
-            system_voice: String::new(),
-            openai_voice: "alloy".to_owned(),
-            piper_voice: default_piper_voice(),
-            rate: 0.5,
-        }
-    }
-}
-
-/// Configuration for the chat plugin, edited in its config dialog and consumed
-/// by the [`crate`]-side `ChatController` (system prompt + default model) and by
-/// the Swift chat window (TTS).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
-#[serde(default)]
-pub struct ChatSettings {
-    /// Default model for new chat turns. `None` = local preset default. A pick
-    /// in the chat window overrides it for that session only.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default_model_ref: Option<LlmModelRef>,
-    /// System prompt steering the assistant. Empty = the built-in default.
-    pub system_prompt: String,
-    pub tts: ChatTtsSettings,
-    /// Global shortcut that opens the chat window (e.g. `Ctrl+Shift+C`). Empty =
-    /// no shortcut. Independent of the dictation hotkey.
-    pub chat_hotkey: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct AppSettings {
@@ -1185,19 +888,14 @@ pub struct AppSettings {
     pub active_post_processing_backend: PostProcessingBackend,
     pub active_custom_llm_id: String,
     pub custom_llm_models: Vec<CustomLlmModel>,
-    /// User-configured Hermes Agents (NousResearch). Selectable in the chat
-    /// alongside language models; each carries its own base URL + optional
-    /// Keychain token (#agent).
-    #[serde(default)]
-    pub hermes_agents: Vec<HermesAgent>,
     /// Registry-selected post-processing model. When set, it overrides the
     /// legacy `PostProcessingChoice` resolution and is the path through which
     /// cloud models become selectable. `None` keeps the legacy behaviour.
     #[serde(default)]
     pub active_post_processing_model: Option<LlmModelRef>,
     /// Stable IDs ([`LlmModelRef::stable_id`]) of models the user enabled
-    /// app-wide. Every model picker (chat, post-processing, plugins) shows only
-    /// enabled models; an empty list means "show all" (handled by the pickers,
+    /// app-wide. Every model picker (post-processing) shows only enabled
+    /// models; an empty list means "show all" (handled by the pickers,
     /// not here). Remote Ollama/LM Studio models exist in the registry *only* via
     /// this list — enabling one in the management UI is what makes it discoverable
     /// without a network call. Seeded from legacy selections in [`Self::normalize`].
@@ -1210,10 +908,6 @@ pub struct AppSettings {
     /// LLM role's list.
     #[serde(default)]
     pub enabled_transcription_ids: Vec<String>,
-    /// Per-role curation for speech-output (TTS) voices — stable IDs the user
-    /// enabled app-wide. Empty = "show all". Separate list (#28 AP1).
-    #[serde(default)]
-    pub enabled_speech_output_ids: Vec<String>,
     pub ollama: ExternalProviderSettings,
     pub lm_studio: ExternalProviderSettings,
     pub post_processing_enabled: bool,
@@ -1225,29 +919,6 @@ pub struct AppSettings {
     pub history_enabled: bool,
     #[serde(default = "default_history_max_entries")]
     pub history_max_entries: u32,
-    /// Chat plugin configuration (system prompt, default model). TTS used to live
-    /// here; it now lives in [`Self::speech_output`] (#28 AP1). `ChatSettings.tts`
-    /// is kept only so old settings still deserialize and can be migrated once.
-    #[serde(default)]
-    pub chat: ChatSettings,
-    /// Speech-output (TTS) configuration. Pulled out of the chat plugin into the
-    /// main program (#28 AP1) so it is a first-class language-model role next to
-    /// transcription and post-processing. Migrated once from `chat.tts` in
-    /// [`Self::normalize`].
-    #[serde(default)]
-    pub speech_output: ChatTtsSettings,
-    /// When true, voice pickers only list voices of the app-wide default language
-    /// (`transcription_language`); an `auto` default disables the filter (shows
-    /// all). Keeps the voice list tidy as more languages/providers arrive (#28).
-    #[serde(default = "default_true")]
-    pub voices_default_language_only: bool,
-    /// Per-plugin enable state. Seeded/pruned in `normalize()`.
-    #[serde(default)]
-    pub plugins: Vec<PluginConfig>,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -1332,35 +1003,6 @@ impl AppSettings {
             .history_max_entries
             .clamp(HISTORY_MAX_ENTRIES_MIN, HISTORY_MAX_ENTRIES_LIMIT);
 
-        // Speech output (TTS) moved out of the chat plugin into the main program
-        // (#28 AP1). Migrate a customized legacy `chat.tts` once, while the new
-        // top-level field is still at its default.
-        if self.speech_output == ChatTtsSettings::default()
-            && self.chat.tts != ChatTtsSettings::default()
-        {
-            self.speech_output = self.chat.tts.clone();
-        }
-        // Cloud TTS was removed — migrate any saved OpenAI choice to local Piper.
-        if self.speech_output.provider == ChatTtsProvider::OpenAi {
-            self.speech_output.provider = ChatTtsProvider::Piper;
-        }
-        if self.speech_output.piper_voice.trim().is_empty() {
-            self.speech_output.piper_voice = DEFAULT_PIPER_VOICE.to_owned();
-        }
-
-        // Seed enable entries for built-in plugins; drop config for plugins that
-        // no longer exist (downgrade-safe — unknown ids just vanish).
-        for id in BUILTIN_PLUGIN_IDS {
-            if !self.plugins.iter().any(|plugin| plugin.id == *id) {
-                self.plugins.push(PluginConfig {
-                    id: (*id).to_owned(),
-                    enabled: true,
-                });
-            }
-        }
-        self.plugins
-            .retain(|plugin| BUILTIN_PLUGIN_IDS.contains(&plugin.id.as_str()));
-
         self.seed_enabled_models_from_legacy();
     }
 
@@ -1383,10 +1025,6 @@ impl AppSettings {
 
         // Registry-based post-processing selection (incl. cloud) — always explicit.
         if let Some(model_ref) = &self.active_post_processing_model {
-            seeds.push(model_ref.stable_id());
-        }
-        // Chat plugin default model — explicit.
-        if let Some(model_ref) = &self.chat.default_model_ref {
             seeds.push(model_ref.stable_id());
         }
         // Legacy backend choice, but only when it represents a real pick (a remote
@@ -1442,26 +1080,6 @@ impl AppSettings {
                 .enabled_transcription_ids
                 .iter()
                 .any(|id| id == stable_id)
-    }
-
-    /// Whether a speech-output (TTS) voice `stable_id` is enabled app-wide.
-    /// Empty list = "show all" (#28 AP1).
-    pub fn is_speech_output_enabled(&self, stable_id: &str) -> bool {
-        self.enabled_speech_output_ids.is_empty()
-            || self
-                .enabled_speech_output_ids
-                .iter()
-                .any(|id| id == stable_id)
-    }
-
-    /// Whether a plugin is enabled. Unknown ids default to enabled (a plugin
-    /// not yet in settings is treated as on until `normalize()` records it).
-    pub fn plugin_enabled(&self, id: &str) -> bool {
-        self.plugins
-            .iter()
-            .find(|plugin| plugin.id == id)
-            .map(|plugin| plugin.enabled)
-            .unwrap_or(true)
     }
 
     pub fn active_mode(&self) -> &ProcessingMode {
@@ -1577,9 +1195,7 @@ impl Default for AppSettings {
             active_post_processing_model: None,
             enabled_model_ids: Vec::new(),
             enabled_transcription_ids: Vec::new(),
-            enabled_speech_output_ids: Vec::new(),
             custom_llm_models: Vec::new(),
-            hermes_agents: Vec::new(),
             ollama: ExternalProviderSettings::ollama_defaults(),
             lm_studio: ExternalProviderSettings::lm_studio_defaults(),
             post_processing_enabled: false,
@@ -1589,10 +1205,6 @@ impl Default for AppSettings {
             dictionary: Vec::new(),
             history_enabled: true,
             history_max_entries: HISTORY_MAX_ENTRIES_DEFAULT,
-            chat: ChatSettings::default(),
-            speech_output: ChatTtsSettings::default(),
-            voices_default_language_only: true,
-            plugins: Vec::new(),
         }
     }
 }
@@ -1731,14 +1343,6 @@ pub struct RuntimeStatusDto {
     /// fast completion doesn't look like the bubble crashing.
     pub dictation_success_count: u64,
     pub dictation_trigger_count: u64,
-    /// Bumped when the chat shortcut fires; the UI opens the chat window on
-    /// change. Defaulted for back-compat with older snapshots.
-    #[serde(default)]
-    pub chat_trigger_count: u64,
-    /// True while a chat turn is recording/transcribing. The UI suppresses the
-    /// normal dictation bubble then — chat shows its own state in its window.
-    #[serde(default)]
-    pub chat_capturing: bool,
     pub hotkey_registered: bool,
     pub hotkey_text: String,
     pub startup_summary: String,
@@ -2012,28 +1616,46 @@ mod tests {
         );
     }
 
+    /// Settings written by versions that still had the chat plugin (chat,
+    /// speech_output, hermes_agents, plugins, enabled_speech_output_ids) must
+    /// keep loading after its removal — serde ignores the unknown fields and
+    /// `normalize()` must not trip over them (#34).
     #[test]
-    fn normalize_seeds_builtin_plugins_and_drops_orphans() {
-        let mut settings = AppSettings::default();
-        settings.plugins = vec![PluginConfig {
-            id: "ghost".to_owned(),
-            enabled: true,
-        }];
+    fn settings_with_legacy_chat_fields_still_load() {
+        let legacy_json = serde_json::json!({
+            "hotkey": "Ctrl+Shift+Space",
+            "chat": {
+                "system_prompt": "Du bist ein Assistent.",
+                "chat_hotkey": "Ctrl+Shift+C",
+                "default_model_ref": { "kind": "ollama", "model_name": "llama3.1" },
+                "tts": { "provider": "piper", "piper_voice": "de_DE-thorsten-high", "rate": 0.5 }
+            },
+            "speech_output": { "provider": "openai", "openai_voice": "alloy", "rate": 0.8 },
+            "hermes_agents": [
+                { "id": "abc", "name": "Local Agent", "base_url": "http://localhost:8642/v1" }
+            ],
+            "plugins": [ { "id": "chat", "enabled": false } ],
+            "enabled_speech_output_ids": ["de_DE-thorsten-high"],
+            "voices_default_language_only": true
+        });
+
+        let mut settings: AppSettings =
+            serde_json::from_value(legacy_json).expect("legacy settings must deserialize");
         settings.normalize();
-        assert!(settings.plugins.iter().any(|p| p.id == "chat"));
-        assert!(!settings.plugins.iter().any(|p| p.id == "ghost"));
+        assert_eq!(settings.hotkey, "Ctrl+Shift+Space");
+        assert!(!settings.modes.is_empty());
     }
 
+    /// A stored model reference of a removed backend kind (`hermes`) must not
+    /// take the whole settings file down: the field is optional, so the file
+    /// still loads once the unknown variant is dropped by the caller. This
+    /// documents that `settings.json` as a whole never contains hermes refs in
+    /// required positions.
     #[test]
-    fn plugin_enabled_honors_disabled_entry_and_defaults_on() {
-        let mut settings = AppSettings::default();
-        settings.normalize();
-        assert!(settings.plugin_enabled("chat"));
-        assert!(settings.plugin_enabled("unknown")); // unknown defaults on
-        if let Some(chat) = settings.plugins.iter_mut().find(|p| p.id == "chat") {
-            chat.enabled = false;
-        }
-        assert!(!settings.plugin_enabled("chat"));
+    fn hermes_model_ref_is_no_longer_a_valid_variant() {
+        let result: Result<LlmModelRef, _> =
+            serde_json::from_value(serde_json::json!({ "kind": "hermes", "id": "abc" }));
+        assert!(result.is_err());
     }
 
     #[test]
@@ -2049,39 +1671,17 @@ mod tests {
     fn per_role_enable_lists_default_to_show_all() {
         let settings = AppSettings::default();
         assert!(settings.enabled_transcription_ids.is_empty());
-        assert!(settings.enabled_speech_output_ids.is_empty());
         assert!(settings.is_transcription_enabled("local_preset:Standard"));
-        assert!(settings.is_speech_output_enabled("de_DE-thorsten-high"));
     }
 
     #[test]
     fn per_role_enable_lists_are_independent() {
         let mut settings = AppSettings::default();
         settings.enabled_transcription_ids = vec!["local_preset:Standard".to_owned()];
-        // Curating transcription must not affect the other roles' "show all".
+        // Curating transcription must not affect the general role's "show all".
         assert!(settings.is_transcription_enabled("local_preset:Standard"));
         assert!(!settings.is_transcription_enabled("local_preset:Tiny"));
-        assert!(settings.is_speech_output_enabled("anything"));
         assert!(settings.is_model_enabled("anything"));
-    }
-
-    #[test]
-    fn tts_migrates_from_legacy_chat_to_speech_output() {
-        let mut settings = AppSettings::default();
-        // Old settings carried TTS inside the chat plugin.
-        settings.chat.tts.piper_voice = "en_US-amy-medium".to_owned();
-        settings.chat.tts.rate = 0.8;
-        settings.normalize();
-        assert_eq!(settings.speech_output.piper_voice, "en_US-amy-medium");
-        assert_eq!(settings.speech_output.rate, 0.8);
-    }
-
-    #[test]
-    fn speech_output_migrates_openai_provider_to_piper() {
-        let mut settings = AppSettings::default();
-        settings.speech_output.provider = ChatTtsProvider::OpenAi;
-        settings.normalize();
-        assert_eq!(settings.speech_output.provider, ChatTtsProvider::Piper);
     }
 
     #[test]

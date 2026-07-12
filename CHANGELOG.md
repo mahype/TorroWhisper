@@ -6,8 +6,11 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Removed
+- **Voice-chat plugin removed to focus on dictation** — the chat window (conversation sidebar, streaming answers, voice input), the Hermes agent integration, the local Piper text-to-speech (sherpa-onnx subprocess), the speech-output settings section, and the plugin overview are gone; TorroWhisper concentrates fully on dictation for now (#34). The shared language-model layer for post-processing (local GGUF, Ollama, LM Studio, cloud providers) is untouched. Settings written by chat-era versions still load — the obsolete fields (`chat`, `speech_output`, `hermes_agents`, `plugins`, `enabled_speech_output_ids`) are simply ignored. Stored chat conversations (`sessions.json`) and downloaded Piper voices/CLI under the app's `tts` data directory are no longer read; delete them manually to reclaim space. The feature can be revived later from branch `feat/chat-plugin` and issue #17.
+
 ### Fixed
-- **Hotkey capture no longer triggers dictation** — while recording a new shortcut in Settings or Onboarding (and for the chat shortcut in Plugins), the global hotkeys are temporarily unregistered. Previously the armed hotkey was consumed system-wide: pressing it started dictation instead of reaching the capture field, and with no Whisper model installed the blocked-model bubble popped up over the settings window and swallowed Escape, blocking the capture entirely. The registration is restored on commit, cancel, and clear.
+- **Hotkey capture no longer triggers dictation** — while recording a new shortcut in Settings or Onboarding, the global hotkeys are temporarily unregistered. Previously the armed hotkey was consumed system-wide: pressing it started dictation instead of reaching the capture field, and with no Whisper model installed the blocked-model bubble popped up over the settings window and swallowed Escape, blocking the capture entirely. The registration is restored on commit, cancel, and clear.
 
 ### Changed
 - **Renamed to TorroWhisper** — the application, the bundle identifier (now `com.gettorro.TorroWhisper`), the on-disk data and Keychain locations, and the Sparkle update feed were all renamed from *DonnyWhisper*. Existing installs do **not** auto-migrate: reinstall TorroWhisper, then re-grant microphone and accessibility permissions and re-enter any cloud API keys.

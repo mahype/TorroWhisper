@@ -33,9 +33,6 @@ final class AppModel: ObservableObject {
 
     var onStateChanged: (() -> Void)?
     var onMicSwitched: ((MicSwitchNotification) -> Void)?
-    /// Fired when the chat shortcut is pressed; the app delegate opens the chat
-    /// window in response.
-    var onChatTriggered: (() -> Void)?
 
     private let bridge = BridgeClient()
     private var timer: Timer?
@@ -49,7 +46,6 @@ final class AppModel: ObservableObject {
     /// How long the red error bubble stays visible after a dictation failure.
     private static let dictationErrorDisplaySeconds: TimeInterval = 6
     private var lastSeenDictationSuccessCount: UInt64 = 0
-    private var lastSeenChatTriggerCount: UInt64 = 0
     private var dictationSuccessOccurredAt: Date?
     /// How long the brief green "done" bubble stays visible after a successful
     /// dictation. Short on purpose — just enough that a fast completion reads as
@@ -249,22 +245,6 @@ final class AppModel: ObservableObject {
             get: { self.settings[keyPath: keyPath] },
             set: { newValue in
                 self.settings[keyPath: keyPath] = newValue
-                self.requestAutoSave()
-            }
-        )
-    }
-
-    /// On/off binding for a plugin's enabled state (keyed by id, since plugins
-    /// are a list). Creates the entry if missing. Saved via the normal flow.
-    func pluginEnabledBinding(id: String) -> Binding<Bool> {
-        Binding(
-            get: { self.settings.plugins.first(where: { $0.id == id })?.enabled ?? true },
-            set: { newValue in
-                if let index = self.settings.plugins.firstIndex(where: { $0.id == id }) {
-                    self.settings.plugins[index].enabled = newValue
-                } else {
-                    self.settings.plugins.append(PluginConfigDTO(id: id, enabled: newValue))
-                }
                 self.requestAutoSave()
             }
         )
@@ -632,33 +612,6 @@ final class AppModel: ObservableObject {
         requestAutoSave()
     }
 
-    // MARK: - Hermes Agents (#agent)
-
-    /// Adds a blank Hermes agent (pre-filled with the default local address) and
-    /// persists immediately so its id exists before a token is stored against it.
-    /// Returns the new agent's id.
-    @discardableResult
-    func addHermesAgent() -> String {
-        let id = UUID().uuidString.lowercased()
-        settings.hermesAgents.append(
-            HermesAgent(
-                id: id,
-                name: "",
-                baseUrl: "http://localhost:8642/v1",
-                modelName: "hermes-agent"
-            )
-        )
-        flushAutoSave()
-        return id
-    }
-
-    /// Removes a Hermes agent and its stored Keychain token.
-    func removeHermesAgent(id: String) {
-        _ = try? bridge.deleteHermesApiKey(id: id)
-        settings.hermesAgents.removeAll(where: { $0.id == id })
-        flushAutoSave()
-    }
-
     func reloadAll() {
         do {
             settings = try bridge.loadSettings()
@@ -674,7 +627,6 @@ final class AppModel: ObservableObject {
             lastSeenMicSwitchEventCount = runtime.micSwitchEventCount
             lastSeenDictationErrorCount = runtime.dictationErrorCount
             lastSeenDictationSuccessCount = runtime.dictationSuccessCount
-            lastSeenChatTriggerCount = runtime.chatTriggerCount
             history = (try? bridge.loadHistory()) ?? []
             lastSeenHistoryRevision = runtime.historyRevision
             bridgeError = nil
@@ -705,7 +657,6 @@ final class AppModel: ObservableObject {
             checkMicSwitchEvent()
             checkDictationErrorEvent()
             checkDictationSuccessEvent()
-            checkChatTriggerEvent()
             if runtime.historyRevision != lastSeenHistoryRevision {
                 history = (try? bridge.loadHistory()) ?? []
                 lastSeenHistoryRevision = runtime.historyRevision
@@ -727,12 +678,6 @@ final class AppModel: ObservableObject {
         guard runtime.dictationSuccessCount != lastSeenDictationSuccessCount else { return }
         lastSeenDictationSuccessCount = runtime.dictationSuccessCount
         dictationSuccessOccurredAt = Date()
-    }
-
-    private func checkChatTriggerEvent() {
-        guard runtime.chatTriggerCount != lastSeenChatTriggerCount else { return }
-        lastSeenChatTriggerCount = runtime.chatTriggerCount
-        onChatTriggered?()
     }
 
     private func checkMicSwitchEvent() {

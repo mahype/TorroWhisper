@@ -318,13 +318,11 @@
 /* Bridge status: footer / tray status line */
 "TorroWhisper is starting." = "TorroWhisper is starting.";
 "History cleared." = "History cleared.";
-"Hide Sidebar" = "Hide Sidebar";
 "Local transcription complete." = "Local transcription complete.";
 "Transcript ready." = "Transcript ready.";
 "Transcript inserted into the active app." = "Transcript inserted into the active app.";
 "No text available to copy." = "No text available to copy.";
 "No text available to paste." = "No text available to paste.";
-"Show Sidebar" = "Show Sidebar";
 "Post-processing cancelled." = "Post-processing cancelled.";
 "Post-processing returned no text." = "Post-processing returned no text.";
 "Recording already in progress." = "Recording already in progress.";
@@ -368,33 +366,9 @@
 "macOS may require privacy permissions for the microphone, global hotkey, and pasting into other apps." = "macOS may require privacy permissions for the microphone, global hotkey, and pasting into other apps.";
 "If you run into issues, open System Settings > Privacy & Security and check Microphone, Accessibility, and Input Monitoring." = "If you run into issues, open System Settings > Privacy & Security and check Microphone, Accessibility, and Input Monitoring.";
 
-/* Hermes agents (#agent) */
-"Hermes agents" = "Hermes agents";
-"No Hermes agents added yet." = "No Hermes agents added yet.";
-"+ Add Hermes agent" = "+ Add Hermes agent";
-"Test connection" = "Test connection";
-"New agent" = "New agent";
-"Message…" = "Message…";
-"Send" = "Send";
-"Address" = "Address";
-"Model id" = "Model id";
-"API key (optional)" = "API key (optional)";
 "Key could not be saved." = "Key could not be saved.";
 "Remove stored key" = "Remove stored key";
 "Key stored" = "Key stored";
 "Save" = "Save";
-"Voice-chat with a Hermes Agent (NousResearch) over its API server. Enter the agent's address (e.g. http://localhost:8642/v1) and, if the server requires one, its API key. Agents appear in the chat window's model picker. Each conversation keeps its own memory via the agent." = "Voice-chat with a Hermes Agent (NousResearch) over its API server. Enter the agent's address (e.g. http://localhost:8642/v1) and, if the server requires one, its API key. Agents appear in the chat window's model picker. Each conversation keeps its own memory via the agent.";
 
-/* Local Piper TTS */
-"Piper (local)" = "Piper (local)";
-"Voice" = "Voice";
-"Voice ready" = "Voice ready";
-"Download voice" = "Download voice";
-"Downloading voice…" = "Downloading voice…";
-"Speech output (local Piper)" = "Speech output (local Piper)";
-"Speed" = "Speed";
-"very low" = "very low";
-"low" = "low";
 "medium" = "medium";
-"high" = "high";
-"Answers are spoken by a fast, fully-local neural voice (Piper). Pick a language and voice; it downloads once (~25–115 MB). Until a voice is downloaded, the offline system voice is used as a fallback." = "Answers are spoken by a fast, fully-local neural voice (Piper). Pick a language and voice; it downloads once (~25–115 MB). Until a voice is downloaded, the offline system voice is used as a fallback.";

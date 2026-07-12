@@ -1,15 +1,14 @@
 //! Backend-independent language-model provider layer.
 //!
 //! [`provider_for`] is the single place that turns a backend-agnostic
-//! [`LlmModelRef`] into a runnable [`LlmProvider`]. Post-processing (and, later,
-//! the chat plugin) go through here instead of dispatching on backend types
+//! [`LlmModelRef`] into a runnable [`LlmProvider`]. Post-processing goes
+//! through here instead of dispatching on backend types
 //! themselves. The local GGUF backend runs in the existing `torrowhisper-llm-helper`
 //! subprocess (ggml symbol-collision workaround); remote backends are blocking
 //! HTTP calls.
 
 mod anthropic;
 mod gemini;
-mod hermes;
 pub(crate) mod keychain;
 mod lm_studio;
 mod ollama;
@@ -51,15 +50,15 @@ pub trait LlmProvider {
         cancelled: &Arc<AtomicBool>,
     ) -> Result<String, String>;
 
-    /// Conversational generation for the chat plugin (#17). Unlike [`generate`]
+    /// Conversational generation. Unlike [`generate`]
     /// — which frames `role_prompt` as a "revise this dictated text"
     /// instruction — `chat` uses `system_prompt` directly as the assistant's
     /// system message and `user_text` as the user's turn, so the model answers
-    /// the question instead of rewriting it.
+    /// the question instead of rewriting it. Dormant since the chat plugin was
+    /// removed (#34); kept as a generic capability of the provider layer.
     ///
     /// `session_key` is a stable per-conversation identifier. Backends that
-    /// support long-term memory (the Hermes agent, via `X-Hermes-Session-Key`)
-    /// scope it to this conversation; all other backends ignore it.
+    /// support long-term memory scope it to this conversation; the rest ignore it.
     fn chat(
         &self,
         system_prompt: &str,
@@ -72,7 +71,7 @@ pub trait LlmProvider {
     /// as it arrives, and the full accumulated answer is returned. The default
     /// produces the whole answer up front and emits it as a single chunk — so
     /// non-streaming backends still work through the streaming path; SSE-capable
-    /// backends (Hermes, OpenAI-compatible) override this.
+    /// backends (OpenAI-compatible) override this.
     fn chat_stream(
         &self,
         system_prompt: &str,
@@ -90,7 +89,7 @@ pub trait LlmProvider {
 }
 
 /// Resolves a [`LlmModelRef`] into a runnable provider. The single dispatch
-/// point shared by post-processing and chat.
+/// point used by post-processing.
 pub fn provider_for(
     model: &LlmModelRef,
     settings: &AppSettings,
@@ -157,37 +156,7 @@ pub fn provider_for(
                 api_key,
             )))
         }
-        LlmModelRef::Hermes { id } => {
-            let agent = settings
-                .hermes_agents
-                .iter()
-                .find(|agent| &agent.id == id)
-                .ok_or_else(|| format!("Hermes agent '{id}' is not configured."))?;
-            if agent.base_url.trim().is_empty() {
-                return Err(format!(
-                    "Hermes agent '{}' has no address configured.",
-                    agent.name
-                ));
-            }
-            // The bearer token is optional — a local Hermes server may run
-            // without `API_SERVER_KEY`.
-            let api_key = keychain::get_hermes_api_key(id);
-            Ok(Box::new(hermes::HermesAgentProvider::new(
-                agent.base_url.clone(),
-                agent.model_name.clone(),
-                api_key,
-            )))
-        }
     }
-}
-
-/// Connection test for a Hermes agent (the settings "Test connection" button).
-/// Thin wrapper so the FFI layer can reach the otherwise-private hermes module.
-pub(crate) fn test_hermes_connection(
-    base_url: &str,
-    api_key: Option<&str>,
-) -> Result<String, String> {
-    hermes::test_connection(base_url, api_key)
 }
 
 /// Fetches a cloud backend's Keychain API key, or a clear error if unset.
@@ -256,9 +225,7 @@ pub(crate) fn build_http_client() -> Result<Client, String> {
     build_http_client_with_timeout(REQUEST_TIMEOUT)
 }
 
-/// Blocking HTTP client with a custom request timeout. The Hermes agent runs a
-/// full toolset (terminal, web, files) per turn, so it needs far more headroom
-/// than a plain chat-completion call.
+/// Blocking HTTP client with a custom request timeout.
 pub(crate) fn build_http_client_with_timeout(timeout: Duration) -> Result<Client, String> {
     Client::builder()
         .timeout(timeout)
@@ -269,7 +236,7 @@ pub(crate) fn build_http_client_with_timeout(timeout: Duration) -> Result<Client
 /// Reads an OpenAI-style streaming Chat-Completions response (`text/event-stream`
 /// with `data: {chunk}` lines, terminated by `data: [DONE]`), forwarding each
 /// `choices[0].delta.content` delta to `on_chunk` and returning the full
-/// accumulated text. Shared by the Hermes and OpenAI-compatible backends.
+/// accumulated text. Used by the OpenAI-compatible backends.
 pub(crate) fn stream_chat_completion(
     response: reqwest::blocking::Response,
     label: &str,

@@ -101,118 +101,10 @@ final class BridgeClient {
         try decodeResponse(from: ow_get_llm_api_key_status())
     }
 
-    // MARK: Hermes Agents (#agent)
-
-    /// Stores a Hermes agent's bearer token in the Keychain (keyed by agent id).
-    func setHermesApiKey(id: String, key: String) throws -> String {
-        try encodeAndCall(["id": id, "key": key], function: ow_set_hermes_api_key)
-    }
-
-    func deleteHermesApiKey(id: String) throws -> String {
-        try encodeAndCall(["id": id], function: ow_delete_hermes_api_key)
-    }
-
-    /// Which configured Hermes agents currently have a token stored (booleans only).
-    func getHermesApiKeyStatus() throws -> [HermesKeyStatusDTO] {
-        try decodeResponse(from: ow_get_hermes_api_key_status())
-    }
-
-    /// Tests reachability + auth of a Hermes agent (GET /v1/models with its
-    /// stored token). Blocking network call — invoke off the main thread.
-    /// Returns a short status string; throws with the failure reason.
-    func testHermesAgent(id: String, baseUrl: String) throws -> String {
-        try encodeAndCall(["id": id, "base_url": baseUrl], function: ow_test_hermes_agent)
-    }
-
     /// Available post-processing pipeline stages (built-in + plugin) for the
     /// per-mode pipeline editor.
     func listPipelineStages() throws -> [StageCatalogEntry] {
         try decodeResponse(from: ow_list_pipeline_stages())
-    }
-
-    // MARK: Plugins
-
-    /// Catalog of available plugins (what exists). Enable state lives in
-    /// AppSettings.plugins and is saved through the normal settings flow.
-    func getPluginCatalog() throws -> [PluginDescriptorDTO] {
-        try decodeResponse(from: ow_get_plugin_catalog())
-    }
-
-    // MARK: Chat plugin
-
-    func chatStartListening() throws -> String {
-        try decodeResponse(from: ow_chat_start_listening())
-    }
-
-    func chatStopListening() throws -> String {
-        try decodeResponse(from: ow_chat_stop_listening())
-    }
-
-    func chatGetState() throws -> ChatStateDTO {
-        try decodeResponse(from: ow_chat_get_state())
-    }
-
-    func chatReset() {
-        let _: String? = try? decodeResponse(from: ow_chat_reset())
-    }
-
-    func chatSetModel(_ modelRef: LlmModelRefDTO?) {
-        struct Payload: Encodable { var modelRef: LlmModelRefDTO? }
-        let _: String? = try? encodeAndCall(Payload(modelRef: modelRef), function: ow_chat_set_model)
-    }
-
-    /// Submits a typed chat message (text input alongside voice).
-    func chatSendText(_ text: String) {
-        let _: String? = try? encodeAndCall(["text": text], function: ow_chat_send_text)
-    }
-
-    func chatNewSession() {
-        let _: String? = try? decodeResponse(from: ow_chat_new_session())
-    }
-
-    func chatSwitchSession(id: String) {
-        let _: String? = try? encodeAndCall(["id": id], function: ow_chat_switch_session)
-    }
-
-    func chatDeleteSession(id: String) {
-        let _: String? = try? encodeAndCall(["id": id], function: ow_chat_delete_session)
-    }
-
-    /// Synthesizes chat TTS audio in Rust (reads the OpenAI key from the
-    /// Keychain there) and returns the MP3 bytes. Safe to call off the main
-    /// thread — it does not touch the bridge runtime.
-    func chatTtsSynthesize(text: String, voice: String, rate: Float) throws -> Data {
-        struct Request: Encodable {
-            var text: String
-            var voice: String
-            var rate: Float
-        }
-        struct Response: Decodable { var audio: [UInt8] }
-        let response: Response = try encodeAndCall(
-            Request(text: text, voice: voice, rate: rate),
-            function: ow_chat_tts_synthesize
-        )
-        return Data(response.audio)
-    }
-
-    // MARK: Local Piper TTS
-
-    /// Curated downloadable Piper voice ids (`{lang}-{voice}-{quality}`).
-    func ttsPiperVoices() throws -> [String] {
-        try decodeResponse(from: ow_tts_piper_voices())
-    }
-
-    /// Whether a Piper voice (and the shared CLI) is downloaded and ready.
-    func ttsLocalReady(voice: String) throws -> Bool {
-        struct Response: Decodable { var ready: Bool }
-        let response: Response = try encodeAndCall(["voice": voice], function: ow_tts_local_ready)
-        return response.ready
-    }
-
-    /// Downloads + extracts the Piper CLI and the given voice if missing.
-    /// Blocking (large download) — invoke off the main thread.
-    func ttsLocalPrepare(voice: String) throws -> String {
-        try encodeAndCall(["voice": voice], function: ow_tts_local_prepare)
     }
 
     func runPermissionDiagnostics() throws -> DiagnosticsDTO {
@@ -278,15 +170,6 @@ final class BridgeClient {
     func logMessage(level: String, message: String) {
         let payload: [String: String] = ["level": level, "message": message]
         let _: String? = try? encodeAndCall(payload, function: ow_log_message)
-    }
-
-    /// Central plugin logging: routes a Swift-side plugin's log line through the
-    /// shared `plugin:<id>` log (same place the Rust side logs to).
-    func pluginLog(pluginId: String, level: String, message: String) {
-        let payload: [String: String] = [
-            "plugin_id": pluginId, "level": level, "message": message,
-        ]
-        let _: String? = try? encodeAndCall(payload, function: ow_plugin_log)
     }
 
     private func encodeAndCall<Input: Encodable, Output: Decodable>(
