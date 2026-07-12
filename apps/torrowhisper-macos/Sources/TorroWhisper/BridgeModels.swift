@@ -1170,7 +1170,7 @@ struct DeviceDTO: Codable, Identifiable {
     var id: String { name }
 }
 
-struct ModelStatusDTO: Codable, Identifiable {
+struct ModelStatusDTO: Codable, Identifiable, Equatable {
     var presetLabel: String
     var backendModelName: String
     var path: String
@@ -1208,7 +1208,7 @@ struct CustomLlmStatusDTO: Codable, Identifiable, Hashable {
     var progressBasisPoints: UInt16?
 }
 
-struct LlmModelStatusDTO: Codable, Identifiable {
+struct LlmModelStatusDTO: Codable, Identifiable, Equatable {
     var presetLabel: String
     var displayLabel: String
     var path: String
@@ -1244,7 +1244,7 @@ struct RecordingLevelsDTO: Codable {
     static let empty = RecordingLevelsDTO(levels: [])
 }
 
-struct RuntimeStatusDTO: Codable {
+struct RuntimeStatusDTO: Codable, Equatable {
     var isRecording: Bool
     var isTranscribing: Bool
     var isPostProcessing: Bool
