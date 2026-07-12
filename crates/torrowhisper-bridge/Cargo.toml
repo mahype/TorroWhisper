@@ -13,7 +13,7 @@ auto-launch = "0.6.0"
 cpal = "0.17.3"
 directories = "6.0.0"
 enigo = { version = "0.6.1", features = ["wayland"] }
-global-hotkey = "0.7.0"
+global-hotkey = "0.8.0"
 # NOTE: llama-cpp-2 must never come back as a dependency here. It bundles a
 # ggml revision that is incompatible with whisper-rs's bundled ggml; linking
 # both into one binary mixes the duplicated symbols and crashes the app. The
