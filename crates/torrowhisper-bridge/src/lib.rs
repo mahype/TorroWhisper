@@ -2,7 +2,6 @@
 mod audio_export;
 #[allow(dead_code)]
 mod autostart;
-mod chat;
 #[allow(dead_code)]
 mod dictation;
 mod dictionary;
@@ -19,8 +18,7 @@ mod model_manager;
 mod permission_diagnostics;
 pub mod plugin_api;
 pub mod plugin_log;
-mod sessions_store;
-// Several pipeline types are scaffolding for plugins (#15) and chat (#17):
+// Several pipeline types are scaffolding for plugins (#15):
 // `StageRegistry::register`, the diagnostic `StageRecord`/context fields, the
 // `Stop` short-circuit outcome. Allow until those consumers land.
 #[allow(dead_code)]
@@ -29,10 +27,8 @@ mod remote_models;
 mod session_marker;
 #[allow(dead_code)]
 mod settings_store;
-mod speech_text;
 #[allow(dead_code)]
 mod text_inserter;
-mod tts;
 
 use std::{
     cell::RefCell,
@@ -49,9 +45,9 @@ use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey:
 use llm_model_manager::LlmModelDownloadManager;
 use model_manager::ModelDownloadManager;
 use torrowhisper_core::{
-    AppSettings, ChatStateDto, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto,
-    HistoryEntry, LlmModelRef, LlmModelStatusDto, LlmPreset, LlmRegistryEntryDto, ModelPreset,
-    ModelStatusDto, RecordingLevelsDto, RemoteModelBackend, RemoteModelDto, RuntimeStatusDto,
+    AppSettings, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto, HistoryEntry,
+    LlmModelStatusDto, LlmPreset, LlmRegistryEntryDto, ModelPreset, ModelStatusDto,
+    RecordingLevelsDto, RemoteModelBackend, RemoteModelDto, RuntimeStatusDto,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -74,14 +70,6 @@ struct BridgeRuntime {
     last_dictation_error: String,
     dictation_error_count: u64,
     dictation_success_count: u64,
-    /// Chat plugin session. Reuses the dictation capture: while `chat_capture`
-    /// is set, the next finished transcript is routed to the chat instead of
-    /// being inserted.
-    chat: chat::ChatController,
-    chat_capture: bool,
-    /// Bumped each time the chat shortcut fires; Swift polls it to open the
-    /// chat window (Rust cannot open windows itself).
-    chat_trigger_count: u64,
     cancelled: Arc<AtomicBool>,
     history: Vec<HistoryEntry>,
     history_revision: u64,
@@ -190,9 +178,6 @@ impl BridgeRuntime {
             last_dictation_error: String::new(),
             dictation_error_count: 0,
             dictation_success_count: 0,
-            chat: chat::ChatController::new(),
-            chat_capture: false,
-            chat_trigger_count: 0,
             cancelled: Arc::new(AtomicBool::new(false)),
             history: history_store::load().unwrap_or_default(),
             history_revision: 0,
@@ -240,74 +225,6 @@ impl BridgeRuntime {
     /// Builds the unified local + cloud model registry (see `llm::registry`).
     fn llm_registry(&self) -> Vec<LlmRegistryEntryDto> {
         llm::registry::build(&self.settings, &self.llm_downloads)
-    }
-
-    /// Per-agent Keychain token presence for every configured Hermes agent
-    /// (booleans only — the tokens never cross the FFI boundary).
-    fn hermes_key_status(&self) -> Vec<torrowhisper_core::HermesKeyStatusDto> {
-        self.settings
-            .hermes_agents
-            .iter()
-            .map(|agent| torrowhisper_core::HermesKeyStatusDto {
-                id: agent.id.clone(),
-                has_key: llm::keychain::has_hermes_api_key(&agent.id),
-            })
-            .collect()
-    }
-
-    // --- chat plugin (#17) ---
-
-    fn chat_start_listening(&mut self) -> Result<String, String> {
-        if !self.settings.plugin_enabled("chat") {
-            return Err("The chat plugin is disabled. Enable it in Settings → Plugins.".to_owned());
-        }
-        self.reset_cancellation();
-        let message = self.dictation.start_recording(&self.settings)?;
-        self.chat_capture = true;
-        Ok(message)
-    }
-
-    fn chat_stop_listening(&mut self) -> Result<String, String> {
-        let outcomes = self.dictation.stop_recording_and_transcribe(
-            &self.settings,
-            "chat",
-            dictation::RecordingCue::Stop,
-        )?;
-        self.apply_dictation_outcomes(outcomes);
-        Ok("Listening stopped.".to_owned())
-    }
-
-    fn chat_state(&self) -> ChatStateDto {
-        let listening = self.chat_capture && self.dictation.is_recording();
-        let transcribing = self.chat_capture && self.dictation.is_transcribing();
-        self.chat.state(listening, transcribing)
-    }
-
-    fn chat_reset(&mut self) {
-        self.chat.reset();
-    }
-
-    fn chat_set_model(&mut self, model_ref: Option<LlmModelRef>) {
-        self.chat.set_model(model_ref);
-    }
-
-    /// Submits a typed message as a chat turn (same path as a finished voice
-    /// transcript): appends it and starts generation.
-    fn chat_send_text(&mut self, text: String) {
-        let settings = self.settings.clone();
-        self.chat.on_transcript(text, &settings);
-    }
-
-    fn chat_new_session(&mut self) {
-        self.chat.new_session();
-    }
-
-    fn chat_switch_session(&mut self, id: &str) {
-        self.chat.switch_session(id);
-    }
-
-    fn chat_delete_session(&mut self, id: &str) {
-        self.chat.delete_session(id);
     }
 
     /// True when `path` points at one of the preset default model filenames —
@@ -419,39 +336,12 @@ impl BridgeRuntime {
                     let outcomes = self.dictation.handle_hotkey(&self.settings, false);
                     self.apply_dictation_outcomes(outcomes);
                 }
-                HotKeyAction::ChatTriggered => {
-                    // The shortcut both opens the window (Swift, via the count
-                    // bump) and toggles the chat recording: press to talk, press
-                    // again to send. Presses while transcribing or generating are
-                    // ignored so a half-finished turn isn't disturbed.
-                    self.chat_trigger_count += 1;
-                    if self.chat_capture && self.dictation.is_recording() {
-                        plugin_log::info("chat", "chat shortcut — stopping capture");
-                        let _ = self.chat_stop_listening();
-                    } else if !self.chat_capture
-                        && !self.dictation.is_transcribing()
-                        && !self.chat.is_generating()
-                    {
-                        plugin_log::info("chat", "chat shortcut — starting capture");
-                        let _ = self.chat_start_listening();
-                    }
-                }
             }
         }
 
         let previous_input_device = self.settings.input_device_name.clone();
         let outcomes = self.dictation.poll(&mut self.settings);
         self.apply_dictation_outcomes(outcomes);
-        self.chat.poll();
-        // A chat capture that ended without yielding a transcript — too short,
-        // empty, cancelled, or a transcription error — emits no TranscriptReady
-        // to clear `chat_capture`. Reconcile here so the shortcut toggle and the
-        // suppressed dictation bubble both recover. (`start_recording` sets the
-        // recording state synchronously, so this never fires mid-start.)
-        if self.chat_capture && !self.dictation.is_recording() && !self.dictation.is_transcribing()
-        {
-            self.chat_capture = false;
-        }
         if self.settings.input_device_name != previous_input_device {
             let _ = settings_store::save(&self.settings);
         }
@@ -470,12 +360,6 @@ impl BridgeRuntime {
                 }
                 DictationOutcome::PendingTranscriptSave(base) => {
                     self.pending_transcript_save = Some(base);
-                }
-                DictationOutcome::TranscriptReady(transcript) if self.chat_capture => {
-                    self.chat_capture = false;
-                    if !self.cancelled.load(Ordering::Relaxed) {
-                        self.chat.on_transcript(transcript, &self.settings);
-                    }
                 }
                 DictationOutcome::TranscriptReady(transcript) => {
                     let was_cancelled = self.cancelled.load(Ordering::Relaxed);
@@ -1167,8 +1051,6 @@ impl BridgeRuntime {
             last_status: i18n::translate(lang, &self.last_status),
             last_transcript: self.last_transcript.clone(),
             dictation_trigger_count: self.dictation_trigger_count,
-            chat_trigger_count: self.chat_trigger_count,
-            chat_capturing: self.chat_capture,
             hotkey_registered: self
                 .hotkey
                 .as_ref()
@@ -1234,16 +1116,12 @@ mod hotkey {
     pub enum HotKeyAction {
         Pressed,
         Released,
-        /// The chat plugin's shortcut was pressed — open the chat window.
-        ChatTriggered,
     }
 
     pub struct HotKeyController {
         manager: GlobalHotKeyManager,
         registered_hotkey: Option<HotKey>,
         registered_text: Option<String>,
-        registered_chat_hotkey: Option<HotKey>,
-        registered_chat_text: Option<String>,
     }
 
     impl HotKeyController {
@@ -1253,16 +1131,11 @@ mod hotkey {
                 manager,
                 registered_hotkey: None,
                 registered_text: None,
-                registered_chat_hotkey: None,
-                registered_chat_text: None,
             })
         }
 
         pub fn apply_settings(&mut self, settings: &AppSettings) -> Result<(), String> {
-            self.apply_dictation_hotkey(settings)?;
-            // A bad/duplicate chat hotkey must not break the dictation hotkey.
-            self.apply_chat_hotkey(settings);
-            Ok(())
+            self.apply_dictation_hotkey(settings)
         }
 
         fn apply_dictation_hotkey(&mut self, settings: &AppSettings) -> Result<(), String> {
@@ -1293,73 +1166,10 @@ mod hotkey {
             Ok(())
         }
 
-        /// Registers/updates the optional chat shortcut. Non-fatal: an invalid or
-        /// already-taken shortcut is logged and skipped rather than propagated.
-        fn apply_chat_hotkey(&mut self, settings: &AppSettings) {
-            // A disabled chat plugin has no shortcut, regardless of the saved key.
-            let mut desired = if settings.plugin_enabled("chat") {
-                settings.chat.chat_hotkey.trim().to_owned()
-            } else {
-                String::new()
-            };
-
-            // global-hotkey derives a HotKey's id from mods+key, so registering
-            // the same combo for chat and dictation clobbers the dictation
-            // registration (and the chat branch in poll_actions would never win
-            // the id match anyway). Refuse the collision rather than break
-            // dictation. (Swift also blocks this at the recorder for feedback.)
-            if !desired.is_empty()
-                && matches!(
-                    (desired.parse::<HotKey>(), settings.hotkey.parse::<HotKey>()),
-                    (Ok(chat), Ok(dictation)) if chat.id() == dictation.id()
-                )
-            {
-                crate::plugin_log::warn(
-                    "chat",
-                    &format!(
-                        "chat shortcut '{desired}' conflicts with the dictation hotkey — ignored"
-                    ),
-                );
-                desired = String::new();
-            }
-
-            if self.registered_chat_text.as_deref() == Some(desired.as_str()) {
-                return;
-            }
-
-            if let Some(old) = self.registered_chat_hotkey.take() {
-                let _ = self.manager.unregister(old);
-            }
-            self.registered_chat_text = Some(desired.clone());
-
-            if desired.is_empty() {
-                return;
-            }
-            match desired.parse::<HotKey>() {
-                Ok(parsed) => {
-                    if self.manager.register(parsed).is_ok() {
-                        self.registered_chat_hotkey = Some(parsed);
-                    } else {
-                        crate::plugin_log::warn(
-                            "chat",
-                            &format!(
-                                "chat shortcut '{desired}' could not be registered (already in use?)"
-                            ),
-                        );
-                    }
-                }
-                Err(err) => crate::plugin_log::warn(
-                    "chat",
-                    &format!("chat shortcut '{desired}' is invalid: {err}"),
-                ),
-            }
-        }
-
-        /// Re-registers the hotkeys unconditionally — used when the keyboard
+        /// Re-registers the hotkey unconditionally — used when the keyboard
         /// hardware changes and the OS may have lost the prior registration.
         pub fn force_reapply(&mut self, settings: &AppSettings) -> Result<(), String> {
             self.registered_text = None;
-            self.registered_chat_text = None;
             self.apply_settings(settings)
         }
 
@@ -1373,10 +1183,6 @@ mod hotkey {
                 let _ = self.manager.unregister(old);
             }
             self.registered_text = None;
-            if let Some(old) = self.registered_chat_hotkey.take() {
-                let _ = self.manager.unregister(old);
-            }
-            self.registered_chat_text = None;
         }
 
         pub fn poll_actions(&mut self) -> Vec<HotKeyAction> {
@@ -1392,13 +1198,6 @@ mod hotkey {
                         HotKeyState::Pressed => actions.push(HotKeyAction::Pressed),
                         HotKeyState::Released => actions.push(HotKeyAction::Released),
                     }
-                } else if self
-                    .registered_chat_hotkey
-                    .as_ref()
-                    .is_some_and(|registered| registered.id() == event.id)
-                    && matches!(event.state, HotKeyState::Pressed)
-                {
-                    actions.push(HotKeyAction::ChatTriggered);
                 }
             }
 
@@ -1602,62 +1401,6 @@ struct ApiKeyBackendRequest {
     backend: torrowhisper_core::LlmBackendKind,
 }
 
-#[derive(Deserialize)]
-struct HermesKeySetRequest {
-    id: String,
-    key: String,
-}
-
-#[derive(Deserialize)]
-struct HermesKeyIdRequest {
-    id: String,
-}
-
-#[derive(Deserialize)]
-struct HermesTestRequest {
-    id: String,
-    base_url: String,
-}
-
-#[derive(Deserialize)]
-struct ChatModelRequest {
-    #[serde(default)]
-    model_ref: Option<LlmModelRef>,
-}
-
-#[derive(Deserialize)]
-struct ChatSessionRequest {
-    id: String,
-}
-
-#[derive(Deserialize)]
-struct ChatTextRequest {
-    text: String,
-}
-
-#[derive(Deserialize)]
-struct ChatTtsRequest {
-    text: String,
-    voice: String,
-    #[serde(default)]
-    rate: f32,
-}
-
-#[derive(Serialize)]
-struct ChatTtsResponse {
-    audio: Vec<u8>,
-}
-
-#[derive(Deserialize)]
-struct TtsVoiceRequest {
-    voice: String,
-}
-
-#[derive(Serialize)]
-struct TtsReadyResponse {
-    ready: bool,
-}
-
 #[derive(Serialize)]
 struct SessionStartResponse {
     previous_ended_abnormally: bool,
@@ -1779,46 +1522,6 @@ pub extern "C" fn ow_get_llm_api_key_status() -> *mut c_char {
     response_ok(statuses)
 }
 
-/// Stores a Hermes agent's bearer token in the Keychain (keyed by agent id).
-/// Like the cloud-key setter, the secret crosses the FFI boundary only here.
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_set_hermes_api_key(request_json: *const c_char) -> *mut c_char {
-    let result = parse_json_arg::<HermesKeySetRequest>(request_json, "HermesKeySetRequest")
-        .and_then(|req| {
-            llm::keychain::set_hermes_api_key(&req.id, &req.key).map(|()| "ok".to_owned())
-        });
-    response_from_result(result)
-}
-
-/// Removes a Hermes agent's stored bearer token from the Keychain.
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_delete_hermes_api_key(request_json: *const c_char) -> *mut c_char {
-    let result = parse_json_arg::<HermesKeyIdRequest>(request_json, "HermesKeyIdRequest")
-        .and_then(|req| llm::keychain::delete_hermes_api_key(&req.id).map(|()| "ok".to_owned()));
-    response_from_result(result)
-}
-
-/// Reports which configured Hermes agents currently have a token stored —
-/// booleans only, never the secrets themselves.
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_get_hermes_api_key_status() -> *mut c_char {
-    response_ok(with_runtime_value(|runtime| runtime.hermes_key_status()))
-}
-
-/// Tests reachability + auth of a Hermes agent (the settings "Test connection"
-/// button): `GET {base_url}/v1/models` with the agent's stored Keychain token.
-/// Deliberately does NOT touch the thread-local `BridgeRuntime`, so Swift can
-/// call it from a background thread without blocking the poll loop.
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_test_hermes_agent(request_json: *const c_char) -> *mut c_char {
-    let result =
-        parse_json_arg::<HermesTestRequest>(request_json, "HermesTestRequest").and_then(|req| {
-            let key = llm::keychain::get_hermes_api_key(&req.id);
-            llm::test_hermes_connection(&req.base_url, key.as_deref())
-        });
-    response_from_result(result)
-}
-
 /// Returns the unified local + cloud model registry. Remote Ollama / LM Studio
 /// models are fetched separately via `ow_list_remote_models` and merged in the UI.
 #[unsafe(no_mangle)]
@@ -1831,135 +1534,6 @@ pub extern "C" fn ow_get_llm_registry() -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_list_pipeline_stages() -> *mut c_char {
     response_ok(pipeline::StageRegistry::with_builtins().catalog())
-}
-
-// --- plugin system FFI (#15) ---
-
-/// Returns the catalog of available plugins (what exists). The enable state per
-/// plugin lives in `AppSettings.plugins` and is edited through the normal
-/// settings save flow.
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_get_plugin_catalog() -> *mut c_char {
-    response_ok(torrowhisper_core::builtin_plugin_catalog())
-}
-
-// --- chat plugin FFI (#17) ---
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_chat_start_listening() -> *mut c_char {
-    response_from_result(with_runtime_value(BridgeRuntime::chat_start_listening))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_chat_stop_listening() -> *mut c_char {
-    response_from_result(with_runtime_value(BridgeRuntime::chat_stop_listening))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_chat_get_state() -> *mut c_char {
-    // Drain streamed chunks on the chat window's own (fast) poll loop so the
-    // answer grows + speaks smoothly. Only the chat queue is drained here — the
-    // download/status queues stay with the main `runtime_status` poll.
-    response_ok(with_runtime_value(|runtime| {
-        runtime.chat.poll();
-        runtime.chat_state()
-    }))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_chat_reset() -> *mut c_char {
-    with_runtime_value(|runtime| runtime.chat_reset());
-    response_ok("ok".to_owned())
-}
-
-/// Submits a typed chat message (text input alongside voice).
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_chat_send_text(request_json: *const c_char) -> *mut c_char {
-    let result = parse_json_arg::<ChatTextRequest>(request_json, "ChatTextRequest").map(|request| {
-        with_runtime_value(|runtime| runtime.chat_send_text(request.text));
-        "ok".to_owned()
-    });
-    response_from_result(result)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_chat_set_model(request_json: *const c_char) -> *mut c_char {
-    let result =
-        parse_json_arg::<ChatModelRequest>(request_json, "ChatModelRequest").map(|request| {
-            with_runtime_value(|runtime| runtime.chat_set_model(request.model_ref));
-            "ok".to_owned()
-        });
-    response_from_result(result)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_chat_new_session() -> *mut c_char {
-    with_runtime_value(|runtime| runtime.chat_new_session());
-    response_ok("ok".to_owned())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_chat_switch_session(request_json: *const c_char) -> *mut c_char {
-    let result =
-        parse_json_arg::<ChatSessionRequest>(request_json, "ChatSessionRequest").map(|request| {
-            with_runtime_value(|runtime| runtime.chat_switch_session(&request.id));
-            "ok".to_owned()
-        });
-    response_from_result(result)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_chat_delete_session(request_json: *const c_char) -> *mut c_char {
-    let result =
-        parse_json_arg::<ChatSessionRequest>(request_json, "ChatSessionRequest").map(|request| {
-            with_runtime_value(|runtime| runtime.chat_delete_session(&request.id));
-            "ok".to_owned()
-        });
-    response_from_result(result)
-}
-
-/// Synthesizes chat TTS audio locally with Piper (sherpa-onnx subprocess).
-/// Deliberately does NOT touch the thread-local `BridgeRuntime`, so Swift can
-/// call it from a background thread without blocking the poll loop. `voice` is a
-/// Piper voice id; returns the WAV bytes as a JSON byte array.
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_chat_tts_synthesize(request_json: *const c_char) -> *mut c_char {
-    let result = parse_json_arg::<ChatTtsRequest>(request_json, "ChatTtsRequest").and_then(|req| {
-        tts::piper_speech(&req.text, &req.voice, req.rate).map(|audio| ChatTtsResponse { audio })
-    });
-    response_from_result(result)
-}
-
-/// Lists the curated downloadable Piper voice ids (the UI parses them into
-/// language / voice / quality pickers).
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_tts_piper_voices() -> *mut c_char {
-    let voices: Vec<String> = torrowhisper_core::PIPER_VOICE_IDS
-        .iter()
-        .map(|id| (*id).to_owned())
-        .collect();
-    response_ok(voices)
-}
-
-/// True once a Piper voice (and the shared CLI) is downloaded and ready. Off the
-/// runtime — safe to call from a background thread.
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_tts_local_ready(request_json: *const c_char) -> *mut c_char {
-    let result = parse_json_arg::<TtsVoiceRequest>(request_json, "TtsVoiceRequest")
-        .map(|req| TtsReadyResponse {
-            ready: tts::piper_ready(&req.voice),
-        });
-    response_from_result(result)
-}
-
-/// Downloads + extracts the Piper CLI and the requested voice if missing.
-/// Blocking (large download) but off the runtime — Swift calls it off the main
-/// thread with progress UI.
-#[unsafe(no_mangle)]
-pub extern "C" fn ow_tts_local_prepare(request_json: *const c_char) -> *mut c_char {
-    let result = parse_json_arg::<TtsVoiceRequest>(request_json, "TtsVoiceRequest")
-        .and_then(|req| tts::prepare_piper(&req.voice).map(|()| "ok".to_owned()));
-    response_from_result(result)
 }
 
 #[unsafe(no_mangle)]

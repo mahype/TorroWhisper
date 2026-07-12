@@ -10,7 +10,6 @@ struct SettingsView: View {
     @State private var isManagingLanguageModels: Bool = false
     @State private var managerTab: LanguageModelsManagerTab = .transcription
     @State private var isManagingCloudModels: Bool = false
-    @State private var isConfiguringChat: Bool = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var isConfirmingHistoryClear: Bool = false
     @State private var isConfirmingAccessibilityReset: Bool = false
@@ -52,11 +51,6 @@ struct SettingsView: View {
             .sheet(isPresented: $isManagingCloudModels) {
                 CloudModelsSheet(model: model) {
                     isManagingCloudModels = false
-                }
-            }
-            .sheet(isPresented: $isConfiguringChat) {
-                ChatSettingsSheet(model: model) {
-                    isConfiguringChat = false
                 }
             }
             .alert(
@@ -111,8 +105,6 @@ struct SettingsView: View {
             historyContent
         case .languageModels:
             languageModelsContent
-        case .plugins:
-            pluginsContent
         case .startup:
             startupContent
         case .updates:
@@ -448,13 +440,11 @@ struct SettingsView: View {
         } header: {
             Text("Transcription", bundle: .module)
         } footer: {
-            Text("The default language applies app-wide — used for transcription and to narrow the voice list. Choose “Automatic” to show every voice.", bundle: .module)
+            Text("The default language applies app-wide and is used for transcription.", bundle: .module)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-
-        SpeechOutputSettings(model: model)
 
         Section {
             Picker(selection: model.postProcessingChoiceBinding) {
@@ -612,15 +602,6 @@ struct SettingsView: View {
             }
         } header: {
             Text("Details", bundle: .module)
-        }
-    }
-
-    @ViewBuilder
-    private var pluginsContent: some View {
-        PluginsListView(model: model) { pluginId in
-            if pluginId == "chat" {
-                isConfiguringChat = true
-            }
         }
     }
 

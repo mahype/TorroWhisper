@@ -2,14 +2,15 @@
 
 Dieses Dokument beschreibt die Schnittstelle, über die Plugins mit der App
 sprechen — insbesondere wie ein Plugin die **verfügbaren Sprachmodelle**
-auflistet und nutzt. Bezugspunkt ist GitHub #15 (Plugin-System) und das
-Chat-Plugin (#17) als erste Referenz-Implementierung.
+auflistet und nutzt. Bezugspunkt ist GitHub #15 (Plugin-System).
 
-> **Status.** Phase 1: Plugins sind eingebaut (built-in), aktuell nur das
-> Chat-Plugin. Die hier beschriebene API ist bereits der **stabile Vertrag**,
-> hinter den eingebaute Plugins gezogen werden; in Phase 2 nutzen ihn auch
-> Dritt-Plugins. Wer heute ein neues eingebautes Plugin oder eine Pipeline-Stage
-> schreibt, programmiert ausschließlich gegen diesen Vertrag.
+> **Status.** Das Chat-Plugin (#17), die erste Referenz-Implementierung, wurde
+> mit #34 vorerst ausgebaut (Fokus Diktierfunktion; Reaktivierung über Branch
+> `feat/chat-plugin` möglich). Der hier beschriebene **stabile Vertrag** gilt
+> unverändert — aktueller Konsument ist die LLM-Nachbearbeitungs-Stage der
+> Pipeline; in Phase 2 nutzen ihn auch Dritt-Plugins. Wer ein neues eingebautes
+> Plugin oder eine Pipeline-Stage schreibt, programmiert ausschließlich gegen
+> diesen Vertrag.
 
 ---
 
@@ -29,15 +30,15 @@ Bridge-Interna. Dadurch bleibt die Grenze versionierbar.
 
 ```
 Plugin  ──►  PluginHost (Trait)  ──►  llm::provider_for  ──►  Backend
-   (Chat,        ├─ available_models / ready_models        (lokales GGUF-Helper-
-    Pipeline-    ├─ chat / generate                         Subprocess, Ollama,
-    Stage, …)    └─ log                                     LM Studio, Cloud)
+  (Pipeline-     ├─ available_models / ready_models        (lokales GGUF-Helper-
+   Stage, …)     ├─ chat / generate                         Subprocess, Ollama,
+                 └─ log                                     LM Studio, Cloud)
 ```
 
 Der konkrete Host ist
 [`BridgeHost`](../crates/torrowhisper-bridge/src/plugin_api.rs). Er hält einen
 **Settings-Snapshot** und ist damit `Send` — er kann in den Arbeits-Thread eines
-Plugins wandern (z. B. läuft die Chat-Generierung außerhalb der Hauptschleife).
+Plugins wandern (z. B. läuft die Nachbearbeitung außerhalb der Hauptschleife).
 
 ---
 
@@ -85,8 +86,8 @@ let host = BridgeHost::new("mein_plugin", settings.clone());
 ```
 
 `"mein_plugin"` ist die Plugin-ID. Sie taucht in jeder Log-Zeile als
-`plugin:mein_plugin` auf und sollte zur ID im Plugin-Katalog passen
-(siehe `builtin_plugin_catalog()` in `crates/torrowhisper-core/src/lib.rs`).
+`plugin:mein_plugin` auf (die LLM-Nachbearbeitungs-Stage nutzt z. B.
+`post_processing`).
 
 ---
 
@@ -143,8 +144,8 @@ Backend (lokaler GGUF-Helper-Subprocess, Ollama, LM Studio, Cloud-HTTP).
 
 - **`chat(model, system_prompt, user_text, cancelled)`** — `system_prompt` wird
   **wörtlich** als System-Nachricht des Assistenten gesetzt, `user_text` ist der
-  Nutzer-Turn. Das Modell **antwortet** auf die Eingabe. Das nutzt das
-  Chat-Plugin.
+  Nutzer-Turn. Das Modell **antwortet** auf die Eingabe. Seit dem Ausbau des
+  Chat-Plugins (#34) ruhende, aber weiterhin gültige Fähigkeit des Vertrags.
 - **`generate(model, role_prompt, user_text, cancelled)`** — `role_prompt`
   rahmt eine **Aufgabe** über `user_text` (z. B. „korrigiere diesen diktierten
   Text“). Das Modell **schreibt um**, statt zu antworten. Das nutzt die
@@ -222,8 +223,9 @@ Innerhalb einer Stage holt man sich Modelle/Generierung über einen `BridgeHost`
 
 Zwei Wege, je nach Plugin-Art:
 
-1. **Eigene Settings-Felder** (wie das Chat-Plugin) — strukturierte Felder unter
-   `AppSettings.chat.*`. Geeignet für eingebaute Plugins mit fester UI.
+1. **Eigene Settings-Felder** — strukturierte Felder in `AppSettings` (so hielt
+   das ausgebaute Chat-Plugin seine Konfiguration unter `AppSettings.chat.*`).
+   Geeignet für eingebaute Plugins mit fester UI.
 2. **Opakes `config`-JSON** pro Pipeline-Schritt (`PipelineStepConfig.config`) —
    geeignet für generische/Dritt-Stages, die ihre eigene Konfiguration mitbringen.
 
@@ -232,16 +234,17 @@ Der Speicher-Fluss ist in beiden Fällen: UI ändert `AppSettings` → `requestA
 
 ---
 
-## 9. Referenz-Implementierungen
+## 9. Referenz-Implementierung
 
-Zwei Konsumenten laufen heute durch den Vertrag — gute Vorlagen:
+Ein Konsument läuft heute durch den Vertrag — gute Vorlage:
 
-- **Chat-Plugin** — `crates/torrowhisper-bridge/src/chat.rs`,
-  `ChatController::start_generation`. Baut `BridgeHost::new("chat", …)`, loggt über
-  den Host und ruft `host.chat(...)` im Worker-Thread.
 - **LLM-Nachbearbeitungs-Stage** —
   `crates/torrowhisper-bridge/src/pipeline/stages/llm.rs`, `LlmStage::run`. Baut
   `BridgeHost::new("post_processing", …)` und ruft `host.generate(...)`.
+
+(Das ausgebaute Chat-Plugin nutzte zusätzlich `host.chat(...)`/`chat_stream` im
+Worker-Thread — bei Bedarf in der Historie unter `feat/chat-plugin` nachlesbar:
+`crates/torrowhisper-bridge/src/chat.rs`.)
 
 ---
 
@@ -282,6 +285,4 @@ fn answer(settings: torrowhisper_core::AppSettings, frage: &str) -> Result<Strin
 | Modell-Typen / Verfügbarkeit | `crates/torrowhisper-core/src/lib.rs` (`LlmModelRef`, `LlmRegistryEntryDto`, `LlmAvailability`) |
 | Logging-Fassade | `crates/torrowhisper-bridge/src/plugin_log.rs` |
 | Pipeline-Stage-Verträge | `crates/torrowhisper-bridge/src/pipeline/mod.rs` |
-| Plugin-Katalog (IDs, Metadaten) | `crates/torrowhisper-core/src/lib.rs` (`builtin_plugin_catalog`) |
-| Referenz: Chat-Plugin | `crates/torrowhisper-bridge/src/chat.rs` |
 | Referenz: LLM-Stage | `crates/torrowhisper-bridge/src/pipeline/stages/llm.rs` |

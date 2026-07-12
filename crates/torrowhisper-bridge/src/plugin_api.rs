@@ -1,8 +1,8 @@
 //! Stable host→plugin API surface (#15 / plugin host).
 //!
 //! [`PluginHost`] is the single contract the app hands to every plugin — the
-//! built-in chat plugin today, third-party plugins later. It bundles the three
-//! things a plugin needs from the host:
+//! post-processing LLM stage today, third-party plugins later. It bundles the
+//! three things a plugin needs from the host:
 //!
 //! 1. **Discover** the available language models ([`PluginHost::available_models`]),
 //!    each with its [`LlmAvailability`] — the same unified registry the settings
@@ -17,7 +17,7 @@
 //! an incompatible host.
 //!
 //! The concrete [`BridgeHost`] owns a settings snapshot, so it is `Send` and can
-//! move into a plugin's worker thread (e.g. chat generation runs off the main
+//! move into a plugin's worker thread (e.g. post-processing runs off the main
 //! loop). See `docs/PLUGIN_API.md` for the full guide.
 
 use std::sync::{Arc, atomic::AtomicBool};
@@ -61,7 +61,7 @@ pub trait PluginHost {
     /// Conversational generation: `system_prompt` is used verbatim as the
     /// assistant's system message and `user_text` as the user's turn, so the
     /// model answers rather than rewrites. `session_key` is a stable
-    /// per-conversation id; memory-capable backends (Hermes) scope it, the rest
+    /// per-conversation id; memory-capable backends scope it, the rest
     /// ignore it.
     fn chat(
         &self,

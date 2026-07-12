@@ -132,7 +132,7 @@ struct LanguageModelsManagerSheet: View {
     private var postProcessingContent: some View {
         Section {
             Text(
-                "Enable the language models you want available across the whole app — in the chat window and as post-processing options. Toggle a model on to make it selectable everywhere; which one post-processing uses is chosen under Post-processing.",
+                "Enable the language models you want available across the whole app as post-processing options. Toggle a model on to make it selectable everywhere; which one post-processing uses is chosen under Post-processing.",
                 bundle: .module
             )
             .font(.caption)

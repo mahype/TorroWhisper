@@ -366,70 +366,20 @@
 "macOS may require privacy permissions for the microphone, global hotkey, and pasting into other apps." = "macOS verlangt ggf. Datenschutz-Berechtigungen für Mikrofon, globalen Hotkey und das Einfügen in andere Apps.";
 "If you run into issues, open System Settings > Privacy & Security and check Microphone, Accessibility, and Input Monitoring." = "Öffne bei Problemen Systemeinstellungen > Datenschutz & Sicherheit und prüfe Mikrofon, Bedienungshilfen und Eingabeüberwachung.";
 
-/* Hermes-Agenten (#agent) */
-"Hermes agents" = "Hermes-Agenten";
-"No Hermes agents added yet." = "Noch keine Hermes-Agenten hinzugefügt.";
-"+ Add Hermes agent" = "+ Hermes-Agent hinzufügen";
-"Test connection" = "Verbindung testen";
-"New agent" = "Neuer Agent";
-"Message…" = "Nachricht…";
-"Send" = "Senden";
-"Address" = "Adresse";
-"Model id" = "Modell-ID";
-"API key (optional)" = "API-Schlüssel (optional)";
 "Key could not be saved." = "Schlüssel konnte nicht gespeichert werden.";
 "Remove stored key" = "Gespeicherten Schlüssel entfernen";
 "Key stored" = "Schlüssel gespeichert";
 "Save" = "Speichern";
-"Voice-chat with a Hermes Agent (NousResearch) over its API server. Enter the agent's address (e.g. http://localhost:8642/v1) and, if the server requires one, its API key. Agents appear in the chat window's model picker. Each conversation keeps its own memory via the agent." = "Sprich per Sprache mit einem Hermes-Agenten (NousResearch) über dessen API-Server. Gib die Adresse des Agenten an (z. B. http://localhost:8642/v1) und, falls der Server einen verlangt, dessen API-Schlüssel. Agenten erscheinen im Modell-Auswahlmenü des Chat-Fensters. Jede Unterhaltung behält über den Agenten ihr eigenes Gedächtnis.";
 
-/* Lokale Piper-Sprachausgabe */
-"Piper (local)" = "Piper (lokal)";
-"Voice" = "Stimme";
-"Voice ready" = "Stimme bereit";
-"Download voice" = "Stimme herunterladen";
-"Downloading voice…" = "Stimme wird geladen…";
-"Speech output (local Piper)" = "Sprachausgabe (lokal, Piper)";
-"Speed" = "Geschwindigkeit";
-"very low" = "sehr niedrig";
-"low" = "niedrig";
 "medium" = "mittel";
-"high" = "hoch";
-"Answers are spoken by a fast, fully-local neural voice (Piper). Pick a language and voice; it downloads once (~25–115 MB). Until a voice is downloaded, the offline system voice is used as a fallback." = "Antworten werden von einer schnellen, komplett lokalen neuronalen Stimme (Piper) gesprochen. Wähle Sprache und Stimme; sie wird einmalig heruntergeladen (~25–115 MB). Bis eine Stimme geladen ist, dient die Offline-Systemstimme als Rückfall.";
 
 // #28: language-models / speech-output / chat translations
 "Default language" = "Standardsprache";
-"The default language applies app-wide — used for transcription and to narrow the voice list. Choose “Automatic” to show every voice." = "Die Standardsprache gilt app-weit – für die Transkription und um die Stimmenliste einzugrenzen. Wähle „Automatisch“, um alle Stimmen anzuzeigen.";
+"The default language applies app-wide and is used for transcription." = "Die Standardsprache gilt app-weit und wird für die Transkription verwendet.";
 "Cloud models & API keys…" = "Cloud-Modelle & API-Schlüssel…";
-"Only show voices of the default language" = "Nur Stimmen der Standardsprache anzeigen";
-"Default voice" = "Standardstimme";
-"Speech output" = "Sprachausgabe";
-"Answers are spoken by a fast, fully-local neural voice (Piper). It downloads once (~25–115 MB). Until a voice is downloaded, the offline system voice is used as a fallback." = "Antworten werden von einer schnellen, vollständig lokalen neuronalen Stimme (Piper) gesprochen. Sie wird einmalig heruntergeladen (~25–115 MB). Bis eine Stimme geladen ist, dient die System-Stimme (offline) als Fallback.";
-"No plugins available." = "Keine Plugins verfügbar.";
-"Configure…" = "Konfigurieren…";
-"Chat settings" = "Chat-Einstellungen";
-"Opens the chat window from anywhere. Separate from the dictation hotkey." = "Öffnet das Chat-Fenster von überall. Unabhängig vom Diktat-Kürzel.";
-"Shortcut" = "Tastenkürzel";
-"Local default" = "Lokaler Standard";
-"Default model" = "Standardmodell";
-"Used for new conversations. A pick in the chat window overrides it for that session. Local models, your custom models and cloud models all appear here — entries marked “not downloaded” or “needs API key” aren’t usable until set up under Language models." = "Für neue Unterhaltungen. Eine Auswahl im Chat-Fenster überschreibt es für die jeweilige Sitzung. Lokale Modelle, eigene Modelle und Cloud-Modelle erscheinen hier – Einträge mit „nicht geladen“ oder „API-Schlüssel nötig“ sind erst nutzbar, wenn sie unter Sprachmodelle eingerichtet wurden.";
-"Leave empty for the built-in assistant prompt." = "Leer lassen für den eingebauten Assistenten-Prompt.";
-"Assistant" = "Assistent";
 "not downloaded" = "nicht geladen";
 "downloading…" = "lädt…";
-"file damaged" = "Datei beschädigt";
-"needs API key" = "API-Schlüssel nötig";
-"Chat shortcut" = "Chat-Kürzel";
-"Hide Sidebar" = "Seitenleiste ausblenden";
-"Show Sidebar" = "Seitenleiste einblenden";
-"This shortcut is already used for dictation." = "Dieses Kürzel wird bereits fürs Diktat verwendet.";
-"System prompt" = "System-Prompt";
-"New chat" = "Neuer Chat";
-"Empty" = "Leer";
-"messages" = "Nachrichten";
-"Thinking…" = "Denkt nach…";
-"Speak" = "Sprechen";
-"Enable the language models you want available across the whole app — in the chat window and as post-processing options. Toggle a model on to make it selectable everywhere; which one post-processing uses is chosen under Post-processing." = "Aktiviere die Sprachmodelle, die app-weit verfügbar sein sollen – im Chat-Fenster und als Nachbearbeitungs-Optionen. Schalte ein Modell ein, um es überall auswählbar zu machen; welches die Nachbearbeitung nutzt, wird unter „Generelle Sprachmodelle“ gewählt.";
+"Enable the language models you want available across the whole app as post-processing options. Toggle a model on to make it selectable everywhere; which one post-processing uses is chosen under Post-processing." = "Aktiviere die Sprachmodelle, die app-weit als Nachbearbeitungs-Optionen verfügbar sein sollen. Schalte ein Modell ein, um es überall auswählbar zu machen; welches die Nachbearbeitung nutzt, wird unter „Generelle Sprachmodelle“ gewählt.";
 "Cloud models need an API key, set under \"Cloud models & API keys\". Enabling one here only makes it selectable; it stays unavailable until a key is stored." = "Cloud-Modelle brauchen einen API-Schlüssel, festgelegt unter „Cloud-Modelle & API-Schlüssel“. Das Einschalten hier macht sie nur auswählbar; sie bleiben ungenutzt, bis ein Schlüssel hinterlegt ist.";
 "Cloud" = "Cloud";
 "Ollama" = "Ollama";

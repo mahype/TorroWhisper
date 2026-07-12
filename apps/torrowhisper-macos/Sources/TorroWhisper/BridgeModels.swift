@@ -748,7 +748,6 @@ enum LlmBackendKind: String, Codable, Hashable {
     case grok
     case anthropic
     case gemini
-    case hermes
 
     var displayName: String {
         switch self {
@@ -761,16 +760,14 @@ enum LlmBackendKind: String, Codable, Hashable {
         case .grok: return "Grok (xAI)"
         case .anthropic: return "Anthropic"
         case .gemini: return "Gemini"
-        case .hermes: return "Hermes Agent"
         }
     }
 
     /// Cloud backends that need a single shared API key (have a Keychain slot).
-    /// Hermes is excluded: each agent has its own per-agent token.
     var isCloud: Bool {
         switch self {
         case .openAi, .mistral, .deepSeek, .grok, .anthropic, .gemini: return true
-        case .localGguf, .ollama, .lmStudio, .hermes: return false
+        case .localGguf, .ollama, .lmStudio: return false
         }
     }
 }
@@ -793,7 +790,6 @@ enum LlmModelRefDTO: Codable, Hashable {
     case openAiCompatible(provider: OpenAiCompatibleProviderDTO, modelName: String)
     case anthropic(String)
     case gemini(String)
-    case hermes(id: String)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -811,7 +807,6 @@ enum LlmModelRefDTO: Codable, Hashable {
         case openAiCompatible = "open_ai_compatible"
         case anthropic
         case gemini
-        case hermes
     }
 
     init(from decoder: Decoder) throws {
@@ -834,8 +829,6 @@ enum LlmModelRefDTO: Codable, Hashable {
             self = .anthropic(try container.decode(String.self, forKey: .modelName))
         case .gemini:
             self = .gemini(try container.decode(String.self, forKey: .modelName))
-        case .hermes:
-            self = .hermes(id: try container.decode(String.self, forKey: .id))
         }
     }
 
@@ -864,9 +857,6 @@ enum LlmModelRefDTO: Codable, Hashable {
         case .gemini(let name):
             try container.encode(Kind.gemini, forKey: .kind)
             try container.encode(name, forKey: .modelName)
-        case .hermes(let id):
-            try container.encode(Kind.hermes, forKey: .kind)
-            try container.encode(id, forKey: .id)
         }
     }
 
@@ -883,7 +873,6 @@ enum LlmModelRefDTO: Codable, Hashable {
             return "\(provider.stableToken):\(modelName)"
         case .anthropic(let name): return "anthropic:\(name)"
         case .gemini(let name): return "gemini:\(name)"
-        case .hermes(let id): return "hermes:\(id)"
         }
     }
 }
@@ -909,131 +898,6 @@ struct ApiKeyStatusDTO: Codable, Hashable, Identifiable {
     var hasKey: Bool
 
     var id: LlmBackendKind { backend }
-}
-
-// MARK: - Hermes Agents (#agent)
-
-/// Mirror of Rust `HermesAgent`. The bearer token is NOT part of this struct —
-/// it lives in the Keychain and is managed via the dedicated key endpoints.
-struct HermesAgent: Codable, Identifiable, Hashable {
-    var id: String
-    var name: String
-    var baseUrl: String
-    var modelName: String
-}
-
-/// Mirror of Rust `HermesKeyStatusDto` — whether an agent has a stored token.
-struct HermesKeyStatusDTO: Codable, Hashable, Identifiable {
-    var id: String
-    var hasKey: Bool
-}
-
-// MARK: - Chat plugin (#17)
-
-enum ChatRole: String, Codable, Hashable {
-    case system
-    case user
-    case assistant
-}
-
-struct ChatMessageDTO: Codable, Hashable, Identifiable {
-    var role: ChatRole
-    var content: String
-
-    // Stable-enough identity for SwiftUI list diffing within one session.
-    var id: Int { hashValue }
-}
-
-enum ChatPhase: String, Codable, Hashable {
-    case idle
-    case listening
-    case transcribing
-    case generating
-}
-
-/// Mirror of Rust `ChatSessionDto` — a sidebar entry (no message bodies).
-struct ChatSessionDTO: Codable, Hashable, Identifiable {
-    var id: String
-    var title: String
-    var updatedAt: Int64
-    var messageCount: Int
-}
-
-struct ChatStateDTO: Codable, Hashable {
-    var phase: ChatPhase
-    var messages: [ChatMessageDTO]
-    var revision: UInt64
-    var error: String?
-    var sessions: [ChatSessionDTO]
-    var activeSessionId: String
-    /// Model/agent the active conversation uses — lets the picker re-sync when
-    /// the user switches conversations.
-    var activeModelRef: LlmModelRefDTO?
-
-    static let empty = ChatStateDTO(
-        phase: .idle, messages: [], revision: 0, error: nil,
-        sessions: [], activeSessionId: "", activeModelRef: nil
-    )
-}
-
-// MARK: - Plugin system (#15)
-
-/// Mirror of Rust `PluginConfig` — per-plugin enable state in AppSettings.plugins.
-struct PluginConfigDTO: Codable, Equatable, Hashable, Identifiable {
-    var id: String
-    var enabled: Bool
-}
-
-/// Mirror of Rust `PluginDescriptorDto` — the catalog of available plugins.
-struct PluginDescriptorDTO: Codable, Equatable, Hashable, Identifiable {
-    var id: String
-    var name: String
-    var description: String
-    var version: String
-    var configurable: Bool
-}
-
-// MARK: - Chat settings (#17)
-
-/// Mirror of Rust `ChatTtsProvider`. Raw values match serde snake_case.
-enum ChatTtsProvider: String, Codable, Hashable, CaseIterable, Identifiable {
-    case system
-    case openAi = "open_ai"
-    case piper
-
-    var id: String { rawValue }
-
-    func label(locale: Locale) -> String {
-        switch self {
-        case .system: return L("System voice (offline)", locale: locale)
-        case .openAi: return L("OpenAI (cloud)", locale: locale)
-        case .piper: return L("Piper (local)", locale: locale)
-        }
-    }
-}
-
-/// Mirror of Rust `ChatTtsSettings`.
-struct ChatTtsSettingsDTO: Codable, Equatable, Hashable {
-    var provider: ChatTtsProvider
-    var systemVoice: String
-    var openaiVoice: String
-    var piperVoice: String
-    var rate: Float
-}
-
-/// Mirror of Rust `ChatSettings`.
-struct ChatSettingsDTO: Codable, Equatable, Hashable {
-    var defaultModelRef: LlmModelRefDTO?
-    var systemPrompt: String
-    var tts: ChatTtsSettingsDTO
-    var chatHotkey: String
-
-    static let `default` = ChatSettingsDTO(
-        defaultModelRef: nil,
-        systemPrompt: "",
-        tts: ChatTtsSettingsDTO(provider: .piper, systemVoice: "", openaiVoice: "alloy", piperVoice: "de_DE-thorsten-high", rate: 0.5),
-        chatHotkey: ""
-    )
 }
 
 struct AppSettings: Codable, Equatable {
@@ -1069,8 +933,6 @@ struct AppSettings: Codable, Equatable {
     var activePostProcessingBackend: PostProcessingBackend
     var activeCustomLlmId: String
     var customLlmModels: [CustomLlmModel]
-    /// User-configured Hermes Agents (#agent). Selectable in the chat.
-    var hermesAgents: [HermesAgent]
     /// Registry-selected post-processing model (incl. cloud). nil = legacy
     /// PostProcessingChoice resolution.
     var activePostProcessingModel: LlmModelRefDTO?
@@ -1080,8 +942,6 @@ struct AppSettings: Codable, Equatable {
     var enabledModelIds: [String]
     /// Per-role curation for transcription (Whisper) models (#28 AP1). Empty = all.
     var enabledTranscriptionIds: [String]
-    /// Per-role curation for speech-output (TTS) voices (#28 AP1). Empty = all.
-    var enabledSpeechOutputIds: [String]
     var ollama: ExternalProviderSettings
     var lmStudio: ExternalProviderSettings
     var postProcessingEnabled: Bool
@@ -1091,14 +951,6 @@ struct AppSettings: Codable, Equatable {
     var dictionary: [DictionaryEntry]
     var historyEnabled: Bool
     var historyMaxEntries: UInt32
-    var chat: ChatSettingsDTO
-    /// Speech-output (TTS) config. Mirrors Rust top-level `AppSettings.speech_output`
-    /// — pulled out of the chat plugin (#28 AP1).
-    var speechOutput: ChatTtsSettingsDTO
-    /// When true, voice pickers only list voices of the app-wide default language
-    /// (`transcriptionLanguage`); "auto" disables the filter (#28).
-    var voicesDefaultLanguageOnly: Bool
-    var plugins: [PluginConfigDTO]
 
     static let `default` = AppSettings(
         onboardingCompleted: false,
@@ -1133,11 +985,9 @@ struct AppSettings: Codable, Equatable {
         activePostProcessingBackend: .local,
         activeCustomLlmId: "",
         customLlmModels: [],
-        hermesAgents: [],
         activePostProcessingModel: nil,
         enabledModelIds: [],
         enabledTranscriptionIds: [],
-        enabledSpeechOutputIds: [],
         ollama: ExternalProviderSettings(endpoint: "http://127.0.0.1:11434", modelName: "whisper"),
         lmStudio: ExternalProviderSettings(endpoint: "http://127.0.0.1:1234", modelName: "openai/whisper-small"),
         postProcessingEnabled: false,
@@ -1146,11 +996,7 @@ struct AppSettings: Codable, Equatable {
         uiLanguage: .system,
         dictionary: [],
         historyEnabled: true,
-        historyMaxEntries: historyMaxEntriesDefault,
-        chat: .default,
-        speechOutput: ChatSettingsDTO.default.tts,
-        voicesDefaultLanguageOnly: true,
-        plugins: []
+        historyMaxEntries: historyMaxEntriesDefault
     )
 }
 
@@ -1255,8 +1101,6 @@ struct RuntimeStatusDTO: Codable, Equatable {
     var dictationErrorCount: UInt64
     var dictationSuccessCount: UInt64
     var dictationTriggerCount: UInt64
-    var chatTriggerCount: UInt64
-    var chatCapturing: Bool
     var hotkeyRegistered: Bool
     var hotkeyText: String
     var startupSummary: String
@@ -1283,8 +1127,6 @@ struct RuntimeStatusDTO: Codable, Equatable {
         dictationErrorCount: 0,
         dictationSuccessCount: 0,
         dictationTriggerCount: 0,
-        chatTriggerCount: 0,
-        chatCapturing: false,
         hotkeyRegistered: false,
         hotkeyText: "Ctrl+Shift+Space",
         startupSummary: "Startup status not synchronized yet.",
