@@ -41,6 +41,15 @@ pub fn init() {
 
         install_panic_hook();
 
+        // Route whisper.cpp / GGML output (normally stderr, which is lost in
+        // a bundled app) through the `log` crate into this file logger. The
+        // GGML error lines are the only trace left right before a failed
+        // GGML_ASSERT abort()s the whole process without unwinding — with
+        // this hook they at least reach the log file first. `enabled()`
+        // passes warn+ for foreign targets, so GGML's chatty info-level
+        // model-load output stays out of the log.
+        whisper_rs::install_logging_hooks();
+
         log::info!(
             target: "bridge",
             "logging started (bridge {})",
