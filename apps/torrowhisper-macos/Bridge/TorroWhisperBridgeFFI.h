@@ -56,6 +56,8 @@ char *ow_clear_history(void);
 char *ow_get_log_path(void);
 char *ow_log_message(const char *request_json);
 char *ow_plugin_log(const char *request_json);
+char *ow_session_started(void);
+char *ow_session_ended_cleanly(void);
 char *ow_write_diagnostics_log(void);
 void ow_string_free(char *raw);
 

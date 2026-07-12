@@ -273,6 +273,22 @@ final class BridgeClient {
         try decodeResponse(from: ow_write_diagnostics_log())
     }
 
+    /// Records the start of an app session in the bridge. Returns true when
+    /// the previous session ended abnormally (crash, abort, kill) — the
+    /// bridge detects this via a session marker file and logs it.
+    @discardableResult
+    func sessionStarted() -> Bool {
+        struct Response: Decodable { var previousEndedAbnormally: Bool }
+        let response: Response? = try? decodeResponse(from: ow_session_started())
+        return response?.previousEndedAbnormally ?? false
+    }
+
+    /// Records a clean shutdown so the next launch does not report an
+    /// abnormal end. Call from `applicationWillTerminate`.
+    func sessionEndedCleanly() {
+        let _: String? = try? decodeResponse(from: ow_session_ended_cleanly())
+    }
+
     /// Writes a line into the shared bridge log file. Levels: "error",
     /// "warn", "debug"; anything else logs at info.
     func logMessage(level: String, message: String) {
