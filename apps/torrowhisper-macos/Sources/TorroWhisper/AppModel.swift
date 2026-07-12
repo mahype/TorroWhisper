@@ -51,6 +51,9 @@ final class AppModel: ObservableObject {
     private var lastSeenDictationSuccessCount: UInt64 = 0
     private var lastSeenChatTriggerCount: UInt64 = 0
     private var dictationSuccessOccurredAt: Date?
+    /// Whether the last poll tick saw a time-limited bubble (done/error) on
+    /// screen; lets the poll fire one final refresh after it expires.
+    private var lastTransientBubbleVisible = false
     /// How long the brief green "done" bubble stays visible after a successful
     /// dictation. Short on purpose — just enough that a fast completion reads as
     /// "finished" instead of the bubble silently vanishing.
@@ -691,16 +694,34 @@ final class AppModel: ObservableObject {
 
     func poll() {
         do {
-            runtime = try bridge.getRuntimeStatus()
-            modelStatus = try bridge.getModelStatus()
-            if let list = try? bridge.getModelStatusList() {
+            // Every @Published assignment fires objectWillChange and re-renders
+            // all observing SwiftUI windows — at a 350 ms poll interval that
+            // kept the app busy re-laying-out even when completely idle
+            // (visible as a sustained-CPU resource report from macOS). Only
+            // assign, and only notify the app delegate, when something
+            // actually changed.
+            var changed = false
+            let newRuntime = try bridge.getRuntimeStatus()
+            if newRuntime != runtime {
+                runtime = newRuntime
+                changed = true
+            }
+            let newModelStatus = try bridge.getModelStatus()
+            if newModelStatus != modelStatus {
+                modelStatus = newModelStatus
+                changed = true
+            }
+            if let list = try? bridge.getModelStatusList(), list != modelStatusList {
                 modelStatusList = list
+                changed = true
             }
-            if let list = try? bridge.getLlmStatusList() {
+            if let list = try? bridge.getLlmStatusList(), list != llmStatusList {
                 llmStatusList = list
+                changed = true
             }
-            if let list = try? bridge.getCustomLlmStatusList() {
+            if let list = try? bridge.getCustomLlmStatusList(), list != customLlmStatusList {
                 customLlmStatusList = list
+                changed = true
             }
             checkMicSwitchEvent()
             checkDictationErrorEvent()
@@ -709,9 +730,21 @@ final class AppModel: ObservableObject {
             if runtime.historyRevision != lastSeenHistoryRevision {
                 history = (try? bridge.loadHistory()) ?? []
                 lastSeenHistoryRevision = runtime.historyRevision
+                changed = true
             }
-            bridgeError = nil
-            onStateChanged?()
+            if bridgeError != nil {
+                bridgeError = nil
+                changed = true
+            }
+            // The green "done" and red error bubbles hide purely by time
+            // (their display window elapsing), not through a state change —
+            // keep refreshing while one is visible, plus one final tick right
+            // after it expires so the bubble is actually taken down.
+            let transientBubbleVisible = isShowingDictationDone || currentDictationErrorMessage != nil
+            if changed || transientBubbleVisible || lastTransientBubbleVisible {
+                onStateChanged?()
+            }
+            lastTransientBubbleVisible = transientBubbleVisible
         } catch {
             publish(error)
         }
