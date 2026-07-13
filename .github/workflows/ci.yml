@@ -21,7 +21,7 @@ jobs:
       # keeps them enabled for the shipped binary.
       SOURCE_DATE_EPOCH: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select Xcode 16 (Swift 6)
         uses: maxim-lobanov/setup-xcode@v1

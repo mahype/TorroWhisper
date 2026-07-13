@@ -31,7 +31,7 @@ jobs:
         language: [swift]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Xcode must be selected BEFORE codeql init so the tracer wraps the
       # right Swift toolchain.

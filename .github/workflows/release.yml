@@ -17,7 +17,7 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select Xcode 16 (Swift 6)
         uses: maxim-lobanov/setup-xcode@v1
@@ -117,7 +117,7 @@ jobs:
       # notes into the appcast as inline HTML, so the Sparkle dialog shows
       # clean release notes instead of the full GitHub web page.
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           draft: false
           name: ${{ github.ref_name }}
@@ -137,7 +137,7 @@ jobs:
           echo "Fetched $(wc -c < release-notes.md) bytes of release notes"
 
       - name: Checkout gh-pages for appcast
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: gh-pages
           path: gh-pages
