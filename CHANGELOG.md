@@ -4,17 +4,22 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 > _TorroWhisper was previously released as **DonnyWhisper** (and before that as **Open Whisper**); entries for 0.4.x and earlier predate the first rename._
 
-## [Unreleased]
+## [0.5.0] — 2026-07-14
 
-### Removed
-- **Voice-chat plugin removed to focus on dictation** — the chat window (conversation sidebar, streaming answers, voice input), the Hermes agent integration, the local Piper text-to-speech (sherpa-onnx subprocess), the speech-output settings section, and the plugin overview are gone; TorroWhisper concentrates fully on dictation for now (#34). The shared language-model layer for post-processing (local GGUF, Ollama, LM Studio, cloud providers) is untouched. Settings written by chat-era versions still load — the obsolete fields (`chat`, `speech_output`, `hermes_agents`, `plugins`, `enabled_speech_output_ids`) are simply ignored. Stored chat conversations (`sessions.json`) and downloaded Piper voices/CLI under the app's `tts` data directory are no longer read; delete them manually to reclaim space. The feature can be revived later from branch `feat/chat-plugin` and issue #17.
-
-### Fixed
-- **Hotkey capture no longer triggers dictation** — while recording a new shortcut in Settings or Onboarding, the global hotkeys are temporarily unregistered. Previously the armed hotkey was consumed system-wide: pressing it started dictation instead of reaching the capture field, and with no Whisper model installed the blocked-model bubble popped up over the settings window and swallowed Escape, blocking the capture entirely. The registration is restored on commit, cancel, and clear.
+### Added
+- **Abnormal-shutdown detection** — a session marker file is written on launch and removed on clean shutdown (a new `applicationWillTerminate` also flushes pending settings autosaves and logs the quit). If the marker is still present at the next launch, the previous session died without reaching the shutdown path — a native abort (e.g. a GGML assertion) or a kill that bypasses the Rust panic hook — and a warning with its start time and pid is logged. Accessory apps get no macOS crash dialog, so this is often the only trace such deaths leave.
+- **whisper.cpp / GGML output in the app log** — whisper.cpp and GGML write to stderr, which is lost in a bundled app, including the error lines emitted right before a failed `GGML_ASSERT` aborts the process. whisper-rs's logging hooks now funnel that output through the shared file logger; the existing filter passes warn+ for foreign targets, keeping GGML's chatty model-load info out of the log.
 
 ### Changed
 - **Renamed to TorroWhisper** — the application, the bundle identifier (now `com.gettorro.TorroWhisper`), the on-disk data and Keychain locations, and the Sparkle update feed were all renamed from *DonnyWhisper*. Existing installs do **not** auto-migrate: reinstall TorroWhisper, then re-grant microphone and accessibility permissions and re-enter any cloud API keys.
 - **Renamed to DonnyWhisper** (from *Open Whisper*) — the application, the bundle identifier (then `com.getdonny.DonnyWhisper`), the on-disk data and Keychain locations, and the Sparkle update feed were all renamed. Existing installs did not auto-migrate. (Superseded by the TorroWhisper rename above.)
+
+### Fixed
+- **Hotkey capture no longer triggers dictation** — while recording a new shortcut in Settings or Onboarding, the global hotkeys are temporarily unregistered. Previously the armed hotkey was consumed system-wide: pressing it started dictation instead of reaching the capture field, and with no Whisper model installed the blocked-model bubble popped up over the settings window and swallowed Escape, blocking the capture entirely. The registration is restored on commit, cancel, and clear.
+- **Runaway idle CPU** — `AppModel.poll()` reassigned its published state and rebuilt every open SwiftUI window and all four status-bar menus every 350 ms even when nothing had changed, which macOS flagged as a sustained-CPU resource violation while the app sat idle. The polled DTOs are now `Equatable` and state is only reassigned (and observers notified) when something actually changed.
+
+### Removed
+- **Voice-chat plugin removed to focus on dictation** — the chat window (conversation sidebar, streaming answers, voice input), the Hermes agent integration, the local Piper text-to-speech (sherpa-onnx subprocess), the speech-output settings section, and the plugin overview are gone; TorroWhisper concentrates fully on dictation for now (#34). The shared language-model layer for post-processing (local GGUF, Ollama, LM Studio, cloud providers) is untouched. Settings written by chat-era versions still load — the obsolete fields (`chat`, `speech_output`, `hermes_agents`, `plugins`, `enabled_speech_output_ids`) are simply ignored. Stored chat conversations (`sessions.json`) and downloaded Piper voices/CLI under the app's `tts` data directory are no longer read; delete them manually to reclaim space. The feature can be revived later from branch `feat/chat-plugin` and issue #17.
 
 ## [0.4.2] — 2026-06-13
 
