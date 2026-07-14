@@ -6,6 +6,29 @@
     <description>Official update feed for Open Whisper.</description>
     <language>en</language>
     <item>
+      <title>Version 0.5.0</title>
+      <pubDate>Tue, 14 Jul 2026 20:02:21 +0000</pubDate>
+      <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+      <sparkle:version>0.5.0</sparkle:version>
+      <description>&lt;h3&gt;What's Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;docs(roadmap): phased implementation roadmap by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/19"&gt;https://github.com/mahype/TorroWhisper/pull/19&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;feat(macos): green "done" bubble + post-processing logging (#11, #12) by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/18"&gt;https://github.com/mahype/TorroWhisper/pull/18&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;feat(#14): zentrales LLM-Modell-Management — Provider-Schicht, Cloud, Registry, UI by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/22"&gt;https://github.com/mahype/TorroWhisper/pull/22&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;build(deps): Bump the rust-deps group across 1 directory with 5 updates by @dependabot[bot] in &lt;a href="https://github.com/mahype/TorroWhisper/pull/13"&gt;https://github.com/mahype/TorroWhisper/pull/13&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;feat(#16): Nachbearbeitungs-Pipeline — geordnete, konfigurierbare Stages by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/23"&gt;https://github.com/mahype/TorroWhisper/pull/23&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;refactor: rename to TorroWhisper + current chat-plugin state by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/36"&gt;https://github.com/mahype/TorroWhisper/pull/36&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;New Contributors&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;@mahype made their first contribution in &lt;a href="https://github.com/mahype/TorroWhisper/pull/19"&gt;https://github.com/mahype/TorroWhisper/pull/19&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;@dependabot[bot] made their first contribution in &lt;a href="https://github.com/mahype/TorroWhisper/pull/13"&gt;https://github.com/mahype/TorroWhisper/pull/13&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a href="https://github.com/mahype/TorroWhisper/compare/v0.4.2...v0.5.0"&gt;https://github.com/mahype/TorroWhisper/compare/v0.4.2...v0.5.0&lt;/a&gt;&lt;/p&gt;</description>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/mahype/TorroWhisper/releases/download/v0.5.0/TorroWhisper-0.5.0.dmg" sparkle:edSignature="BEnFS3zkvIpnbZEAWLT218OvjGjhNNq5rwk5h6IKzuTRJyUjQpnvr1JQHJx+vY7WIdFRDcIcJaaW225TWRPHCA==" length="26511447" type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 0.4.2</title>
       <pubDate>Sat, 13 Jun 2026 08:12:47 +0000</pubDate>
       <sparkle:shortVersionString>0.4.2</sparkle:shortVersionString>
