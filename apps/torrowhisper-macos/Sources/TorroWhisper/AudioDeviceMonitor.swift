@@ -16,8 +16,13 @@ final class AudioDeviceMonitor {
     func start() {
         guard !isRunning else { return }
 
-        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            DispatchQueue.main.async {
+        // @Sendable is load-bearing: CoreAudio invokes this block on the utility
+        // queue passed below. Without it the closure silently inherits start()'s
+        // MainActor isolation — the compiler accepts it, but any build with actor
+        // isolation checks enabled asserts that isolation on entry to the block,
+        // before the hop below can run, and SIGTRAPs on every device change.
+        let block: AudioObjectPropertyListenerBlock = { @Sendable [weak self] _, _ in
+            Task { @MainActor in
                 self?.onDevicesChanged?()
             }
         }
