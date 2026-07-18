@@ -1100,7 +1100,7 @@ fn build_input_stream(
     match config.sample_format() {
         SampleFormat::F32 => device
             .build_input_stream(
-                &stream_config,
+                stream_config,
                 move |data: &[f32], _| handle_input_data_f32(data, channels, &shared, &event_tx),
                 error_callback,
                 None,
@@ -1108,7 +1108,7 @@ fn build_input_stream(
             .map_err(|err| err.to_string()),
         SampleFormat::F64 => device
             .build_input_stream(
-                &stream_config,
+                stream_config,
                 move |data: &[f64], _| {
                     handle_input_data_iter(
                         data.iter().copied().map(|sample| sample as f32),
@@ -1123,7 +1123,7 @@ fn build_input_stream(
             .map_err(|err| err.to_string()),
         SampleFormat::I8 => device
             .build_input_stream(
-                &stream_config,
+                stream_config,
                 move |data: &[i8], _| {
                     handle_input_data_iter(
                         data.iter()
@@ -1140,7 +1140,7 @@ fn build_input_stream(
             .map_err(|err| err.to_string()),
         SampleFormat::I16 => device
             .build_input_stream(
-                &stream_config,
+                stream_config,
                 move |data: &[i16], _| {
                     handle_input_data_iter(
                         data.iter()
@@ -1157,7 +1157,7 @@ fn build_input_stream(
             .map_err(|err| err.to_string()),
         SampleFormat::I32 => device
             .build_input_stream(
-                &stream_config,
+                stream_config,
                 move |data: &[i32], _| {
                     handle_input_data_iter(
                         data.iter()
@@ -1174,7 +1174,7 @@ fn build_input_stream(
             .map_err(|err| err.to_string()),
         SampleFormat::U8 => device
             .build_input_stream(
-                &stream_config,
+                stream_config,
                 move |data: &[u8], _| {
                     handle_input_data_iter(
                         data.iter()
@@ -1191,7 +1191,7 @@ fn build_input_stream(
             .map_err(|err| err.to_string()),
         SampleFormat::U16 => device
             .build_input_stream(
-                &stream_config,
+                stream_config,
                 move |data: &[u16], _| {
                     handle_input_data_iter(
                         data.iter()
@@ -1208,7 +1208,7 @@ fn build_input_stream(
             .map_err(|err| err.to_string()),
         SampleFormat::U32 => device
             .build_input_stream(
-                &stream_config,
+                stream_config,
                 move |data: &[u32], _| {
                     handle_input_data_iter(
                         data.iter()
@@ -1890,7 +1890,7 @@ where
     let mut cursor = 0usize;
     device
         .build_output_stream(
-            config,
+            *config,
             move |data: &mut [T], _| write_cue_output_data(data, channels, &samples, &mut cursor),
             |_err| {},
             None,

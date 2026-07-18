@@ -10,7 +10,7 @@ crate-type = ["staticlib", "rlib"]
 [dependencies]
 arboard = "3.6.1"
 auto-launch = "0.6.0"
-cpal = "0.17.3"
+cpal = "0.18.1"
 directories = "6.0.0"
 enigo = { version = "0.6.1", features = ["wayland"] }
 global-hotkey = "0.8.0"
