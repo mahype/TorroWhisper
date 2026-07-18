@@ -29,8 +29,10 @@ mod remote_models;
 mod session_marker;
 #[allow(dead_code)]
 mod settings_store;
+mod streaming_transcription;
 #[allow(dead_code)]
 mod text_inserter;
+mod transcript_stabilizer;
 
 use std::{
     cell::RefCell,
@@ -50,6 +52,7 @@ use torrowhisper_core::{
     AppSettings, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto, HistoryEntry,
     LlmModelStatusDto, LlmPreset, LlmRegistryEntryDto, ModelPreset, ModelStatusDto,
     RecordingLevelsDto, RemoteModelBackend, RemoteModelDto, RuntimeStatusDto, StageTimingDto,
+    StreamingTranscriptDto,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -1106,6 +1109,14 @@ impl BridgeRuntime {
         }
     }
 
+    /// Live-transcript snapshot for the overlay's dedicated poll (#41).
+    /// Deliberately does NOT call `self.poll()` — this endpoint is hit several
+    /// times a second and must stay a cheap read; the 350 ms status poll pumps
+    /// the state machine.
+    fn streaming_transcript(&mut self) -> StreamingTranscriptDto {
+        self.dictation.streaming_transcript()
+    }
+
     fn runtime_status(&mut self) -> RuntimeStatusDto {
         self.poll();
 
@@ -1814,6 +1825,13 @@ pub extern "C" fn ow_get_runtime_status() -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_recording_levels() -> *mut c_char {
     response_ok(with_runtime_value(BridgeRuntime::recording_levels))
+}
+
+/// Live transcription while recording (#41): committed/pending text plus a
+/// monotonic revision. Polled by the overlay independently of the status poll.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_get_streaming_transcript() -> *mut c_char {
+    response_ok(with_runtime_value(BridgeRuntime::streaming_transcript))
 }
 
 /// Latency breakdown of the most recently completed dictation (#43). Returns a

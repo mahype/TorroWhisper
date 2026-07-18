@@ -189,10 +189,25 @@ struct SettingsView: View {
         }
 
         Section {
-            Toggle(isOn: model.binding(for: \.showRecordingIndicator)) {
-                Text("Show waveform window while recording", bundle: .module)
+            // The bubble itself can no longer be disabled — the display is an
+            // either/or choice between the two modes.
+            Picker(selection: model.binding(for: \.liveTranscriptionEnabled)) {
+                Text("Waveform — focus on speaking", bundle: .module).tag(false)
+                Text("Live text — read while dictating", bundle: .module).tag(true)
+            } label: {
+                Text("Recording display", bundle: .module)
             }
 
+            if model.settings.liveTranscriptionEnabled {
+                Text(
+                    "Displays the recognized text in the recording window while you speak. Only the final result is inserted.",
+                    bundle: .module
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            // Style and color only affect the waveform mode.
             Picker(selection: model.binding(for: \.waveformStyle)) {
                 ForEach(WaveformStyle.allCases) { style in
                     Text(style.label(locale: locale)).tag(style)
@@ -200,7 +215,7 @@ struct SettingsView: View {
             } label: {
                 Text("Style", bundle: .module)
             }
-            .disabled(!model.settings.showRecordingIndicator)
+            .disabled(model.settings.liveTranscriptionEnabled)
 
             Picker(selection: model.binding(for: \.waveformColor)) {
                 ForEach(WaveformColor.allCases) { color in
@@ -211,17 +226,15 @@ struct SettingsView: View {
             } label: {
                 Text("Color", bundle: .module)
             }
-            .disabled(!model.settings.showRecordingIndicator)
+            .disabled(model.settings.liveTranscriptionEnabled)
 
             Toggle(isOn: model.binding(for: \.largeRecordingIndicator)) {
                 Text("Large view (easier to read)", bundle: .module)
             }
-            .disabled(!model.settings.showRecordingIndicator)
 
             Toggle(isOn: model.binding(for: \.highContrastRecordingIndicator)) {
                 Text("High contrast", bundle: .module)
             }
-            .disabled(!model.settings.showRecordingIndicator)
         } header: {
             Text("Recording indicator", bundle: .module)
         }

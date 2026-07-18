@@ -194,6 +194,11 @@
 "Settings…" = "Settings…";
 "Setup" = "Setup";
 "Show waveform window while recording" = "Show waveform window while recording";
+"Recording display" = "Recording display";
+"Waveform — focus on speaking" = "Waveform — focus on speaking";
+"Live text — read while dictating" = "Live text — read while dictating";
+"Displays the recognized text in the recording window while you speak. Only the final result is inserted." = "Displays the recognized text in the recording window while you speak. Only the final result is inserted.";
+"Listening…" = "Listening…";
 "Silence stop" = "Silence stop";
 "Small" = "Small";
 "Small language model (Gemma 4 E2B). Fast and lean, runs on 8 GB of RAM." = "Small language model (Gemma 4 E2B). Fast and lean, runs on 8 GB of RAM.";

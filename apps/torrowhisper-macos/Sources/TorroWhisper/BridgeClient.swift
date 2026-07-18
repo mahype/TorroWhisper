@@ -131,6 +131,10 @@ final class BridgeClient {
         try decodeResponse(from: ow_get_recording_levels())
     }
 
+    func getStreamingTranscript() throws -> StreamingTranscriptDTO {
+        try decodeResponse(from: ow_get_streaming_transcript())
+    }
+
     /// Latency breakdown of the most recent dictation (#43).
     func getLastTiming() throws -> StageTimingDTO {
         try decodeResponse(from: ow_get_last_timing())

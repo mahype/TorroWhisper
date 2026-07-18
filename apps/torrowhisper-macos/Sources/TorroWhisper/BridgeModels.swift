@@ -921,6 +921,9 @@ struct AppSettings: Codable, Equatable {
     var waveformColor: WaveformColor
     var largeRecordingIndicator: Bool
     var highContrastRecordingIndicator: Bool
+    /// Live transcription in the recording bubble while speaking (#41). Only
+    /// the final pass is ever inserted. Mirrors Rust `live_transcription_enabled`.
+    var liveTranscriptionEnabled: Bool
     var saveAudioRecordings: Bool
     var saveTranscripts: Bool
     var saveDirectory: String
@@ -977,6 +980,7 @@ struct AppSettings: Codable, Equatable {
         waveformColor: .accent,
         largeRecordingIndicator: false,
         highContrastRecordingIndicator: false,
+        liveTranscriptionEnabled: true,
         saveAudioRecordings: false,
         saveTranscripts: false,
         saveDirectory: "",
@@ -1094,6 +1098,16 @@ struct RecordingLevelsDTO: Codable {
     var levels: [Float]
 
     static let empty = RecordingLevelsDTO(levels: [])
+}
+
+/// Live-transcript snapshot from `ow_get_streaming_transcript` (#41).
+/// `revision` is globally monotonic on the Rust side — consumers keep the
+/// highest value they have seen and ignore anything not strictly newer.
+struct StreamingTranscriptDTO: Codable, Equatable {
+    var revision: UInt64
+    var committed: String
+    var pending: String
+    var isFinal: Bool
 }
 
 struct RuntimeStatusDTO: Codable, Equatable {

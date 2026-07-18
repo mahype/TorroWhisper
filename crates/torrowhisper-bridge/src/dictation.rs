@@ -12,12 +12,19 @@ use std::{
 
 use crate::audio_export;
 use crate::model_manager::validated_model_path;
+use crate::streaming_transcription::{
+    self, SharedStreamingOutput, StreamingConfig, StreamingOutput, StreamingSession,
+};
 use cpal::{
     Device, FromSample, I24, Sample, SampleFormat, SizedSample, Stream, SupportedStreamConfig, U24,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
-use torrowhisper_core::{AppSettings, SYSTEM_DEFAULT_DEVICE_LABEL, TriggerMode};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+use torrowhisper_core::{
+    AppSettings, SYSTEM_DEFAULT_DEVICE_LABEL, StreamingTranscriptDto, TriggerMode,
+};
+use whisper_rs::{
+    FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState,
+};
 
 const CUE_NOTE_GAP_MS: u32 = 18;
 const CUE_VOLUME: f32 = 0.12;
@@ -96,6 +103,17 @@ pub struct DictationController {
     /// or a model switch is already warm.
     warmup_rx: Option<Receiver<WarmupResult>>,
     model_cache: Option<ModelCache>,
+    /// Live-transcription worker for the current recording (#41). `Some` only
+    /// while a recording with live preview runs; taken (and joined by the
+    /// final-pass thread) at stop, stop-flagged and detached on cancel/error.
+    streaming: Option<StreamingSession>,
+    /// The published live-transcript slot. Lives for the whole process so the
+    /// overlay keeps its text through the final pass, and so the revision
+    /// counter stays globally monotonic across sessions.
+    streaming_output: SharedStreamingOutput,
+    /// True between "recording with live preview stopped" and "final transcript
+    /// arrived" — tells `poll` to publish the final text as `is_final`.
+    streaming_finalize_pending: bool,
     dictation_blocked_at: Option<Instant>,
     active_input_device_name: String,
     last_mic_switch_message: String,
@@ -111,6 +129,9 @@ impl DictationController {
             pending_timing_seed: None,
             warmup_rx: None,
             model_cache: None,
+            streaming: None,
+            streaming_output: Arc::new(Mutex::new(StreamingOutput::new())),
+            streaming_finalize_pending: false,
             dictation_blocked_at: None,
             active_input_device_name: String::new(),
             last_mic_switch_message: String::new(),
@@ -202,6 +223,7 @@ impl DictationController {
             .and_then(|recording| recording.swap_device(&new_active).err());
 
         if let Some(err) = swap_error {
+            self.stop_streaming();
             self.recording.take();
             self.last_mic_switch_message =
                 format!("Mic switch failed: {err}. Recording stopped — please restart.");
@@ -303,6 +325,7 @@ impl DictationController {
         let (tx, rx) = mpsc::channel();
         let path_for_thread = model_path.clone();
         let label = settings.local_model.display_label().to_owned();
+        let settings_for_thread = settings.clone();
         thread::spawn(move || {
             let started = Instant::now();
             let path_string = path_for_thread.to_string_lossy().to_string();
@@ -316,7 +339,9 @@ impl DictationController {
                     "model warmup complete in {:.1}s ({label})",
                     started.elapsed().as_secs_f32()
                 );
-                (path_for_thread, Arc::new(context))
+                let context = Arc::new(context);
+                warm_inference_graph(&context, &settings_for_thread);
+                (path_for_thread, context)
             })
             .map_err(|err| {
                 log::warn!(target: "dictation", "model warmup failed ({label}): {err}");
@@ -328,7 +353,7 @@ impl DictationController {
     }
 
     /// Installs a completed warmup context into the cache. Called from `poll`.
-    fn drain_warmup(&mut self) {
+    fn drain_warmup(&mut self, settings: &AppSettings) {
         let Some(rx) = &self.warmup_rx else {
             return;
         };
@@ -344,12 +369,74 @@ impl DictationController {
                 if !already_current {
                     self.model_cache = Some(ModelCache { path, context });
                 }
+                // Late spawn (#41): a dictation begun while the model was still
+                // warming skipped its live preview; start it now that the
+                // context is here.
+                if self.recording.is_some()
+                    && self.streaming.is_none()
+                    && live_transcription_active(settings)
+                    && let Ok(model_path) = validated_model_path(settings)
+                {
+                    self.start_streaming_session(settings, &model_path);
+                }
             }
             Ok(Err(_)) | Err(TryRecvError::Disconnected) => {
                 self.warmup_rx = None;
             }
             Err(TryRecvError::Empty) => {}
         }
+    }
+
+    /// Starts the live-transcription worker for the running recording (#41).
+    /// Sessions only start on a warm model cache — loading models is the job
+    /// of the background warmup and the final pass. A cold first take simply
+    /// skips the preview (`drain_warmup` late-spawns it once the context
+    /// arrives).
+    fn start_streaming_session(&mut self, settings: &AppSettings, model_path: &PathBuf) {
+        if self.streaming.is_some() {
+            return;
+        }
+        let Some(buffer) = self
+            .recording
+            .as_ref()
+            .map(|recording| recording.shared.clone())
+        else {
+            return;
+        };
+        let Some(context) = self
+            .model_cache
+            .as_ref()
+            .filter(|cache| cache.path == *model_path)
+            .map(|cache| cache.context.clone())
+        else {
+            log::info!(
+                target: "dictation",
+                "live transcription skipped: model not warmed up yet"
+            );
+            return;
+        };
+
+        self.streaming = Some(streaming_transcription::spawn(StreamingConfig {
+            buffer,
+            output: self.streaming_output.clone(),
+            context,
+            settings: settings.clone(),
+            language: normalized_language(&settings.transcription_language),
+        }));
+    }
+
+    /// Stops and detaches the live-preview worker. For paths where no final
+    /// pass follows (cancel, stream errors) — the worker exits within one
+    /// tick / one aborted inference on its own.
+    fn stop_streaming(&mut self) {
+        if let Some(session) = self.streaming.take() {
+            session.request_stop();
+        }
+    }
+
+    /// Snapshot of the live transcript for the polling FFI endpoint.
+    pub fn streaming_transcript(&self) -> StreamingTranscriptDto {
+        streaming_transcription::snapshot_dto(&self.streaming_output)
     }
 
     pub fn handle_hotkey(
@@ -406,16 +493,25 @@ impl DictationController {
 
         // Same validation as ensure_whisper_context, so a recording never
         // starts when the later transcription would fail to find the model.
-        if let Err(err) = validated_model_path(settings) {
-            self.mark_blocked_now();
-            return Err(format!("Recording blocked: {err}"));
-        }
+        let model_path = match validated_model_path(settings) {
+            Ok(path) => path,
+            Err(err) => {
+                self.mark_blocked_now();
+                return Err(format!("Recording blocked: {err}"));
+            }
+        };
 
         let resolved_name = resolve_input_device_name(settings, &self.available_input_devices);
         let (recording, used_name) = ActiveRecording::start(settings, &resolved_name)?;
         self.recording = Some(recording);
         self.active_input_device_name = used_name.clone();
         self.clear_blocked();
+        // Every session starts with a cleared live-transcript slot, whether or
+        // not a worker spawns — the overlay must never show a previous take.
+        streaming_transcription::reset_output(&self.streaming_output);
+        if live_transcription_active(settings) {
+            self.start_streaming_session(settings, &model_path);
+        }
         play_recording_cue(RecordingCue::Start);
         log::info!(
             target: "dictation",
@@ -440,6 +536,15 @@ impl DictationController {
         reason: &str,
         cue: RecordingCue,
     ) -> Result<Vec<DictationOutcome>, String> {
+        // Flag the live-preview worker first: its abort callback ends any
+        // in-flight streaming pass while we do the post-stop bookkeeping, and
+        // the final-pass thread joins it below before its own inference.
+        let streaming = self.streaming.take();
+        if let Some(session) = &streaming {
+            session.request_stop();
+        }
+        self.streaming_finalize_pending = false;
+
         let Some(recording) = self.recording.take() else {
             return Ok(Vec::new());
         };
@@ -489,7 +594,14 @@ impl DictationController {
             settings.local_model.display_label()
         );
 
+        self.streaming_finalize_pending = streaming.is_some();
         thread::spawn(move || {
+            // Hard no-overlap guarantee: wait for the streaming worker to
+            // finish (its current pass aborts via the stop flag, so this is
+            // quick) before the final inference starts.
+            if let Some(session) = streaming {
+                session.join();
+            }
             let started = Instant::now();
             let result =
                 transcribe_with_whisper(context, &app_settings, audio, language.as_deref());
@@ -528,6 +640,7 @@ impl DictationController {
     }
 
     pub fn cancel_recording(&mut self) -> bool {
+        self.stop_streaming();
         if self.recording.take().is_some() {
             play_recording_cue(RecordingCue::Cancel);
             true
@@ -543,7 +656,7 @@ impl DictationController {
     pub fn poll(&mut self, settings: &mut AppSettings) -> Vec<DictationOutcome> {
         let mut outcomes = Vec::new();
 
-        self.drain_warmup();
+        self.drain_warmup(settings);
 
         let pending_recording_event = self
             .recording
@@ -567,6 +680,7 @@ impl DictationController {
                         outcomes.push(DictationOutcome::Status(event.message));
                     }
                     None => {
+                        self.stop_streaming();
                         self.recording.take();
                         outcomes.push(DictationOutcome::Error(err));
                     }
@@ -579,6 +693,15 @@ impl DictationController {
             match rx.try_recv() {
                 Ok(Ok(output)) => {
                     self.transcription_rx = None;
+                    if std::mem::take(&mut self.streaming_finalize_pending) {
+                        // The overlay shows the raw Whisper text as final;
+                        // insertion still uses the post-processed pipeline
+                        // output via the outcomes below.
+                        streaming_transcription::publish_final(
+                            &self.streaming_output,
+                            &output.text,
+                        );
+                    }
                     let timing = self.pending_timing_seed.take().map(|seed| DictationTiming {
                         stop_instant: seed.stop_instant,
                         audio_secs: seed.audio_secs,
@@ -598,6 +721,9 @@ impl DictationController {
                 Ok(Err(err)) => {
                     self.transcription_rx = None;
                     self.pending_timing_seed = None;
+                    if std::mem::take(&mut self.streaming_finalize_pending) {
+                        streaming_transcription::mark_final_unchanged(&self.streaming_output);
+                    }
                     outcomes.push(DictationOutcome::Error(err));
                 }
                 Err(TryRecvError::Disconnected) => {
@@ -606,6 +732,9 @@ impl DictationController {
                     // details in the log.
                     self.transcription_rx = None;
                     self.pending_timing_seed = None;
+                    if std::mem::take(&mut self.streaming_finalize_pending) {
+                        streaming_transcription::mark_final_unchanged(&self.streaming_output);
+                    }
                     outcomes.push(DictationOutcome::Error(
                         "Transcription worker stopped unexpectedly.".to_owned(),
                     ));
@@ -782,14 +911,17 @@ pub struct MicSwitchEvent {
     pub message: String,
 }
 
-enum RecordingEvent {
+pub(crate) enum RecordingEvent {
     SilenceDetected,
     StreamError(String),
 }
 
 const LEVEL_HISTORY_CAPACITY: usize = 120;
+/// Upper bound for the tracked noise floor — also its start value, so the
+/// floor only ever falls toward the microphone's real silence level.
+const NOISE_FLOOR_CEILING: f32 = 0.02;
 
-struct RecordingBuffer {
+pub(crate) struct RecordingBuffer {
     samples: Vec<f32>,
     sample_rate: u32,
     vad_enabled: bool,
@@ -798,11 +930,29 @@ struct RecordingBuffer {
     silence_run_samples: usize,
     voice_detected: bool,
     silence_notification_sent: bool,
+    /// Total samples whose chunk counted as speech for the live preview — a
+    /// cheap "how much actual speech was heard" counter. Gates the first
+    /// streaming pass (#41) so silence-only takes never run inference.
+    voiced_samples: usize,
+    /// Sample index just past the most recent speech chunk. The streaming
+    /// worker truncates its snapshots here (+ a little padding) so Whisper
+    /// never decodes into trailing silence — that is where it hallucinates
+    /// filler ("Vielen Dank", repeated words) which must never commit.
+    last_voiced_end: usize,
+    /// Fast-fall / slow-rise tracker of the quietest recent chunk RMS. Lets
+    /// the streaming gate adapt to the microphone's actual noise floor
+    /// instead of relying on the absolute VAD threshold alone.
+    noise_floor: f32,
     level_history: VecDeque<f32>,
 }
 
 impl RecordingBuffer {
-    fn new(sample_rate: u32, vad_enabled: bool, vad_threshold: f32, vad_silence_ms: u32) -> Self {
+    pub(crate) fn new(
+        sample_rate: u32,
+        vad_enabled: bool,
+        vad_threshold: f32,
+        vad_silence_ms: u32,
+    ) -> Self {
         let silence_limit_samples =
             ((sample_rate as u64 * vad_silence_ms as u64) / 1000).max(1) as usize;
 
@@ -815,11 +965,14 @@ impl RecordingBuffer {
             silence_run_samples: 0,
             voice_detected: false,
             silence_notification_sent: false,
+            voiced_samples: 0,
+            last_voiced_end: 0,
+            noise_floor: NOISE_FLOOR_CEILING,
             level_history: VecDeque::with_capacity(LEVEL_HISTORY_CAPACITY),
         }
     }
 
-    fn push_chunk(&mut self, chunk: &[f32], event_tx: &Sender<RecordingEvent>) {
+    pub(crate) fn push_chunk(&mut self, chunk: &[f32], event_tx: &Sender<RecordingEvent>) {
         if chunk.is_empty() {
             return;
         }
@@ -831,6 +984,17 @@ impl RecordingBuffer {
             self.level_history.pop_front();
         }
         self.level_history.push_back(rms);
+
+        // Track the quietest recent level: drop instantly, recover slowly.
+        self.noise_floor = if rms < self.noise_floor {
+            rms
+        } else {
+            (self.noise_floor * 1.02).min(NOISE_FLOOR_CEILING)
+        };
+        if self.is_voiced_for_streaming(rms) {
+            self.voiced_samples += chunk.len();
+            self.last_voiced_end = self.samples.len();
+        }
 
         if rms >= self.vad_threshold {
             self.voice_detected = true;
@@ -852,6 +1016,46 @@ impl RecordingBuffer {
 
     fn levels_snapshot(&self) -> Vec<f32> {
         self.level_history.iter().copied().collect()
+    }
+
+    /// Speech test for the live-preview gate (#41). The auto-stop VAD
+    /// threshold alone proved far too strict on low-gain microphones — quiet
+    /// but perfectly transcribable speech hovered below it and the preview
+    /// stayed on "Listening…" for a minute. A chunk counts as speech when it
+    /// crosses a fraction of the VAD threshold OR clearly rises above the
+    /// recording's own noise floor, whichever is more permissive. The
+    /// auto-stop VAD keeps using the strict threshold unchanged.
+    ///
+    /// Calibration: 5× the floor with a 0.0035 minimum — 3×/0.002 proved too
+    /// permissive in the field (ordinary room ambience counted as speech and
+    /// the worker ran inference on silence).
+    fn is_voiced_for_streaming(&self, rms: f32) -> bool {
+        const MIN_VOICED_RMS: f32 = 0.0035;
+        let above_absolute = rms >= self.vad_threshold * 0.35;
+        let above_floor = rms >= (self.noise_floor * 5.0).max(MIN_VOICED_RMS);
+        above_absolute || above_floor
+    }
+
+    pub(crate) fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    pub(crate) fn voiced_samples(&self) -> usize {
+        self.voiced_samples
+    }
+
+    pub(crate) fn last_voiced_end(&self) -> usize {
+        self.last_voiced_end
+    }
+
+    /// Appends `samples[from..]` to `into` — the streaming worker's
+    /// incremental snapshot, so the callback-shared lock is only held for the
+    /// new tail. A `from` beyond the current length is a no-op (after
+    /// `finish()` the samples are taken and the buffer is empty).
+    pub(crate) fn copy_new_samples(&self, from: usize, into: &mut Vec<f32>) {
+        if let Some(new_samples) = self.samples.get(from..) {
+            into.extend_from_slice(new_samples);
+        }
     }
 
     fn finish(&mut self, duration: Duration) -> RecordedAudio {
@@ -1117,6 +1321,38 @@ pub(crate) fn run_whisper_inference(
         .map_err(|err| format!("Whisper state could not be created: {err}"))?;
     let state_secs = state_started.elapsed().as_secs_f32();
 
+    let params = base_full_params(settings, language, n_threads);
+
+    // Serialize all Whisper inference process-wide. Today the paths (a live
+    // dictation, a benchmark run) never overlap by design, but nothing enforced
+    // it. A single coordinated worker keeps GPU/CPU pressure predictable and
+    // makes the pipeline safe for a future streaming mode where a final pass
+    // could otherwise race an in-flight chunk (#43, streaming prep). The lock
+    // is held only around inference, not model loading or resampling.
+    let inference_started = Instant::now();
+    let _inference_guard = whisper_inference_lock();
+    state
+        .full(params, samples)
+        .map_err(|err| format!("Whisper transcription failed: {err}"))?;
+    drop(_inference_guard);
+    let inference_secs = inference_started.elapsed().as_secs_f32();
+
+    let transcript = collect_transcript(&state);
+
+    Ok(WhisperInference {
+        text: transcript,
+        state_secs,
+        inference_secs,
+    })
+}
+
+/// Decoding parameters shared by the final dictation pass, the benchmark and
+/// the streaming preview (#41), so their behavior can never drift apart.
+pub(crate) fn base_full_params<'lang>(
+    settings: &AppSettings,
+    language: Option<&'lang str>,
+    n_threads: i32,
+) -> FullParams<'lang, 'static> {
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 0 });
     params.set_n_threads(n_threads);
     params.set_translate(false);
@@ -1134,33 +1370,17 @@ pub(crate) fn run_whisper_inference(
     // avoids spurious leading blanks.
     params.set_suppress_nst(true);
     params.set_suppress_blank(true);
+    params
+}
 
-    // Serialize all Whisper inference process-wide. Today the paths (a live
-    // dictation, a benchmark run) never overlap by design, but nothing enforced
-    // it. A single coordinated worker keeps GPU/CPU pressure predictable and
-    // makes the pipeline safe for a future streaming mode where a final pass
-    // could otherwise race an in-flight chunk (#43, streaming prep). The lock
-    // is held only around inference, not model loading or resampling.
-    let inference_started = Instant::now();
-    let _inference_guard = whisper_inference_lock();
+/// Joins the decoded segments of a finished pass into one transcript string.
+pub(crate) fn collect_transcript(state: &WhisperState) -> String {
     state
-        .full(params, samples)
-        .map_err(|err| format!("Whisper transcription failed: {err}"))?;
-    drop(_inference_guard);
-    let inference_secs = inference_started.elapsed().as_secs_f32();
-
-    let transcript = state
         .as_iter()
         .map(|segment| segment.to_string().trim().to_owned())
         .filter(|segment| !segment.is_empty())
         .collect::<Vec<_>>()
-        .join(" ");
-
-    Ok(WhisperInference {
-        text: transcript,
-        state_secs,
-        inference_secs,
-    })
+        .join(" ")
 }
 
 pub(crate) fn resample_to_16khz(samples: &[f32], sample_rate: u32) -> Vec<f32> {
@@ -1237,10 +1457,25 @@ fn thread_count() -> i32 {
 /// Process-wide lock ensuring only one Whisper inference runs at a time
 /// (#43, streaming prep). Returns the guard; poisoning is recovered from since
 /// the lock protects no data, only serializes access.
-fn whisper_inference_lock() -> std::sync::MutexGuard<'static, ()> {
-    static LOCK: Mutex<()> = Mutex::new(());
-    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+pub(crate) fn whisper_inference_lock() -> std::sync::MutexGuard<'static, ()> {
+    WHISPER_INFERENCE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
+
+/// Non-blocking variant for the streaming worker: a preview pass must never
+/// queue behind a long-running final pass (e.g. of a just-cancelled previous
+/// dictation) — it would publish a stale snapshot much later. Skipping keeps
+/// the worker ticking with fresh audio instead (#41).
+pub(crate) fn try_whisper_inference_lock() -> Option<std::sync::MutexGuard<'static, ()>> {
+    match WHISPER_INFERENCE_LOCK.try_lock() {
+        Ok(guard) => Some(guard),
+        Err(std::sync::TryLockError::Poisoned(poisoned)) => Some(poisoned.into_inner()),
+        Err(std::sync::TryLockError::WouldBlock) => None,
+    }
+}
+
+static WHISPER_INFERENCE_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn resolve_thread_count(configured: u32) -> i32 {
     if configured == 0 {
@@ -1249,6 +1484,45 @@ pub(crate) fn resolve_thread_count(configured: u32) -> i32 {
             .unwrap_or(4)
     } else {
         configured.clamp(1, 16) as i32
+    }
+}
+
+/// The recording bubble is always shown; the live preview runs whenever the
+/// user picked the live-text display mode (`show_recording_indicator` is a
+/// legacy field — the bubble can no longer be disabled).
+fn live_transcription_active(settings: &AppSettings) -> bool {
+    settings.live_transcription_enabled
+}
+
+/// Runs one short silent inference right after a model is (pre)loaded. ggml's
+/// Metal backend compiles its pipeline cache lazily on the first inference of
+/// the process — a multi-second, one-time cliff on large models that would
+/// otherwise hit the first live-preview pass or the first final pass (#41).
+/// Best-effort: failures only cost the warm start, never a dictation.
+fn warm_inference_graph(context: &WhisperContext, settings: &AppSettings) {
+    let started = Instant::now();
+    let mut state = match context.create_state() {
+        Ok(state) => state,
+        Err(err) => {
+            log::debug!(target: "dictation", "graph warmup skipped: {err}");
+            return;
+        }
+    };
+    let language = normalized_language(&settings.transcription_language);
+    let params = base_full_params(
+        settings,
+        language.as_deref(),
+        resolve_thread_count(settings.whisper_thread_count),
+    );
+    let silence = vec![0.0_f32; 16_000];
+    let _inference_guard = whisper_inference_lock();
+    match state.full(params, &silence) {
+        Ok(()) => log::info!(
+            target: "dictation",
+            "inference graph warmed in {:.1}s",
+            started.elapsed().as_secs_f32()
+        ),
+        Err(err) => log::debug!(target: "dictation", "graph warmup inference failed: {err}"),
     }
 }
 
@@ -1596,6 +1870,61 @@ mod tests {
     fn auto_language_maps_to_none() {
         assert_eq!(normalized_language("auto"), None);
         assert_eq!(normalized_language("de"), Some("de".to_owned()));
+    }
+
+    #[test]
+    fn push_chunk_counts_only_voiced_samples() {
+        let (event_tx, _event_rx) = mpsc::channel();
+        let mut buffer = RecordingBuffer::new(16_000, false, 0.014, 900);
+
+        let loud = vec![0.2_f32; 800];
+        let quiet = vec![0.001_f32; 800];
+        buffer.push_chunk(&loud, &event_tx);
+        buffer.push_chunk(&quiet, &event_tx);
+        buffer.push_chunk(&loud, &event_tx);
+
+        // Only the two loud chunks count as voiced; the buffer holds all three.
+        assert_eq!(buffer.voiced_samples(), 1_600);
+        assert_eq!(buffer.samples.len(), 2_400);
+    }
+
+    #[test]
+    fn quiet_speech_below_vad_threshold_still_counts_as_voiced() {
+        let (event_tx, _event_rx) = mpsc::channel();
+        // Default VAD threshold 0.014 — the auto-stop keeps using it, but the
+        // streaming gate must accept quiet-but-clear speech on low-gain mics.
+        let mut buffer = RecordingBuffer::new(16_000, false, 0.014, 900);
+
+        let silence = vec![0.0005_f32; 800];
+        let quiet_speech = vec![0.006_f32; 800];
+        buffer.push_chunk(&silence, &event_tx);
+        buffer.push_chunk(&quiet_speech, &event_tx);
+        buffer.push_chunk(&silence, &event_tx);
+        buffer.push_chunk(&quiet_speech, &event_tx);
+
+        assert_eq!(buffer.voiced_samples(), 1_600);
+        // The strict VAD latch must NOT have fired for any of these chunks.
+        assert!(!buffer.voice_detected);
+    }
+
+    #[test]
+    fn copy_new_samples_appends_only_the_tail() {
+        let (event_tx, _event_rx) = mpsc::channel();
+        let mut buffer = RecordingBuffer::new(16_000, false, 0.014, 900);
+        buffer.push_chunk(&[0.1, 0.2, 0.3], &event_tx);
+
+        let mut local = Vec::new();
+        buffer.copy_new_samples(0, &mut local);
+        assert_eq!(local, vec![0.1, 0.2, 0.3]);
+
+        buffer.push_chunk(&[0.4, 0.5], &event_tx);
+        buffer.copy_new_samples(local.len(), &mut local);
+        assert_eq!(local, vec![0.1, 0.2, 0.3, 0.4, 0.5]);
+
+        // Beyond-length reads (buffer emptied by finish()) are a no-op.
+        buffer.finish(Duration::from_secs(1));
+        buffer.copy_new_samples(local.len(), &mut local);
+        assert_eq!(local.len(), 5);
     }
 
     #[test]

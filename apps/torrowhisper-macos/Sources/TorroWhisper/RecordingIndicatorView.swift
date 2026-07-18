@@ -59,6 +59,72 @@ final class RecordingLevelFeed: ObservableObject {
     }
 }
 
+/// Polls the live transcript (#41) on its own cadence, decoupled from the
+/// 0.35 s status poll (which must stay change-detected and idle-cheap) and
+/// from the 30 Hz waveform feed. Publishes only when the Rust-side revision
+/// advances, so SwiftUI re-renders track actual new text (~1.3×/s), not
+/// poll ticks.
+@MainActor
+final class StreamingTranscriptFeed: ObservableObject {
+    static let pollingInterval: TimeInterval = 0.2
+
+    struct Snapshot: Equatable {
+        var revision: UInt64 = 0
+        var committed: String = ""
+        var pending: String = ""
+        var isFinal: Bool = false
+
+        var isEmpty: Bool { committed.isEmpty && pending.isEmpty }
+    }
+
+    @Published private(set) var snapshot = Snapshot()
+
+    private let bridge = BridgeClient()
+    private var timer: Timer?
+
+    /// Idempotent — runs on every state-change pass while the bubble shows an
+    /// active phase. Unlike `RecordingLevelFeed.start()` it must not restart
+    /// the timer or touch the snapshot: blanking visible text mid-recording
+    /// would be a visible glitch (bars just refill on the next 33 ms tick,
+    /// text would not).
+    func start() {
+        guard timer == nil else { return }
+        let newTimer = Timer(timeInterval: Self.pollingInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.tick()
+            }
+        }
+        RunLoop.main.add(newTimer, forMode: .common)
+        timer = newTimer
+    }
+
+    /// Stops polling but keeps the snapshot, so the done/error phases retain
+    /// the last text.
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    /// Session boundary: stop polling and clear the text.
+    func reset() {
+        stop()
+        snapshot = Snapshot()
+    }
+
+    private func tick() {
+        guard let dto = try? bridge.getStreamingTranscript() else { return }
+        // Revision guard: ignore stale or out-of-order reads. The Rust side
+        // never resets the counter, so this also holds across sessions.
+        guard dto.revision > snapshot.revision else { return }
+        snapshot = Snapshot(
+            revision: dto.revision,
+            committed: dto.committed,
+            pending: dto.pending,
+            isFinal: dto.isFinal
+        )
+    }
+}
+
 struct RecordingIndicatorView: View {
     let phase: IndicatorPhase
     var style: WaveformStyle = .centeredBars
@@ -82,13 +148,30 @@ struct RecordingIndicatorView: View {
     /// Higher-contrast styling: bolder text, stronger text/background colors and
     /// a heavier border. Independent of `isLarge`.
     var highContrast: Bool = false
+    /// Live transcription (#41): the dark box hosts a slim waveform strip plus
+    /// the committed/pending transcript instead of the full-height waveform.
+    /// When false the bubble renders exactly the pre-#41 layout.
+    var showsLiveTranscript: Bool = false
     @ObservedObject var feed: RecordingLevelFeed
+    @ObservedObject var transcriptFeed: StreamingTranscriptFeed
     @Environment(\.locale) private var locale
 
     /// Base bubble size at 1x. The window is sized to `baseSize * scale`.
     static let baseSize = CGSize(width: 260, height: 98)
+    /// Wider, taller bubble hosting the live transcript (#41) — sized for
+    /// comfortable reading (~5 lines at 13 pt).
+    static let liveBaseSize = CGSize(width: 420, height: 180)
     /// Scale factor applied when the large (low-vision) view is enabled.
     static let largeScale: CGFloat = 1.7
+
+    /// Single source of truth for the bubble/panel size. AppDelegate derives
+    /// the window frame only from this — never from content or phase — so the
+    /// panel size changes exclusively when the user flips a setting.
+    static func windowSize(isLarge: Bool, live: Bool) -> CGSize {
+        let base = live ? liveBaseSize : baseSize
+        let scale = isLarge ? largeScale : 1.0
+        return CGSize(width: base.width * scale, height: base.height * scale)
+    }
 
     private var scale: CGFloat { isLarge ? Self.largeScale : 1.0 }
     private var leadingControlSize: CGFloat { 24 * scale }
@@ -115,9 +198,10 @@ struct RecordingIndicatorView: View {
     }
 
     var body: some View {
-        content
+        let size = Self.windowSize(isLarge: isLarge, live: showsLiveTranscript)
+        return content
             .padding(10 * scale)
-            .frame(width: Self.baseSize.width * scale, height: Self.baseSize.height * scale)
+            .frame(width: size.width, height: size.height)
             .background(
                 highContrast ? AnyShapeStyle(.ultraThickMaterial) : AnyShapeStyle(.regularMaterial),
                 in: RoundedRectangle(cornerRadius: 14 * scale, style: .continuous)
@@ -140,17 +224,126 @@ struct RecordingIndicatorView: View {
             // (flat while not recording) and the status line stays put — only the
             // leading dot color and the title/hint text swap out.
             VStack(spacing: 8 * scale) {
-                waveform
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(
-                        Color.black.opacity(highContrast ? 1.0 : 0.85),
-                        in: RoundedRectangle(cornerRadius: 8 * scale, style: .continuous)
-                    )
+                if showsLiveTranscript {
+                    liveTranscriptBox
+                } else {
+                    waveform
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(
+                            Color.black.opacity(highContrast ? 1.0 : 0.85),
+                            in: RoundedRectangle(cornerRadius: 8 * scale, style: .continuous)
+                        )
+                }
                 infoRow
             }
         case let .modelNotReady(label, progress, isDownloading):
             modelNotReadyRow(label: label, progress: progress, isDownloading: isDownloading)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    // MARK: Live transcript (#41)
+
+    /// Live layout: the dark box is a pure reading surface — no waveform (the
+    /// user chose text over waves; the pulsing red dot in the status row is
+    /// the "recording" signal). Hidden from accessibility: the floating panel
+    /// is outside the a11y tree anyway, and a text region changing every
+    /// ~750 ms must never become a VoiceOver live region — the phase
+    /// announcements in AppDelegate stay the only spoken output.
+    private var liveTranscriptBox: some View {
+        transcriptWindow
+            .padding(.horizontal, 10 * scale)
+            .padding(.vertical, 8 * scale)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(
+                Color.black.opacity(highContrast ? 1.0 : 0.85),
+                in: RoundedRectangle(cornerRadius: 8 * scale, style: .continuous)
+            )
+            .accessibilityHidden(true)
+    }
+
+    /// Bottom-anchored clipped window: the transcript takes its full ideal
+    /// height and overflows the flexible frame upward, so the newest words
+    /// are always visible — no scroll state, no per-update animation (which
+    /// also satisfies Reduce Motion). The top fade signals "continues above".
+    private var transcriptWindow: some View {
+        transcriptContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .clipped()
+            .mask(topFadeMask)
+    }
+
+    @ViewBuilder
+    private var transcriptContent: some View {
+        let snapshot = transcriptFeed.snapshot
+        if snapshot.isEmpty {
+            Text("Listening…", bundle: .module)
+                .font(scaledFont(13).italic())
+                .foregroundStyle(Color.white.opacity(0.35))
+                // Keep the placeholder's layout identity stable; it simply
+                // fades out in the post-stop phases when no text ever arrived.
+                .opacity(phase == .recording && !isCancelling ? 1 : 0)
+        } else {
+            transcriptText(snapshot)
+                .font(.system(size: 13 * scale, weight: highContrast ? .medium : .regular))
+                .lineSpacing(2.5 * scale)
+                // Load-bearing: report the full ideal height so the text
+                // overflows the bottom-aligned window at the TOP. Without
+                // this, Text truncates at the end and the window would show
+                // the oldest words instead of the newest.
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// One flowing paragraph: committed bright, pending dimmed. A pending →
+    /// committed promotion only changes the color attribute, never glyph
+    /// positions — the shared prefix cannot flicker.
+    private func transcriptText(_ snapshot: StreamingTranscriptFeed.Snapshot) -> Text {
+        let committed = displayCommitted(snapshot.committed)
+        let needsJoin = !committed.isEmpty
+            && !snapshot.pending.isEmpty
+            && !(committed.last?.isWhitespace ?? false)
+        let committedColor = Color.white.opacity(highContrast ? 1.0 : 0.92)
+        let pendingColor = Color.white.opacity(highContrast ? 0.7 : 0.5)
+        return Text(committed + (needsJoin ? " " : ""))
+            .foregroundStyle(committedColor)
+            + Text(snapshot.pending)
+            .foregroundStyle(pendingColor)
+    }
+
+    /// Caps the rendered text at a tail well beyond what three lines can show
+    /// (~165 visible chars), so layout cost stays O(1) however long the
+    /// dictation gets. Walks at most `maxChars` from the end (never the whole
+    /// string) and snaps to a word boundary so the faded top line never
+    /// starts mid-word.
+    private func displayCommitted(_ committed: String) -> String {
+        let maxChars = 600
+        guard
+            let cut = committed.index(
+                committed.endIndex, offsetBy: -maxChars, limitedBy: committed.startIndex
+            ),
+            cut > committed.startIndex
+        else {
+            return committed
+        }
+        var tail = committed[cut...]
+        if let firstSpace = tail.firstIndex(where: { $0.isWhitespace }) {
+            tail = tail[tail.index(after: firstSpace)...]
+        }
+        return String(tail)
+    }
+
+    /// Clear→opaque vertical gradient over the window's top edge, so the
+    /// clipped line above reads as intentional continuation instead of a cut.
+    private var topFadeMask: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                gradient: Gradient(colors: [.clear, .black]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 12 * scale)
+            Rectangle().fill(Color.black)
         }
     }
 

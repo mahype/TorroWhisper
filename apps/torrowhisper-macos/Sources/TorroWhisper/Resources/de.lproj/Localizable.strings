@@ -199,6 +199,11 @@
 "Settings…" = "Einstellungen…";
 "Setup" = "Einrichtung";
 "Show waveform window while recording" = "Wellenform-Fenster während Aufnahme anzeigen";
+"Recording display" = "Aufnahme-Anzeige";
+"Waveform — focus on speaking" = "Wellenform — Konzentration aufs Sprechen";
+"Live text — read while dictating" = "Live-Text — beim Diktieren mitlesen";
+"Displays the recognized text in the recording window while you speak. Only the final result is inserted." = "Zeigt den erkannten Text bereits während des Sprechens im Aufnahmefenster an. Eingefügt wird nur das endgültige Ergebnis.";
+"Listening…" = "Höre zu …";
 "Silence stop" = "Silence-Stopp";
 "Small" = "Klein";
 "Small language model (Gemma 4 E2B). Fast and lean, runs on 8 GB of RAM." = "Kleines Sprachmodell (Gemma 4 E2B). Schnell und sparsam, läuft auch auf 8 GB RAM.";

@@ -29,6 +29,7 @@ char *ow_stop_dictation(void);
 char *ow_cancel_dictation(void);
 char *ow_get_runtime_status(void);
 char *ow_get_recording_levels(void);
+char *ow_get_streaming_transcript(void);
 char *ow_get_last_timing(void);
 char *ow_run_whisper_benchmark(const char *request_json);
 char *ow_validate_hotkey(const char *request_json);

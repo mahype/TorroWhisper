@@ -873,6 +873,10 @@ pub struct AppSettings {
     /// Higher-contrast recording bubble (stronger background, bolder text,
     /// more saturated waveform/dot colors). Independent of the large toggle.
     pub high_contrast_recording_indicator: bool,
+    /// Live transcription while recording (#41): a streaming worker keeps
+    /// transcribing the growing take and the bubble shows committed/pending
+    /// text as the user speaks. Only the final pass is ever inserted.
+    pub live_transcription_enabled: bool,
     /// Save each (non-cancelled) dictation's audio as an MP3 into `save_directory`.
     pub save_audio_recordings: bool,
     /// Save each (non-cancelled) dictation's transcript as a .txt into `save_directory`.
@@ -1190,6 +1194,7 @@ impl Default for AppSettings {
             waveform_color: WaveformColor::default(),
             large_recording_indicator: false,
             high_contrast_recording_indicator: false,
+            live_transcription_enabled: true,
             save_audio_recordings: false,
             save_transcripts: false,
             save_directory: String::new(),
@@ -1331,6 +1336,20 @@ pub struct RecordingLevelsDto {
     pub levels: Vec<f32>,
 }
 
+/// Snapshot of the live transcription while a recording is running (#41).
+/// `committed` never shrinks within a session; `pending` is the still-unstable
+/// tail and is rendered dimmed. `revision` is globally monotonic (never reset
+/// across sessions) so consumers can simply ignore anything not newer than the
+/// last revision they saw. `is_final` marks the result of the full post-stop
+/// Whisper pass — the text that (after post-processing) actually gets inserted.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StreamingTranscriptDto {
+    pub revision: u64,
+    pub committed: String,
+    pub pending: String,
+    pub is_final: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RuntimeStatusDto {
     pub is_recording: bool,
@@ -1460,6 +1479,36 @@ mod tests {
         assert!(!settings.vad_enabled);
         assert!(!settings.post_processing_enabled);
         assert_eq!(settings.active_mode_name(), "Cleanup");
+    }
+
+    #[test]
+    fn live_transcription_defaults_on_and_survives_legacy_settings() {
+        assert!(AppSettings::default().live_transcription_enabled);
+
+        // Settings files written before #41 lack the field; the container-level
+        // #[serde(default)] must fill it from Default (= enabled).
+        let legacy: AppSettings = serde_json::from_str("{}").expect("legacy settings parse");
+        assert!(legacy.live_transcription_enabled);
+    }
+
+    #[test]
+    fn streaming_transcript_dto_uses_snake_case_wire_names() {
+        let dto = StreamingTranscriptDto {
+            revision: 7,
+            committed: "hello world".to_owned(),
+            pending: "this is".to_owned(),
+            is_final: false,
+        };
+
+        let json = serde_json::to_string(&dto).expect("serialize");
+        // Swift decodes via convertFromSnakeCase; the wire names are the contract.
+        assert!(json.contains("\"revision\":7"));
+        assert!(json.contains("\"committed\":\"hello world\""));
+        assert!(json.contains("\"pending\":\"this is\""));
+        assert!(json.contains("\"is_final\":false"));
+
+        let back: StreamingTranscriptDto = serde_json::from_str(&json).expect("roundtrip");
+        assert_eq!(back, dto);
     }
 
     #[test]

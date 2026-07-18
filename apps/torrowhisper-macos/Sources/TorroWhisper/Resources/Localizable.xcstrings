@@ -1003,6 +1003,31 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Wellenform-Fenster während Aufnahme anzeigen" } }
       }
     },
+    "Recording display" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Aufnahme-Anzeige" } }
+      }
+    },
+    "Waveform — focus on speaking" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Wellenform — Konzentration aufs Sprechen" } }
+      }
+    },
+    "Live text — read while dictating" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Live-Text — beim Diktieren mitlesen" } }
+      }
+    },
+    "Displays the recognized text in the recording window while you speak. Only the final result is inserted." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zeigt den erkannten Text bereits während des Sprechens im Aufnahmefenster an. Eingefügt wird nur das endgültige Ergebnis." } }
+      }
+    },
+    "Listening…" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Höre zu …" } }
+      }
+    },
     "Silence stop" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Silence-Stopp" } }

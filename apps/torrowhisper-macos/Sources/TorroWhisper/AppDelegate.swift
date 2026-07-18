@@ -30,6 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private let audioDeviceMonitor = AudioDeviceMonitor()
     private let keyboardHardwareMonitor = KeyboardHardwareMonitor()
     private let recordingLevelFeed = RecordingLevelFeed()
+    private let streamingTranscriptFeed = StreamingTranscriptFeed()
+    /// Last phase the indicator showed — detects the entry into `.recording`
+    /// (a new dictation session) so the transcript feed resets exactly once
+    /// per session, not on every state-change pass.
+    private var previousIndicatorPhase: IndicatorPhase?
     private let modeMenu = NSMenu()
     private let modelMenu = NSMenu()
     private let micMenu = NSMenu()
@@ -457,8 +462,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             return nil
         }()
 
-        guard model.settings.showRecordingIndicator, let phase else {
+        // The bubble can no longer be disabled (`showRecordingIndicator` is a
+        // legacy setting) — it hides only when no dictation phase is active.
+        guard let phase else {
             recordingLevelFeed.stop()
+            // Same CPU discipline as the panel teardown below: no timer may
+            // outlive the visible bubble.
+            streamingTranscriptFeed.reset()
+            previousIndicatorPhase = nil
             // Tear the panel down completely instead of just ordering it out:
             // the hosted SwiftUI view keeps its last phase, and a blinking
             // phase drives TimelineView at 20 fps forever in the invisible
@@ -474,11 +485,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         installEscapeMonitor()
 
-        if phase == .recording {
+        let liveTranscriptEnabled = model.settings.liveTranscriptionEnabled
+
+        // The 30 Hz level feed only drives the waveform mode; in live-text
+        // mode nothing renders it, so don't poll for it.
+        if phase == .recording, !liveTranscriptEnabled {
             recordingLevelFeed.start()
         } else {
             recordingLevelFeed.stop()
         }
+        if liveTranscriptEnabled {
+            if phase == .recording, previousIndicatorPhase != .recording {
+                // New dictation session: clear the previous take's text and
+                // re-arm the revision guard before the first poll.
+                streamingTranscriptFeed.reset()
+            }
+            switch phase {
+            case .recording, .transcribing, .postProcessing:
+                streamingTranscriptFeed.start()
+            case .done, .error, .modelNotReady:
+                // Keep the snapshot (done/error still show the text), just
+                // stop polling.
+                streamingTranscriptFeed.stop()
+            }
+        } else {
+            streamingTranscriptFeed.reset()
+        }
+        previousIndicatorPhase = phase
 
         let style = model.settings.waveformStyle
         let color = model.settings.waveformColor
@@ -508,14 +541,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let isCancelling = model.runtime.isCancelling
         let isLargeIndicator = model.settings.largeRecordingIndicator
         let highContrastIndicator = model.settings.highContrastRecordingIndicator
-        let window = recordingIndicatorWindow ?? makeRecordingIndicatorWindow(phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, isCancelling: isCancelling, isLarge: isLargeIndicator, highContrast: highContrastIndicator, onStop: onStop)
+        let window = recordingIndicatorWindow ?? makeRecordingIndicatorWindow(phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, isCancelling: isCancelling, isLarge: isLargeIndicator, highContrast: highContrastIndicator, showsLiveTranscript: liveTranscriptEnabled, onStop: onStop)
         recordingIndicatorWindow = window
-        // Resize the panel to match the (possibly large) bubble — the size
-        // setting can change between recordings.
-        let indicatorScale = isLargeIndicator ? RecordingIndicatorView.largeScale : 1.0
-        let indicatorSize = NSSize(
-            width: RecordingIndicatorView.baseSize.width * indicatorScale,
-            height: RecordingIndicatorView.baseSize.height * indicatorScale
+        // Resize the panel to match the bubble — a pure function of the two
+        // size-affecting settings (large view, live transcript), never of
+        // content or phase, so this can't loop.
+        let indicatorSize = RecordingIndicatorView.windowSize(
+            isLarge: isLargeIndicator, live: liveTranscriptEnabled
         )
         if window.frame.size != indicatorSize {
             window.setContentSize(indicatorSize)
@@ -524,15 +556,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // from whatever is underneath. While recording we accept them so the
         // small stop button is clickable.
         window.ignoresMouseEvents = (phase != .recording)
-        updateIndicatorPhase(window: window, phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, isCancelling: isCancelling, isLarge: isLargeIndicator, highContrast: highContrastIndicator, onStop: onStop)
+        updateIndicatorPhase(window: window, phase: phase, style: style, color: color, modelName: modelName, modeName: modeName, stopHotkeyHint: stopHotkeyHint, isCancelling: isCancelling, isLarge: isLargeIndicator, highContrast: highContrastIndicator, showsLiveTranscript: liveTranscriptEnabled, onStop: onStop)
         positionRecordingIndicatorWindow(window)
         window.orderFrontRegardless()
     }
 
-    private func updateIndicatorPhase(window: NSWindow, phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?, stopHotkeyHint: String, isCancelling: Bool, isLarge: Bool, highContrast: Bool, onStop: @escaping () -> Void) {
+    private func updateIndicatorPhase(window: NSWindow, phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?, stopHotkeyHint: String, isCancelling: Bool, isLarge: Bool, highContrast: Bool, showsLiveTranscript: Bool, onStop: @escaping () -> Void) {
         guard let hosting = window.contentViewController as? NSHostingController<LocalizedRoot<RecordingIndicatorView>> else {
             return
         }
+        // Deliberately NOT part of this diff: the live transcript text. It
+        // flows through the observed StreamingTranscriptFeed (like the
+        // waveform bars), so text updates re-render the hosted view without a
+        // rootView swap — swapping would reset view identity (waveform
+        // animation state, button hover) on every revision.
         let inner = hosting.rootView.content()
         if inner.phase != phase
             || inner.style != style
@@ -542,7 +579,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             || inner.stopHotkeyHint != stopHotkeyHint
             || inner.isCancelling != isCancelling
             || inner.isLarge != isLarge
-            || inner.highContrast != highContrast {
+            || inner.highContrast != highContrast
+            || inner.showsLiveTranscript != showsLiveTranscript {
             hosting.rootView = LocalizedRoot(model: model) {
                 RecordingIndicatorView(
                     phase: phase,
@@ -555,15 +593,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     isCancelling: isCancelling,
                     isLarge: isLarge,
                     highContrast: highContrast,
-                    feed: self.recordingLevelFeed
+                    showsLiveTranscript: showsLiveTranscript,
+                    feed: self.recordingLevelFeed,
+                    transcriptFeed: self.streamingTranscriptFeed
                 )
             }
         }
     }
 
-    private func makeRecordingIndicatorWindow(phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?, stopHotkeyHint: String, isCancelling: Bool, isLarge: Bool, highContrast: Bool, onStop: @escaping () -> Void) -> NSWindow {
-        let scale = isLarge ? RecordingIndicatorView.largeScale : 1.0
-        let size = NSSize(width: RecordingIndicatorView.baseSize.width * scale, height: RecordingIndicatorView.baseSize.height * scale)
+    private func makeRecordingIndicatorWindow(phase: IndicatorPhase, style: WaveformStyle, color: WaveformColor, modelName: String, modeName: String?, stopHotkeyHint: String, isCancelling: Bool, isLarge: Bool, highContrast: Bool, showsLiveTranscript: Bool, onStop: @escaping () -> Void) -> NSWindow {
+        let size = RecordingIndicatorView.windowSize(isLarge: isLarge, live: showsLiveTranscript)
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -594,7 +633,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     isCancelling: isCancelling,
                     isLarge: isLarge,
                     highContrast: highContrast,
-                    feed: self.recordingLevelFeed
+                    showsLiveTranscript: showsLiveTranscript,
+                    feed: self.recordingLevelFeed,
+                    transcriptFeed: self.streamingTranscriptFeed
                 )
             }
         )

@@ -20,6 +20,39 @@ final class BridgeIntegrationTests: XCTestCase {
         XCTAssertNotNil(response.error)
     }
 
+    /// The live-transcript endpoint (#41) must answer with an idle snapshot
+    /// (revision 0, empty text) when no recording session ever ran.
+    func testStreamingTranscriptIdleSnapshot() throws {
+        struct TranscriptEnvelope: Decodable {
+            struct Value: Decodable {
+                let revision: UInt64
+                let committed: String
+                let pending: String
+                let isFinal: Bool
+            }
+            let ok: Bool
+            let value: Value?
+        }
+
+        guard let rawPointer = ow_get_streaming_transcript() else {
+            XCTFail("Bridge returned nil pointer")
+            throw BridgeTestError.nilResponse
+        }
+        defer { ow_string_free(rawPointer) }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let data = Data(String(cString: rawPointer).utf8)
+        let response = try decoder.decode(TranscriptEnvelope.self, from: data)
+
+        XCTAssertTrue(response.ok)
+        let value = try XCTUnwrap(response.value)
+        XCTAssertEqual(value.revision, 0)
+        XCTAssertEqual(value.committed, "")
+        XCTAssertEqual(value.pending, "")
+        XCTAssertFalse(value.isFinal)
+    }
+
     private func callBridge(json: String) throws -> Envelope {
         let rawPointer = json.withCString { pointer in
             ow_validate_hotkey(pointer)
