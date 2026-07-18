@@ -1059,10 +1059,12 @@ impl RecordingBuffer {
     }
 
     fn finish(&mut self, duration: Duration) -> RecordedAudio {
+        let last_voiced_end = self.last_voiced_end;
         RecordedAudio {
             samples: std::mem::take(&mut self.samples),
             sample_rate: self.sample_rate,
             duration,
+            last_voiced_end,
         }
     }
 }
@@ -1071,6 +1073,13 @@ struct RecordedAudio {
     samples: Vec<f32>,
     sample_rate: u32,
     duration: Duration,
+    /// Sample index (at `sample_rate`) just past the last chunk that counted as
+    /// speech. The final pass decodes only up to here (+ a short padding) so it
+    /// never runs Whisper over the trailing silence — that is where the model
+    /// hallucinates subtitle-style filler ("Vielen Dank", "Bis zum nächsten Mal
+    /// im ZDF"). Zero means no speech was ever detected; then the whole buffer
+    /// is kept (better a rare hallucination than dropping a quiet real take).
+    last_voiced_end: usize,
 }
 
 fn build_input_stream(
@@ -1270,8 +1279,24 @@ fn transcribe_with_whisper(
     audio: RecordedAudio,
     language: Option<&str>,
 ) -> Result<TranscriptionOutput, String> {
+    // Discard trailing silence before decoding: Whisper hallucinates subtitle-
+    // style filler when it decodes into (near-)silent audio, and that garbage
+    // ("Vielen Dank", "Untertitel von …", "Bis zum nächsten Mal im ZDF") would
+    // otherwise be appended to every take that ends with a pause. The live
+    // preview already truncates the same way — this brings the authoritative
+    // final pass in line so the inserted text matches what the user saw.
+    let speech = trim_trailing_silence(&audio.samples, audio.sample_rate, audio.last_voiced_end);
+    let trimmed_secs =
+        audio.samples.len().saturating_sub(speech.len()) as f32 / audio.sample_rate.max(1) as f32;
+    if trimmed_secs >= 0.1 {
+        log::info!(
+            target: "dictation",
+            "trimmed {trimmed_secs:.1}s trailing silence before the final pass"
+        );
+    }
+
     let resample_started = Instant::now();
-    let mono_16khz = resample_to_16khz(&audio.samples, audio.sample_rate);
+    let mono_16khz = resample_to_16khz(speech, audio.sample_rate);
     let resample_secs = resample_started.elapsed().as_secs_f32();
     if mono_16khz.is_empty() {
         return Err("No audio data available for Whisper.".to_owned());
@@ -1280,7 +1305,12 @@ fn transcribe_with_whisper(
     let n_threads = resolve_thread_count(settings.whisper_thread_count);
     let inference = run_whisper_inference(&context, &mono_16khz, settings, language, n_threads)?;
 
-    if inference.text.is_empty() {
+    // Belt-and-suspenders over the silence trim: a short residual pause can
+    // still trigger a hallucinated subtitle/broadcast phrase. Strip those known
+    // artifacts from the tail (never legitimate mid-text content — see
+    // strip_hallucinated_tail).
+    let text = strip_hallucinated_tail(&inference.text);
+    if text.is_empty() {
         return Err(format!(
             "Whisper recognized no text. Model: {}, language: {}.",
             settings.local_model.default_filename(),
@@ -1289,7 +1319,7 @@ fn transcribe_with_whisper(
     }
 
     Ok(TranscriptionOutput {
-        text: inference.text,
+        text,
         resample_secs,
         state_secs: inference.state_secs,
         inference_secs: inference.inference_secs,
@@ -1381,6 +1411,129 @@ pub(crate) fn collect_transcript(state: &WhisperState) -> String {
         .filter(|segment| !segment.is_empty())
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// The final dictation pass decodes speech only up to the last voiced sample
+/// plus this padding; the trailing silence beyond it is dropped. Decoding into
+/// silence is exactly where Whisper hallucinates subtitle-style filler. A touch
+/// more generous than the live preview's tail padding (streaming
+/// `SPEECH_TAIL_PADDING_MS`, 500 ms) because the final pass has no second
+/// chance — a trailing word must never be clipped.
+const FINAL_PASS_TAIL_PADDING_MS: u64 = 800;
+
+/// Returns `samples` truncated to the last speech (+ [`FINAL_PASS_TAIL_PADDING_MS`])
+/// so the final pass never decodes trailing silence. Returns the input
+/// unchanged when no speech was tracked (`last_voiced_end == 0`): dropping to a
+/// few hundred ms of pure padding could throw away a quiet real take, so the
+/// full buffer is kept in that case.
+pub(crate) fn trim_trailing_silence(
+    samples: &[f32],
+    sample_rate: u32,
+    last_voiced_end: usize,
+) -> &[f32] {
+    if last_voiced_end == 0 || sample_rate == 0 {
+        return samples;
+    }
+    let padding = (sample_rate as u64 * FINAL_PASS_TAIL_PADDING_MS / 1000) as usize;
+    let speech_end = last_voiced_end.saturating_add(padding).min(samples.len());
+    &samples[..speech_end]
+}
+
+/// Subtitle / broadcast boilerplate Whisper emits from its video-heavy training
+/// data when it decodes (near-)silent audio — never something a user dictates.
+/// Matched (normalized, case-insensitively) only against the *trailing*
+/// sentences of a transcript, so a legitimate mid-text occurrence is untouched.
+///
+/// Deliberately conservative: ambiguous phrases a user might genuinely dictate
+/// at the end of a message — a bare "Vielen Dank", "Mit freundlichen Grüßen",
+/// "Tschüss", a standalone "Untertitel" — are NOT listed. Those are handled
+/// upstream by [`trim_trailing_silence`]; blocking them here would silently eat
+/// real content. Every entry is a phrase specific enough to broadcast outros.
+const HALLUCINATION_MARKERS: &[&str] = &[
+    "amara.org",
+    "untertitel von",
+    "untertitel im auftrag",
+    "untertitel der",
+    "untertitelung",
+    "copyright wdr",
+    "copyright zdf",
+    "thanks for watching",
+    "thank you for watching",
+    "für's zuschauen",
+    "fürs zuschauen",
+    "bis zum nächsten mal",
+    "abonniert nicht vergessen",
+    "abonnieren nicht vergessen",
+];
+
+/// Removes trailing hallucinated subtitle/broadcast phrases from a final
+/// transcript. Splits into sentence-ish units and drops trailing units that
+/// match a [`HALLUCINATION_MARKERS`] entry, stopping at the first real sentence.
+/// Only the tail is examined, so genuine mid-text content is never affected.
+pub(crate) fn strip_hallucinated_tail(text: &str) -> String {
+    let mut sentences = split_sentences(text);
+    while sentences.last().is_some_and(|last| is_hallucinated_sentence(last)) {
+        sentences.pop();
+    }
+    sentences.join(" ").trim().to_owned()
+}
+
+/// Splits text into sentence-ish units, keeping each terminator attached, so a
+/// surviving sentence retains its own punctuation on rejoin. Whitespace-only
+/// fragments are dropped.
+fn split_sentences(text: &str) -> Vec<String> {
+    let mut sentences = Vec::new();
+    let mut current = String::new();
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        current.push(ch);
+        // Only a terminator at a word boundary ends a sentence — a '.' inside a
+        // token ("amara.org", "2017.") must not fragment it.
+        let boundary = matches!(ch, '.' | '!' | '?' | '…')
+            && chars.peek().is_none_or(|next| next.is_whitespace());
+        if boundary {
+            let trimmed = current.trim();
+            if !trimmed.is_empty() {
+                sentences.push(trimmed.to_owned());
+            }
+            current.clear();
+        }
+    }
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        sentences.push(trimmed.to_owned());
+    }
+    sentences
+}
+
+/// Whether one sentence is a known hallucination artifact. Both sides run
+/// through [`normalize_for_match`] so markers can be written naturally.
+fn is_hallucinated_sentence(sentence: &str) -> bool {
+    let normalized = normalize_for_match(sentence);
+    if normalized.is_empty() {
+        return false;
+    }
+    HALLUCINATION_MARKERS
+        .iter()
+        .any(|marker| normalized.contains(&normalize_for_match(marker)))
+}
+
+/// Lowercases and reduces a string to alphanumeric words (plus `.`, which keeps
+/// tokens like "amara.org" intact) separated by single spaces, so punctuation
+/// and spacing differences never defeat a marker match.
+fn normalize_for_match(text: &str) -> String {
+    let lowered = text.to_lowercase();
+    let cleaned: String = lowered
+        .chars()
+        .map(|ch| {
+            if ch.is_alphanumeric() || ch == '.' {
+                ch
+            } else {
+                ' '
+            }
+        })
+        .collect();
+    cleaned.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 pub(crate) fn resample_to_16khz(samples: &[f32], sample_rate: u32) -> Vec<f32> {
@@ -1947,5 +2100,87 @@ mod tests {
         assert_ne!(start, stop);
         assert_ne!(start, cancel);
         assert_ne!(stop, cancel);
+    }
+
+    #[test]
+    fn trim_trailing_silence_cuts_to_last_speech_plus_padding() {
+        // 16 kHz, speech ends at sample 1_000, then a long silent tail.
+        let samples = vec![0.0_f32; 40_000];
+        let trimmed = trim_trailing_silence(&samples, 16_000, 1_000);
+        // 800 ms padding at 16 kHz = 12_800 samples.
+        assert_eq!(trimmed.len(), 1_000 + 12_800);
+    }
+
+    #[test]
+    fn trim_trailing_silence_keeps_full_buffer_without_speech() {
+        // last_voiced_end == 0 means no speech was ever tracked: never truncate,
+        // or a quiet real take would be reduced to pure padding.
+        let samples = vec![0.1_f32; 5_000];
+        assert_eq!(trim_trailing_silence(&samples, 16_000, 0).len(), 5_000);
+    }
+
+    #[test]
+    fn trim_trailing_silence_never_extends_past_the_buffer() {
+        let samples = vec![0.0_f32; 2_000];
+        // Padding would reach past the end; result is clamped to the buffer.
+        assert_eq!(trim_trailing_silence(&samples, 16_000, 1_900).len(), 2_000);
+    }
+
+    #[test]
+    fn strip_removes_trailing_broadcast_outros() {
+        assert_eq!(
+            strip_hallucinated_tail("Das ist mein Text. Bis zum nächsten Mal im ZDF."),
+            "Das ist mein Text."
+        );
+        assert_eq!(
+            strip_hallucinated_tail("Bitte um Rückmeldung. Vielen Dank fürs Zuschauen."),
+            "Bitte um Rückmeldung."
+        );
+        assert_eq!(
+            strip_hallucinated_tail("Ende. Untertitel von der Amara.org-Community"),
+            "Ende."
+        );
+        assert_eq!(
+            strip_hallucinated_tail("Hello there. Thank you for watching!"),
+            "Hello there."
+        );
+    }
+
+    #[test]
+    fn strip_removes_multiple_stacked_outros() {
+        // Two genuine artifacts stacked at the tail are both removed, stopping
+        // at the first real sentence.
+        assert_eq!(
+            strip_hallucinated_tail(
+                "Der eigentliche Inhalt. Untertitelung des ZDF. Bis zum nächsten Mal."
+            ),
+            "Der eigentliche Inhalt."
+        );
+        assert_eq!(
+            strip_hallucinated_tail("Inhalt. Vielen Dank fürs Zuschauen. Bis zum nächsten Mal."),
+            "Inhalt."
+        );
+    }
+
+    #[test]
+    fn strip_keeps_legitimate_farewells() {
+        // A bare farewell is real dictation (e.g. an email) — must be preserved.
+        // Trailing-silence trimming, not the blocklist, prevents the hallucinated
+        // variant, so these ambiguous phrases stay untouched here.
+        for text in [
+            "Ich melde mich bald. Vielen Dank.",
+            "Anbei die Unterlagen. Mit freundlichen Grüßen.",
+            "Wir sehen uns morgen. Tschüss.",
+            "Bitte füge die Untertitel zum Video hinzu.",
+            "Ich habe den Newsletter abonniert.",
+        ] {
+            assert_eq!(strip_hallucinated_tail(text), text);
+        }
+    }
+
+    #[test]
+    fn strip_leaves_clean_text_unchanged() {
+        let text = "Ein ganz normaler Satz ohne Floskeln.";
+        assert_eq!(strip_hallucinated_tail(text), text);
     }
 }
