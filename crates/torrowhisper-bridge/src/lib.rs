@@ -2,6 +2,7 @@
 mod audio_export;
 #[allow(dead_code)]
 mod autostart;
+mod diagnostics;
 #[allow(dead_code)]
 mod dictation;
 mod dictionary;
@@ -1457,8 +1458,12 @@ pub extern "C" fn ow_plugin_log(request_json: *const c_char) -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_session_started() -> *mut c_char {
     logging::init();
+    let previous_ended_abnormally = session_marker::session_started();
+    // Start the once-per-minute diagnostics heartbeat now that a session is
+    // live (#39, Part B). Idempotent, so repeated calls spawn no extra thread.
+    diagnostics::start_heartbeat();
     response_ok(SessionStartResponse {
-        previous_ended_abnormally: session_marker::session_started(),
+        previous_ended_abnormally,
     })
 }
 

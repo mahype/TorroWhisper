@@ -2,7 +2,10 @@ use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::mpsc::{self, Receiver, TryRecvError},
+    sync::{
+        Mutex,
+        mpsc::{self, Receiver, TryRecvError},
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -94,31 +97,68 @@ pub fn validated_model_path(settings: &AppSettings) -> Result<PathBuf, String> {
     };
 
     match model_file_integrity(&path, expected_size) {
-        ModelIntegrity::Valid => Ok(path),
+        ModelIntegrity::Valid => {
+            // Only announce the transition back to usable, so a normal
+            // running state stays quiet.
+            if model_usability_changed("usable") {
+                log::info!(
+                    target: "models",
+                    "model usable: preset '{}', resolved '{}'",
+                    settings.local_model.display_label(),
+                    path.display()
+                );
+            }
+            Ok(path)
+        }
         ModelIntegrity::Missing => {
-            log::warn!(
-                target: "models",
-                "model not usable: preset '{}', resolved '{}', exists: false, override set: {override_info}",
-                settings.local_model.display_label(),
-                path.display()
-            );
+            // The UI polls this several times a second during onboarding; log
+            // the "not usable" warning only when the state actually changes,
+            // not on every poll (#39, Part D).
+            if model_usability_changed(&format!("missing:{}", path.display())) {
+                log::warn!(
+                    target: "models",
+                    "model not usable: preset '{}', resolved '{}', exists: false, override set: {override_info}",
+                    settings.local_model.display_label(),
+                    path.display()
+                );
+            }
             Err(format!(
                 "{} has not been downloaded yet. Download it in Settings first.",
                 settings.local_model.display_label()
             ))
         }
         ModelIntegrity::Corrupt { reason } => {
-            log::warn!(
-                target: "models",
-                "model not usable: preset '{}', resolved '{}', failed verification ({reason}), override set: {override_info}",
-                settings.local_model.display_label(),
-                path.display()
-            );
+            if model_usability_changed(&format!("corrupt:{}:{reason}", path.display())) {
+                log::warn!(
+                    target: "models",
+                    "model not usable: preset '{}', resolved '{}', failed verification ({reason}), override set: {override_info}",
+                    settings.local_model.display_label(),
+                    path.display()
+                );
+            }
             Err(format!(
                 "{} is damaged or incomplete. Please download it again.",
                 settings.local_model.display_label()
             ))
         }
+    }
+}
+
+/// De-duplicates the noisy model-usability logging from [`validated_model_path`].
+///
+/// Returns `true` (i.e. "please log this") only when `signature` differs from
+/// the previously seen one, so a fast poll loop reporting the same state over
+/// and over logs a single line per state transition instead of hundreds.
+fn model_usability_changed(signature: &str) -> bool {
+    static LAST_SIGNATURE: Mutex<Option<String>> = Mutex::new(None);
+    let mut guard = LAST_SIGNATURE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if guard.as_deref() == Some(signature) {
+        false
+    } else {
+        *guard = Some(signature.to_owned());
+        true
     }
 }
 

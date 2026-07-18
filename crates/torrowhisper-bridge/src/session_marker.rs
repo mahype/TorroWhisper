@@ -22,6 +22,9 @@ const MARKER_FILE_NAME: &str = "torrowhisper.session";
 /// ended abnormally (its marker was never cleaned up).
 pub fn session_started() -> bool {
     let path = marker_path();
+    // The marker's mtime is the previous session's start time: it lets the
+    // crash-report collector tell this crash's `.ips` from older ones.
+    let previous_start = fs::metadata(&path).and_then(|meta| meta.modified()).ok();
     let previous = match fs::read_to_string(&path) {
         Ok(contents) => {
             log::warn!(
@@ -29,6 +32,11 @@ pub fn session_started() -> bool {
                 "previous session ended abnormally — no clean shutdown recorded (last session: {})",
                 contents.trim()
             );
+            // Fold the matching macOS crash report into the log so the
+            // signal and faulting frame land in the file the user sends
+            // (#39, Part C). A missing report is itself logged as a signal
+            // that the process was killed rather than crashed.
+            crate::diagnostics::report_previous_crash(previous_start);
             true
         }
         Err(_) => false,

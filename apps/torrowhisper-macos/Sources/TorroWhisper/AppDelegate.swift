@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var micSwitchToastWindow: NSPanel?
     private var micSwitchToastDismissTask: Task<Void, Never>?
     private var lastAnnouncedPhaseKey: String?
+    private var powerEventObservers: [NSObjectProtocol] = []
     private let audioDeviceMonitor = AudioDeviceMonitor()
     private let keyboardHardwareMonitor = KeyboardHardwareMonitor()
     private let recordingLevelFeed = RecordingLevelFeed()
@@ -121,6 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         keyboardHardwareMonitor.start()
 
+        registerPowerEventObservers()
+
         // Re-place the recording bubble when the display arrangement changes
         // (monitor plugged/unplugged, resolution change), so it never gets
         // stranded on a display that no longer exists.
@@ -144,6 +147,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     func applicationWillTerminate(_ notification: Notification) {
         model.flushAutoSave()
         BridgeClient().sessionEndedCleanly()
+    }
+
+    /// Logs macOS power transitions (sleep/wake/power-off) into the shared
+    /// log file (#39, Part A). When the last line before a silent death is
+    /// `system will sleep`, the crash is immediately tied to the standby
+    /// transition — the very case that made v0.5.0 "just vanish".
+    ///
+    /// NSWorkspace notifications are delivered ONLY through
+    /// `NSWorkspace.shared.notificationCenter`, never `NotificationCenter.default`.
+    private func registerPowerEventObservers() {
+        let center = NSWorkspace.shared.notificationCenter
+        let events: [(Notification.Name, String)] = [
+            (NSWorkspace.willSleepNotification, "system will sleep"),
+            (NSWorkspace.didWakeNotification, "system did wake"),
+            (NSWorkspace.screensDidSleepNotification, "screens did sleep"),
+            (NSWorkspace.screensDidWakeNotification, "screens did wake"),
+            (NSWorkspace.willPowerOffNotification, "system will power off / user logout"),
+        ]
+        for (name, message) in events {
+            let token = center.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { _ in
+                BridgeClient().logMessage(level: "info", message: message)
+            }
+            powerEventObservers.append(token)
+        }
     }
 
     func menuWillOpen(_ menu: NSMenu) {

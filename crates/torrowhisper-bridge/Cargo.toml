@@ -14,6 +14,9 @@ cpal = "0.17.3"
 directories = "6.0.0"
 enigo = { version = "0.6.1", features = ["wayland"] }
 global-hotkey = "0.7.0"
+# Used only for `proc_pidinfo` (RSS + thread count) in the diagnostics
+# heartbeat; already present transitively, so no new download.
+libc = "0.2"
 # NOTE: llama-cpp-2 must never come back as a dependency here. It bundles a
 # ggml revision that is incompatible with whisper-rs's bundled ggml; linking
 # both into one binary mixes the duplicated symbols and crashes the app. The
