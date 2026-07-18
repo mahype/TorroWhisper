@@ -25,12 +25,12 @@ struct HotkeyRecorderField: View {
                         .fill(Color(nsColor: .textBackgroundColor))
                         .overlay(
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(isCapturing ? Color.accentColor : Color.secondary.opacity(0.16), lineWidth: isCapturing ? 1.5 : 1)
+                                .stroke(isCapturing ? Color.torroAccent : Color.secondary.opacity(0.16), lineWidth: isCapturing ? 1.5 : 1)
                         )
 
                     HStack(spacing: 8) {
                         Image(systemName: isCapturing ? "keyboard.badge.ellipsis" : "command")
-                            .foregroundStyle(isCapturing ? Color.accentColor : Color.secondary)
+                            .foregroundStyle(isCapturing ? Color.torroAccent : Color.secondary)
                         Text(displayText)
                             .font(.system(.body, design: .rounded).weight(.medium))
                             .foregroundStyle(displayText == placeholderText ? .secondary : .primary)

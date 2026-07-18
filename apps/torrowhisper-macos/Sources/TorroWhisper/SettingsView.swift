@@ -757,6 +757,21 @@ struct SettingsView: View {
     @ViewBuilder
     private var helpContent: some View {
         Section {
+            HStack(spacing: 12) {
+                TorroLogoTile(size: 40)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: "TorroWhisper")
+                        .font(.title3.weight(.semibold))
+                    Text("Local dictation for macOS", bundle: .module)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 2)
+
             LabeledContent {
                 Text(appVersionString)
             } label: {

@@ -394,6 +394,7 @@
 "API keys (stored in macOS Keychain)" = "API-Schlüssel (im macOS-Schlüsselbund gespeichert)";
 "needs key" = "Schlüssel nötig";
 "damaged" = "beschädigt";
+"Local dictation for macOS" = "Lokales Diktieren für macOS";
 
 /* Whisper performance, timing & benchmark (#43) */
 "No dictation measured yet." = "Noch kein Diktat gemessen.";

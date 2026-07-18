@@ -75,7 +75,7 @@ struct ModeListTile: View {
                 HStack(spacing: 10) {
                     Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
                         .font(.body)
-                        .foregroundStyle(isActive ? Color.accentColor : Color.secondary.opacity(0.7))
+                        .foregroundStyle(isActive ? Color.torroAccent : Color.secondary.opacity(0.7))
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -138,7 +138,7 @@ struct PostProcessingOffTile: View {
             HStack(spacing: 10) {
                 Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
                     .font(.body)
-                    .foregroundStyle(isActive ? Color.accentColor : Color.secondary.opacity(0.7))
+                    .foregroundStyle(isActive ? Color.torroAccent : Color.secondary.opacity(0.7))
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -177,7 +177,7 @@ struct ModelPresetTile: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.7))
+                    .foregroundStyle(isSelected ? Color.torroAccent : Color.secondary.opacity(0.7))
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -603,19 +603,30 @@ struct StepRail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Setup", bundle: .module)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
+            // Brand header — the wizard is the one place the app introduces
+            // itself, so it leads with the signet rather than a bare label.
+            HStack(spacing: 10) {
+                TorroLogoTile(size: 32)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: "TorroWhisper")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text("Setup", bundle: .module)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
 
             ForEach(Array(steps.enumerated()), id: \.offset) { index, title in
                 HStack(spacing: 10) {
                     ZStack {
                         Circle()
-                            .fill(index == currentStep ? Color.accentColor : Color.secondary.opacity(0.18))
+                            .fill(index == currentStep ? Color.torroAccent : Color.secondary.opacity(0.18))
                             .frame(width: 20, height: 20)
                         if index < currentStep {
                             Image(systemName: "checkmark")

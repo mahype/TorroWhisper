@@ -469,8 +469,8 @@ struct LanguageModelsManagerSheet: View {
                                 .font(.caption2.weight(.semibold))
                                 .padding(.vertical, 2)
                                 .padding(.horizontal, 6)
-                                .background(Color.accentColor.opacity(0.14), in: Capsule())
-                                .foregroundStyle(Color.accentColor)
+                                .background(Color.torroAccent.opacity(0.14), in: Capsule())
+                                .foregroundStyle(Color.torroAccent)
                         }
                     }
                     Text(preset.description(locale: locale))

@@ -63,5 +63,9 @@ struct LocalizedRoot<Content: View>: View {
     var body: some View {
         content()
             .environment(\.locale, model.settings.effectiveLocale)
+            // Every window goes through here, so this is the one place that has
+            // to carry the brand accent — it tints the controls that read the
+            // system accent on their own (prominent buttons, toggles, pickers).
+            .tint(.torroAccent)
     }
 }

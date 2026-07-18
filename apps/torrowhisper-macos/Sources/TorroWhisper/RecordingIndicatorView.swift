@@ -452,7 +452,7 @@ struct RecordingIndicatorView: View {
 extension WaveformColor {
     var swiftUIColor: Color {
         switch self {
-        case .accent: return .accentColor
+        case .accent: return .torroAccent
         case .blue: return .blue
         case .green: return .green
         case .teal: return .teal

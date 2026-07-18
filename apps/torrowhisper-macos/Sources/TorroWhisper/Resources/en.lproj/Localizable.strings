@@ -372,6 +372,7 @@
 "Save" = "Save";
 
 "medium" = "medium";
+"Local dictation for macOS" = "Local dictation for macOS";
 
 /* Whisper performance, timing & benchmark (#43) */
 "No dictation measured yet." = "No dictation measured yet.";

@@ -16,7 +16,7 @@ struct FeedbackView: View {
             VStack(spacing: 10) {
                 FeedbackChannelTile(
                     iconSystemName: "ladybug.fill",
-                    iconColor: .accentColor,
+                    iconColor: .torroAccent,
                     title: "GitHub Issues",
                     subtitle: L("Report bugs or submit feature requests.", locale: .current),
                     actionLabel: L("Open on GitHub", locale: .current),
