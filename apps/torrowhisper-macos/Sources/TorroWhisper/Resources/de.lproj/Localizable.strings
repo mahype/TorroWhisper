@@ -394,3 +394,27 @@
 "API keys (stored in macOS Keychain)" = "API-Schlüssel (im macOS-Schlüsselbund gespeichert)";
 "needs key" = "Schlüssel nötig";
 "damaged" = "beschädigt";
+
+/* Whisper performance, timing & benchmark (#43) */
+"No dictation measured yet." = "Noch kein Diktat gemessen.";
+"Audio length" = "Audiolänge";
+"Model load" = "Modell laden";
+"Resampling" = "Resampling";
+"Whisper state creation" = "Whisper-State-Erzeugung";
+"Whisper inference" = "Whisper-Inferenz";
+"Post-processing (LLM)" = "Nachbearbeitung (LLM)";
+"Text insertion" = "Texteingabe";
+"Total after stop" = "Gesamt ab Aufnahmeende";
+"Real-time factor" = "Echtzeitfaktor";
+"Last dictation timing" = "Zeitmessung letztes Diktat";
+"Whisper and LLM post-processing are timed separately, so you can tell which one dominates." = "Whisper und LLM-Nachbearbeitung werden getrennt gemessen, damit erkennbar ist, welcher Schritt überwiegt.";
+"Run benchmark" = "Benchmark ausführen";
+"Benchmarking… this can take a while." = "Benchmark läuft … das kann einen Moment dauern.";
+"Model & thread benchmark" = "Modell- & Thread-Benchmark";
+"Transcribes a fixed reference clip with each installed model and across thread counts (1/2/4/6/8), so the fastest option can be chosen from real measurements instead of assumptions." = "Transkribiert ein festes Referenz-Audio mit jedem installierten Modell und über Threadzahlen (1/2/4/6/8), damit die schnellste Option anhand echter Messungen statt Annahmen gewählt werden kann.";
+"Whisper threads" = "Whisper-Threads";
+"Auto" = "Automatisch";
+"Force single segment" = "Einzelsegment erzwingen";
+"Whisper (expert)" = "Whisper (Experte)";
+"Threads 0 = automatic. Single segment can be faster on very short dictations but may hurt punctuation on longer ones. Choose values based on the benchmark above." = "Threads 0 = automatisch. Einzelsegment kann bei sehr kurzen Diktaten schneller sein, verschlechtert aber bei längeren ggf. die Zeichensetzung. Werte anhand des Benchmarks oben wählen.";
+"Loading speech model…" = "Sprachmodell wird geladen …";

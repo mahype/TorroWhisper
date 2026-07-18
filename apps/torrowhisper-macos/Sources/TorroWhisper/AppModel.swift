@@ -22,6 +22,16 @@ final class AppModel: ObservableObject {
     @Published var llmRegistry: [LlmRegistryEntryDTO] = []
     @Published var diagnostics: DiagnosticsDTO = .empty
     @Published var runtime: RuntimeStatusDTO = .empty
+    /// Latency breakdown of the most recent dictation (#43). `revision == 0`
+    /// until the first dictation completes.
+    @Published var lastTiming: StageTimingDTO = .empty
+    /// Result of the last whisper benchmark run (#43), or nil if never run.
+    @Published var benchmarkReport: BenchmarkReportDTO?
+    /// True while a benchmark is running so the UI can show progress and disable
+    /// the trigger.
+    @Published var isBenchmarkRunning = false
+    /// Error from the last benchmark attempt, if any.
+    @Published var benchmarkError: String?
     @Published var bridgeError: String?
     @Published var onboardingStep: Int = 0
     @Published var editingModeID: String = "cleanup"
@@ -46,6 +56,9 @@ final class AppModel: ObservableObject {
     /// How long the red error bubble stays visible after a dictation failure.
     private static let dictationErrorDisplaySeconds: TimeInterval = 6
     private var lastSeenDictationSuccessCount: UInt64 = 0
+    /// Success count at which `lastTiming` was last refreshed, so the timing
+    /// report is fetched once per completed dictation instead of every poll (#43).
+    private var lastTimingSuccessCount: UInt64 = 0
     private var dictationSuccessOccurredAt: Date?
     /// Whether the last poll tick saw a time-limited bubble (done/error) on
     /// screen; lets the poll fire one final refresh after it expires.
@@ -678,6 +691,14 @@ final class AppModel: ObservableObject {
             checkMicSwitchEvent()
             checkDictationErrorEvent()
             checkDictationSuccessEvent()
+            // Refresh the latency breakdown once per completed dictation (#43).
+            if runtime.dictationSuccessCount != lastTimingSuccessCount {
+                lastTimingSuccessCount = runtime.dictationSuccessCount
+                if let timing = try? bridge.getLastTiming(), timing != lastTiming {
+                    lastTiming = timing
+                    changed = true
+                }
+            }
             if runtime.historyRevision != lastSeenHistoryRevision {
                 history = (try? bridge.loadHistory()) ?? []
                 lastSeenHistoryRevision = runtime.historyRevision
@@ -775,6 +796,36 @@ final class AppModel: ObservableObject {
             bridgeError = nil
         } catch {
             publish(error)
+        }
+    }
+
+    /// Runs the whisper model & thread benchmark (#43) off the main thread so
+    /// the UI stays responsive during the (multi-second) run. Uses a private
+    /// BridgeClient instance to avoid sharing the polling decoder across threads;
+    /// the benchmark FFI is stateless and bypasses the shared runtime.
+    func runBenchmark() {
+        guard !isBenchmarkRunning else { return }
+        // Persist pending settings so the benchmark uses the current decoding
+        // options (single_segment etc.).
+        flushAutoSave()
+        isBenchmarkRunning = true
+        benchmarkError = nil
+        benchmarkReport = nil
+        Task.detached(priority: .userInitiated) {
+            let client = BridgeClient()
+            do {
+                let report = try client.runWhisperBenchmark()
+                await MainActor.run { [weak self] in
+                    self?.benchmarkReport = report
+                    self?.isBenchmarkRunning = false
+                }
+            } catch {
+                let message = (error as? BridgeError)?.message ?? error.localizedDescription
+                await MainActor.run { [weak self] in
+                    self?.benchmarkError = message
+                    self?.isBenchmarkRunning = false
+                }
+            }
         }
     }
 

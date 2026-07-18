@@ -3,7 +3,7 @@ use std::{
     f32::consts::PI,
     path::PathBuf,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, Once,
         mpsc::{self, Receiver, Sender, TryRecvError},
     },
     thread,
@@ -27,7 +27,14 @@ const RECORDING_CANCEL_NOTES: [(f32, u32); 3] = [(523.25, 50), (392.00, 60), (32
 
 pub enum DictationOutcome {
     Status(String),
-    TranscriptReady(String),
+    /// A finished Whisper transcript, plus the whisper-side latency breakdown
+    /// and the anchors (`stop_instant`) the runtime needs to complete the
+    /// per-dictation timing report once post-processing and insertion are done
+    /// (#43). `timing` is `None` only when no measurement was seeded (defensive).
+    TranscriptReady {
+        transcript: String,
+        timing: Option<DictationTiming>,
+    },
     /// A dictation step failed and the user should see it (recording could
     /// not start, transcription errored, worker thread died). Unlike
     /// `Status`, this feeds the error indicator in the UI.
@@ -38,10 +45,56 @@ pub enum DictationOutcome {
     PendingTranscriptSave(String),
 }
 
+/// Whisper-side latency of one dictation plus the wall-clock anchor the runtime
+/// needs to finish the report (#43). Created when recording stops, completed by
+/// the whisper worker, and handed to the runtime via `TranscriptReady`.
+pub struct DictationTiming {
+    /// The moment recording stopped; the runtime derives `total_after_stop`
+    /// from this once the transcript is delivered.
+    pub stop_instant: Instant,
+    /// Length of the captured audio (basis for the real-time factor).
+    pub audio_secs: f32,
+    /// Model load time on this dictation — `0.0` on a warm cache hit.
+    pub whisper_load_secs: f32,
+    /// Resample of the captured audio to 16 kHz mono.
+    pub resample_secs: f32,
+    /// `WhisperContext::create_state`.
+    pub state_secs: f32,
+    /// Whisper inference (`state.full`).
+    pub inference_secs: f32,
+}
+
+/// Whisper worker output: the transcript plus the stages the worker measured
+/// itself (resample / state creation / inference).
+struct TranscriptionOutput {
+    text: String,
+    resample_secs: f32,
+    state_secs: f32,
+    inference_secs: f32,
+}
+
+/// Timing anchors known at recording-stop time, held on the controller until
+/// the whisper worker's result arrives and the two halves are merged.
+struct TimingSeed {
+    stop_instant: Instant,
+    audio_secs: f32,
+    whisper_load_secs: f32,
+}
+
+/// A completed background warmup: the model path and its loaded context.
+type WarmupResult = Result<(PathBuf, Arc<WhisperContext>), String>;
+
 pub struct DictationController {
     available_input_devices: Vec<String>,
     recording: Option<ActiveRecording>,
-    transcription_rx: Option<Receiver<Result<String, String>>>,
+    transcription_rx: Option<Receiver<Result<TranscriptionOutput, String>>>,
+    /// Timing anchors for the in-flight transcription, merged with the worker's
+    /// stage timings when its result arrives.
+    pending_timing_seed: Option<TimingSeed>,
+    /// In-flight background model preload (#43). Delivers a loaded context that
+    /// `poll` installs into `model_cache`, so the first dictation after startup
+    /// or a model switch is already warm.
+    warmup_rx: Option<Receiver<WarmupResult>>,
     model_cache: Option<ModelCache>,
     dictation_blocked_at: Option<Instant>,
     active_input_device_name: String,
@@ -55,6 +108,8 @@ impl DictationController {
             available_input_devices: Vec::new(),
             recording: None,
             transcription_rx: None,
+            pending_timing_seed: None,
+            warmup_rx: None,
             model_cache: None,
             dictation_blocked_at: None,
             active_input_device_name: String::new(),
@@ -222,6 +277,81 @@ impl DictationController {
         self.model_cache = None;
     }
 
+    /// True while a background model preload is in flight (#43).
+    pub fn is_model_warming(&self) -> bool {
+        self.warmup_rx.is_some()
+    }
+
+    /// Kicks off a background preload of the active model so the first dictation
+    /// after startup or a model switch is already warm (#43). No-op when the
+    /// model is already cached, a warmup is already running, or the model file
+    /// is missing (a real dictation would surface that error instead).
+    pub fn start_model_warmup(&mut self, settings: &AppSettings) {
+        if self.warmup_rx.is_some() {
+            return;
+        }
+        let Ok(model_path) = validated_model_path(settings) else {
+            return;
+        };
+        if let Some(cache) = &self.model_cache
+            && cache.path == model_path
+        {
+            return;
+        }
+
+        log_whisper_backend_info_once();
+        let (tx, rx) = mpsc::channel();
+        let path_for_thread = model_path.clone();
+        let label = settings.local_model.display_label().to_owned();
+        thread::spawn(move || {
+            let started = Instant::now();
+            let path_string = path_for_thread.to_string_lossy().to_string();
+            let result = WhisperContext::new_with_params(
+                &path_string,
+                WhisperContextParameters::default(),
+            )
+            .map(|context| {
+                log::info!(
+                    target: "dictation",
+                    "model warmup complete in {:.1}s ({label})",
+                    started.elapsed().as_secs_f32()
+                );
+                (path_for_thread, Arc::new(context))
+            })
+            .map_err(|err| {
+                log::warn!(target: "dictation", "model warmup failed ({label}): {err}");
+                format!("Whisper model warmup failed: {err}")
+            });
+            let _ = tx.send(result);
+        });
+        self.warmup_rx = Some(rx);
+    }
+
+    /// Installs a completed warmup context into the cache. Called from `poll`.
+    fn drain_warmup(&mut self) {
+        let Some(rx) = &self.warmup_rx else {
+            return;
+        };
+        match rx.try_recv() {
+            Ok(Ok((path, context))) => {
+                self.warmup_rx = None;
+                // Only install if still relevant (model may have changed while
+                // warming) and nothing newer is cached.
+                let already_current = self
+                    .model_cache
+                    .as_ref()
+                    .is_some_and(|cache| cache.path == path);
+                if !already_current {
+                    self.model_cache = Some(ModelCache { path, context });
+                }
+            }
+            Ok(Err(_)) | Err(TryRecvError::Disconnected) => {
+                self.warmup_rx = None;
+            }
+            Err(TryRecvError::Empty) => {}
+        }
+    }
+
     pub fn handle_hotkey(
         &mut self,
         settings: &AppSettings,
@@ -314,6 +444,9 @@ impl DictationController {
             return Ok(Vec::new());
         };
 
+        // Anchor the "total after stop" stopwatch at the very moment the user
+        // stopped recording, before any post-stop work (#43).
+        let stop_instant = Instant::now();
         let audio = recording.finish()?;
         play_recording_cue(cue);
         if audio.samples.is_empty() || audio.duration < Duration::from_millis(200) {
@@ -343,7 +476,7 @@ impl DictationController {
             outcomes.push(DictationOutcome::PendingTranscriptSave(base));
         }
 
-        let context = self.ensure_whisper_context(settings)?;
+        let (context, whisper_load_secs) = self.ensure_whisper_context(settings)?;
         let language = normalized_language(&settings.transcription_language);
         let app_settings = settings.clone();
         let (tx, rx) = mpsc::channel();
@@ -361,16 +494,20 @@ impl DictationController {
             let result =
                 transcribe_with_whisper(context, &app_settings, audio, language.as_deref());
             match &result {
-                Ok(text) => log::info!(
+                Ok(output) => log::info!(
                     target: "dictation",
-                    "transcription finished in {:.1}s ({} chars from {:.1}s audio)",
+                    "transcription finished in {:.2}s ({} chars from {:.1}s audio; \
+                     resample {:.2}s, state {:.2}s, inference {:.2}s)",
                     started.elapsed().as_secs_f32(),
-                    text.chars().count(),
-                    audio_duration.as_secs_f32()
+                    output.text.chars().count(),
+                    audio_duration.as_secs_f32(),
+                    output.resample_secs,
+                    output.state_secs,
+                    output.inference_secs
                 ),
                 Err(err) => log::error!(
                     target: "dictation",
-                    "transcription failed after {:.1}s: {err}",
+                    "transcription failed after {:.2}s: {err}",
                     started.elapsed().as_secs_f32()
                 ),
             }
@@ -378,6 +515,11 @@ impl DictationController {
         });
 
         self.transcription_rx = Some(rx);
+        self.pending_timing_seed = Some(TimingSeed {
+            stop_instant,
+            audio_secs: audio_duration.as_secs_f32(),
+            whisper_load_secs,
+        });
 
         outcomes.push(DictationOutcome::Status(format!(
             "Recording stopped ({reason}). Local transcription in progress."
@@ -400,6 +542,8 @@ impl DictationController {
 
     pub fn poll(&mut self, settings: &mut AppSettings) -> Vec<DictationOutcome> {
         let mut outcomes = Vec::new();
+
+        self.drain_warmup();
 
         let pending_recording_event = self
             .recording
@@ -433,15 +577,27 @@ impl DictationController {
 
         if let Some(rx) = &self.transcription_rx {
             match rx.try_recv() {
-                Ok(Ok(transcript)) => {
+                Ok(Ok(output)) => {
                     self.transcription_rx = None;
+                    let timing = self.pending_timing_seed.take().map(|seed| DictationTiming {
+                        stop_instant: seed.stop_instant,
+                        audio_secs: seed.audio_secs,
+                        whisper_load_secs: seed.whisper_load_secs,
+                        resample_secs: output.resample_secs,
+                        state_secs: output.state_secs,
+                        inference_secs: output.inference_secs,
+                    });
                     outcomes.push(DictationOutcome::Status(
                         "Local transcription complete.".to_owned(),
                     ));
-                    outcomes.push(DictationOutcome::TranscriptReady(transcript));
+                    outcomes.push(DictationOutcome::TranscriptReady {
+                        transcript: output.text,
+                        timing,
+                    });
                 }
                 Ok(Err(err)) => {
                     self.transcription_rx = None;
+                    self.pending_timing_seed = None;
                     outcomes.push(DictationOutcome::Error(err));
                 }
                 Err(TryRecvError::Disconnected) => {
@@ -449,6 +605,7 @@ impl DictationController {
                     // likely a panic inside whisper. The panic hook has the
                     // details in the log.
                     self.transcription_rx = None;
+                    self.pending_timing_seed = None;
                     outcomes.push(DictationOutcome::Error(
                         "Transcription worker stopped unexpectedly.".to_owned(),
                     ));
@@ -460,18 +617,23 @@ impl DictationController {
         outcomes
     }
 
+    /// Returns the whisper context for the active model plus the time spent
+    /// loading it — `0.0` on a warm cache hit, the real load duration on a miss.
+    /// The load time is reported separately from inference so a cold first
+    /// dictation is never mistaken for slow transcription (#43).
     fn ensure_whisper_context(
         &mut self,
         settings: &AppSettings,
-    ) -> Result<Arc<WhisperContext>, String> {
+    ) -> Result<(Arc<WhisperContext>, f32), String> {
         let model_path = validated_model_path(settings)?;
 
         if let Some(cache) = &self.model_cache
             && cache.path == model_path
         {
-            return Ok(cache.context.clone());
+            return Ok((cache.context.clone(), 0.0));
         }
 
+        log_whisper_backend_info_once();
         let model_path_string = model_path.to_string_lossy().to_string();
         let load_started = Instant::now();
         let context = WhisperContext::new_with_params(
@@ -485,10 +647,10 @@ impl DictationController {
             );
             format!("Whisper model could not be loaded: {err}")
         })?;
+        let load_secs = load_started.elapsed().as_secs_f32();
         log::info!(
             target: "dictation",
-            "whisper model loaded in {:.1}s ({model_path_string})",
-            load_started.elapsed().as_secs_f32()
+            "whisper model loaded in {load_secs:.1}s ({model_path_string})"
         );
 
         let context = Arc::new(context);
@@ -497,7 +659,7 @@ impl DictationController {
             context: context.clone(),
         });
 
-        Ok(context)
+        Ok((context, load_secs))
     }
 }
 
@@ -903,18 +1065,60 @@ fn transcribe_with_whisper(
     settings: &AppSettings,
     audio: RecordedAudio,
     language: Option<&str>,
-) -> Result<String, String> {
+) -> Result<TranscriptionOutput, String> {
+    let resample_started = Instant::now();
     let mono_16khz = resample_to_16khz(&audio.samples, audio.sample_rate);
+    let resample_secs = resample_started.elapsed().as_secs_f32();
     if mono_16khz.is_empty() {
         return Err("No audio data available for Whisper.".to_owned());
     }
 
+    let n_threads = resolve_thread_count(settings.whisper_thread_count);
+    let inference = run_whisper_inference(&context, &mono_16khz, settings, language, n_threads)?;
+
+    if inference.text.is_empty() {
+        return Err(format!(
+            "Whisper recognized no text. Model: {}, language: {}.",
+            settings.local_model.default_filename(),
+            language.unwrap_or("auto")
+        ));
+    }
+
+    Ok(TranscriptionOutput {
+        text: inference.text,
+        resample_secs,
+        state_secs: inference.state_secs,
+        inference_secs: inference.inference_secs,
+    })
+}
+
+/// Result of one Whisper decode over already-resampled 16 kHz mono samples.
+pub(crate) struct WhisperInference {
+    pub text: String,
+    pub state_secs: f32,
+    pub inference_secs: f32,
+}
+
+/// Runs Whisper over 16 kHz mono `samples` and returns the transcript plus the
+/// state-creation and inference timings. Shared by the live dictation path and
+/// the benchmark engine so both exercise identical decoding parameters (#43).
+/// `n_threads` is passed in so the benchmark can sweep thread counts without
+/// mutating settings.
+pub(crate) fn run_whisper_inference(
+    context: &WhisperContext,
+    samples: &[f32],
+    settings: &AppSettings,
+    language: Option<&str>,
+    n_threads: i32,
+) -> Result<WhisperInference, String> {
+    let state_started = Instant::now();
     let mut state = context
         .create_state()
         .map_err(|err| format!("Whisper state could not be created: {err}"))?;
+    let state_secs = state_started.elapsed().as_secs_f32();
 
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 0 });
-    params.set_n_threads(thread_count());
+    params.set_n_threads(n_threads);
     params.set_translate(false);
     params.set_language(language);
     params.set_print_special(false);
@@ -922,7 +1126,7 @@ fn transcribe_with_whisper(
     params.set_print_realtime(false);
     params.set_print_timestamps(false);
     params.set_no_timestamps(true);
-    params.set_single_segment(false);
+    params.set_single_segment(settings.whisper_single_segment);
     // Suppress Whisper's non-speech hallucinations. On trailing silence the
     // model loves to emit subtitle-style filler it learned from video training
     // data — most visibly "Vielen Dank", "Untertitel von …", "Thank you for
@@ -931,9 +1135,19 @@ fn transcribe_with_whisper(
     params.set_suppress_nst(true);
     params.set_suppress_blank(true);
 
+    // Serialize all Whisper inference process-wide. Today the paths (a live
+    // dictation, a benchmark run) never overlap by design, but nothing enforced
+    // it. A single coordinated worker keeps GPU/CPU pressure predictable and
+    // makes the pipeline safe for a future streaming mode where a final pass
+    // could otherwise race an in-flight chunk (#43, streaming prep). The lock
+    // is held only around inference, not model loading or resampling.
+    let inference_started = Instant::now();
+    let _inference_guard = whisper_inference_lock();
     state
-        .full(params, &mono_16khz)
+        .full(params, samples)
         .map_err(|err| format!("Whisper transcription failed: {err}"))?;
+    drop(_inference_guard);
+    let inference_secs = inference_started.elapsed().as_secs_f32();
 
     let transcript = state
         .as_iter()
@@ -942,18 +1156,14 @@ fn transcribe_with_whisper(
         .collect::<Vec<_>>()
         .join(" ");
 
-    if transcript.is_empty() {
-        return Err(format!(
-            "Whisper recognized no text. Model: {}, language: {}.",
-            settings.local_model.default_filename(),
-            language.unwrap_or("auto")
-        ));
-    }
-
-    Ok(transcript)
+    Ok(WhisperInference {
+        text: transcript,
+        state_secs,
+        inference_secs,
+    })
 }
 
-fn resample_to_16khz(samples: &[f32], sample_rate: u32) -> Vec<f32> {
+pub(crate) fn resample_to_16khz(samples: &[f32], sample_rate: u32) -> Vec<f32> {
     if sample_rate == 16_000 {
         return samples.to_vec();
     }
@@ -974,10 +1184,72 @@ fn resample_to_16khz(samples: &[f32], sample_rate: u32) -> Vec<f32> {
     output
 }
 
+/// Logs whisper.cpp's compiled backend flags exactly once per process so the
+/// log file alone proves whether GPU acceleration is available. There is no
+/// boolean "is Metal active" API in whisper-rs — the authoritative source is
+/// the `print_system_info()` string (contains `METAL = 1` when the Metal
+/// backend is compiled in). We derive a plain-language line from it and also
+/// dump the raw string plus the bundled whisper.cpp version. The ggml backend
+/// then logs its own `ggml_metal_init: …` lines at context-creation time
+/// (routed through `whisper_rs::ggml_logging_hook`, admitted by the file
+/// logger) which confirm the GPU is actually initialised and used.
+fn log_whisper_backend_info_once() {
+    static LOGGED: Once = Once::new();
+    LOGGED.call_once(|| {
+        let system_info = whisper_rs::print_system_info();
+        let metal_enabled = whisper_metal_compiled_in(system_info);
+        if metal_enabled {
+            log::info!(
+                target: "dictation",
+                "GPU acceleration: Metal ENABLED (whisper.cpp {})",
+                whisper_rs::WHISPER_CPP_VERSION
+            );
+        } else {
+            log::warn!(
+                target: "dictation",
+                "GPU acceleration: Metal DISABLED — running on CPU (whisper.cpp {})",
+                whisper_rs::WHISPER_CPP_VERSION
+            );
+        }
+        log::info!(target: "dictation", "whisper system info: {system_info}");
+    });
+}
+
+/// Whether whisper.cpp was compiled with the Metal backend, inferred from its
+/// `print_system_info()` string. The format has changed across versions, so we
+/// accept both the current `Metal : …` section header (whisper.cpp 1.8.x) and
+/// the older `METAL = 1` flag. ggml only prints a backend's section when that
+/// backend is compiled in, so the presence of the `Metal :` header is the
+/// signal (the GPU is then actually used unless no device is available, which
+/// the `ggml_metal_*` init lines in the log confirm).
+pub(crate) fn whisper_metal_compiled_in(system_info: &str) -> bool {
+    system_info.contains("Metal :") || system_info.contains("METAL = 1")
+}
+
+/// Resolves the whisper inference thread count from settings. `0` means "auto":
+/// use the available parallelism, capped at 6 so a burst of inference threads
+/// never starves the UI / audio callbacks. A non-zero setting is an expert
+/// override, clamped to a sane 1..=16 range.
 fn thread_count() -> i32 {
-    std::thread::available_parallelism()
-        .map(|value| value.get().min(6) as i32)
-        .unwrap_or(4)
+    resolve_thread_count(0)
+}
+
+/// Process-wide lock ensuring only one Whisper inference runs at a time
+/// (#43, streaming prep). Returns the guard; poisoning is recovered from since
+/// the lock protects no data, only serializes access.
+fn whisper_inference_lock() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+pub(crate) fn resolve_thread_count(configured: u32) -> i32 {
+    if configured == 0 {
+        std::thread::available_parallelism()
+            .map(|value| value.get().min(6) as i32)
+            .unwrap_or(4)
+    } else {
+        configured.clamp(1, 16) as i32
+    }
 }
 
 fn normalized_language(language: &str) -> Option<String> {

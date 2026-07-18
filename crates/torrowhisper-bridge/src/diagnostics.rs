@@ -66,13 +66,13 @@ fn heartbeat_loop(start: Instant) -> ! {
 }
 
 /// Resident memory and live thread count for the current process.
-struct ProcessStats {
-    resident_bytes: u64,
+pub(crate) struct ProcessStats {
+    pub(crate) resident_bytes: u64,
     thread_count: i32,
 }
 
 #[cfg(target_os = "macos")]
-fn process_stats() -> Option<ProcessStats> {
+pub(crate) fn process_stats() -> Option<ProcessStats> {
     // One `proc_pidinfo(PROC_PIDTASKINFO)` call yields both resident size and
     // thread count in a single fixed-size struct — no allocation to free,
     // unlike `task_threads`. libc is already in the dependency tree.
@@ -98,7 +98,7 @@ fn process_stats() -> Option<ProcessStats> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn process_stats() -> Option<ProcessStats> {
+pub(crate) fn process_stats() -> Option<ProcessStats> {
     None
 }
 

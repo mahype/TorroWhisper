@@ -919,6 +919,15 @@ pub struct AppSettings {
     pub history_enabled: bool,
     #[serde(default = "default_history_max_entries")]
     pub history_max_entries: u32,
+    /// Whisper inference thread count. `0` = auto (available parallelism capped
+    /// at 6). An expert override; benchmark-informed (#43). Clamped to 1..=16
+    /// when non-zero by the transcriber.
+    #[serde(default)]
+    pub whisper_thread_count: u32,
+    /// Force Whisper to emit a single segment. Faster on very short dictations
+    /// but can hurt punctuation on longer ones, so it stays opt-in (#43).
+    #[serde(default)]
+    pub whisper_single_segment: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -1205,6 +1214,8 @@ impl Default for AppSettings {
             dictionary: Vec::new(),
             history_enabled: true,
             history_max_entries: HISTORY_MAX_ENTRIES_DEFAULT,
+            whisper_thread_count: 0,
+            whisper_single_segment: false,
         }
     }
 }
@@ -1357,6 +1368,79 @@ pub struct RuntimeStatusDto {
     pub last_mic_switch_message: String,
     pub mic_switch_event_count: u64,
     pub history_revision: u64,
+    /// True while the active whisper model is being preloaded in the background
+    /// (#43). The UI can show a brief "model loading" hint so a dictation begun
+    /// during warmup isn't mistaken for a hang. Defaulted for wire compatibility.
+    #[serde(default)]
+    pub dictation_model_warming: bool,
+}
+
+/// Per-stage latency breakdown of the most recent dictation, from recording
+/// stop to inserted text (#43). Every field is in seconds. Whisper stages and
+/// LLM post-processing are kept separate so the diagnostics can tell which one
+/// dominates. `revision` bumps on each new measurement so the UI can tell a
+/// fresh timing from a stale one; `0` means "no dictation measured yet".
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
+pub struct StageTimingDto {
+    /// Length of the captured audio (basis for the real-time factor).
+    pub audio_secs: f32,
+    /// Model load time — `0` on a cache hit (the common warm case).
+    pub whisper_load_secs: f32,
+    /// Linear resample of the captured audio to 16 kHz mono.
+    pub resample_secs: f32,
+    /// `WhisperContext::create_state` for this run.
+    pub state_secs: f32,
+    /// Whisper inference proper (`state.full`).
+    pub inference_secs: f32,
+    /// LLM/dictionary/auto-correct post-processing pipeline. `0` when disabled.
+    pub post_processing_secs: f32,
+    /// Text insertion / clipboard paste into the active app.
+    pub insertion_secs: f32,
+    /// Wall-clock from recording stop to the fully delivered transcript.
+    pub total_after_stop_secs: f32,
+    /// `inference_secs / audio_secs` — whisper throughput (lower is faster than
+    /// real time). `0` when the audio length is unknown.
+    pub real_time_factor: f32,
+    pub revision: u64,
+}
+
+/// Request for `ow_run_whisper_benchmark` (#43). All fields optional; an empty
+/// object runs the default sweep (all locally available models at auto threads,
+/// plus a 1/2/4/6/8 thread sweep on the active model).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(default)]
+pub struct BenchmarkRequestDto {
+    /// Thread counts to sweep on the active model. Empty = `[1, 2, 4, 6, 8]`.
+    pub thread_counts: Vec<u32>,
+}
+
+/// One measured benchmark run over the fixed reference audio (#43).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BenchmarkRowDto {
+    /// Which sweep this row belongs to: `"model"` or `"threads"`.
+    pub kind: String,
+    pub model_label: String,
+    /// `false` when the model is not downloaded — the row then only carries a
+    /// note and no measurements (never silently omitted).
+    pub model_available: bool,
+    pub thread_count: u32,
+    pub load_secs: f32,
+    pub inference_secs: f32,
+    pub real_time_factor: f32,
+    /// Resident-memory increase caused by loading this model, in MB.
+    pub load_rss_mb: f32,
+    /// Rough quality: fraction of reference words recognised (0.0..=1.0).
+    pub quality_score: f32,
+    pub transcript: String,
+    pub note: String,
+}
+
+/// Result of a benchmark run (#43).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BenchmarkReportDto {
+    pub audio_secs: f32,
+    pub reference_text: String,
+    pub rows: Vec<BenchmarkRowDto>,
 }
 
 #[cfg(test)]

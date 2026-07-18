@@ -131,6 +131,18 @@ final class BridgeClient {
         try decodeResponse(from: ow_get_recording_levels())
     }
 
+    /// Latency breakdown of the most recent dictation (#43).
+    func getLastTiming() throws -> StageTimingDTO {
+        try decodeResponse(from: ow_get_last_timing())
+    }
+
+    /// Runs the whisper model & thread benchmark over the embedded reference
+    /// clip (#43). Long-running — call off the main thread. `threadCounts`
+    /// empty = the default 1/2/4/6/8 sweep on the active model.
+    func runWhisperBenchmark(threadCounts: [UInt32] = []) throws -> BenchmarkReportDTO {
+        try encodeAndCall(["thread_counts": threadCounts], function: ow_run_whisper_benchmark)
+    }
+
     func validateHotkey(_ hotkey: String) throws -> String {
         try encodeAndCall(["hotkey": hotkey], function: ow_validate_hotkey)
     }

@@ -603,6 +603,155 @@ struct SettingsView: View {
         } header: {
             Text("Details", bundle: .module)
         }
+
+        lastTimingSection
+        benchmarkSection
+        whisperExpertSection
+    }
+
+    /// Per-stage latency of the most recent dictation (#43).
+    @ViewBuilder
+    private var lastTimingSection: some View {
+        Section {
+            if model.lastTiming.revision == 0 {
+                Text("No dictation measured yet.", bundle: .module)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                let timing = model.lastTiming
+                timingRow("Audio length", timing.audioSecs)
+                if timing.whisperLoadSecs > 0 {
+                    timingRow("Model load", timing.whisperLoadSecs)
+                }
+                timingRow("Resampling", timing.resampleSecs)
+                timingRow("Whisper state creation", timing.stateSecs)
+                timingRow("Whisper inference", timing.inferenceSecs)
+                if timing.postProcessingSecs > 0 {
+                    timingRow("Post-processing (LLM)", timing.postProcessingSecs)
+                }
+                timingRow("Text insertion", timing.insertionSecs)
+                timingRow("Total after stop", timing.totalAfterStopSecs)
+                LabeledContent {
+                    Text(verbatim: String(format: "%.2f×", timing.realTimeFactor))
+                } label: {
+                    Text("Real-time factor", bundle: .module)
+                }
+            }
+        } header: {
+            Text("Last dictation timing", bundle: .module)
+        } footer: {
+            Text("Whisper and LLM post-processing are timed separately, so you can tell which one dominates.", bundle: .module)
+        }
+    }
+
+    private func timingRow(_ label: LocalizedStringKey, _ seconds: Float) -> some View {
+        LabeledContent {
+            Text(verbatim: String(format: "%.2f s", seconds))
+        } label: {
+            Text(label, bundle: .module)
+        }
+    }
+
+    /// Model & thread benchmark trigger and results (#43).
+    @ViewBuilder
+    private var benchmarkSection: some View {
+        Section {
+            Button {
+                model.runBenchmark()
+            } label: {
+                Text("Run benchmark", bundle: .module)
+            }
+            .disabled(
+                model.isBenchmarkRunning
+                    || model.runtime.isRecording
+                    || model.runtime.isTranscribing
+            )
+
+            if model.isBenchmarkRunning {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Benchmarking… this can take a while.", bundle: .module)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let error = model.benchmarkError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            if let report = model.benchmarkReport {
+                Text(verbatim: String(format: "Reference audio: %.1f s", report.audioSecs))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(report.rows) { row in
+                    benchmarkRow(row)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                }
+            }
+        } header: {
+            Text("Model & thread benchmark", bundle: .module)
+        } footer: {
+            Text("Transcribes a fixed reference clip with each installed model and across thread counts (1/2/4/6/8), so the fastest option can be chosen from real measurements instead of assumptions.", bundle: .module)
+        }
+    }
+
+    @ViewBuilder
+    private func benchmarkRow(_ row: BenchmarkRowDTO) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(verbatim: row.modelLabel)
+                    .font(.callout.weight(.medium))
+                Spacer()
+                if row.kind == "threads" {
+                    Text(verbatim: "\(row.threadCount) threads")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if !row.modelAvailable || row.inferenceSecs == 0 {
+                Text(verbatim: row.note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(verbatim: String(
+                    format: "load %.2fs · inference %.2fs · RTF %.2f× · %.0f MB · quality %.0f%%",
+                    row.loadSecs,
+                    row.inferenceSecs,
+                    row.realTimeFactor,
+                    row.loadRssMb,
+                    row.qualityScore * 100
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// Expert Whisper decoding controls (#43): thread count + single-segment.
+    @ViewBuilder
+    private var whisperExpertSection: some View {
+        Section {
+            Stepper(value: model.binding(for: \.whisperThreadCount), in: 0...16) {
+                LabeledContent {
+                    Text(
+                        model.settings.whisperThreadCount == 0
+                            ? L("Auto", locale: locale)
+                            : "\(model.settings.whisperThreadCount)"
+                    )
+                } label: {
+                    Text("Whisper threads", bundle: .module)
+                }
+            }
+            Toggle(isOn: model.binding(for: \.whisperSingleSegment)) {
+                Text("Force single segment", bundle: .module)
+            }
+        } header: {
+            Text("Whisper (expert)", bundle: .module)
+        } footer: {
+            Text("Threads 0 = automatic. Single segment can be faster on very short dictations but may hurt punctuation on longer ones. Choose values based on the benchmark above.", bundle: .module)
+        }
     }
 
     @ViewBuilder
@@ -806,6 +955,9 @@ struct SettingsView: View {
         }
         if model.runtime.isTranscribing {
             return L("Transcription in progress", locale: locale)
+        }
+        if model.runtime.dictationModelWarming {
+            return L("Loading speech model…", locale: locale)
         }
         return model.runtime.lastStatus.isEmpty ? L("Ready", locale: locale) : L(model.runtime.lastStatus, locale: locale)
     }

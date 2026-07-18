@@ -31,11 +31,27 @@ serde.workspace = true
 serde_json = "1.0.149"
 sys-locale = "0.3"
 sysinfo = { version = "0.38", default-features = false, features = ["system", "disk"] }
-# log_backend routes whisper.cpp/GGML output through the `log` crate into
-# our file logger instead of stderr (which is lost in a bundled app).
+# whisper-rs is declared per-target below so macOS can add the `metal` feature
+# (GPU inference) without forcing it onto Windows/Linux builds. `log_backend`
+# routes whisper.cpp/GGML output through the `log` crate into our file logger
+# instead of stderr (which is lost in a bundled app).
+
+# macOS: enable Metal so whisper.cpp runs inference on the GPU. Metal exists on
+# both Apple Silicon and Intel Macs (whisper.cpp falls back to CPU cleanly when
+# no suitable GPU is present), so a single macOS block covers the universal
+# (arm64 + x86_64) build. Feature must stay confined to whisper-rs's own ggml —
+# see the llama-cpp-2 warning above.
+[target.'cfg(target_os = "macos")'.dependencies]
+whisper-rs = { version = "0.16.0", features = ["log_backend", "metal"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
 whisper-rs = { version = "0.16.0", features = ["log_backend"] }
 
-[dev-dependencies]
-# Visible to the integration tests (tests/ggml_log_hook.rs); features unify
-# with the main dependency above, so this adds no extra build cost.
+# Dev-deps mirror the per-target split; otherwise the test binary would unify to
+# the non-metal variant and the ggml log-hook test would exercise a CPU-only
+# build even on macOS.
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+whisper-rs = { version = "0.16.0", features = ["log_backend", "metal"] }
+
+[target.'cfg(not(target_os = "macos"))'.dev-dependencies]
 whisper-rs = { version = "0.16.0", features = ["log_backend"] }

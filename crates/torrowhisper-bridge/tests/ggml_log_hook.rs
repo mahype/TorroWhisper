@@ -41,3 +41,19 @@ fn whisper_errors_reach_the_log_file() {
 
     let _ = fs::remove_dir_all(&dir);
 }
+
+/// Acceptance test for #43, task 1: the macOS build must compile in the Metal
+/// backend so inference can run on the GPU. `print_system_info()` reports
+/// `METAL = 1` exactly when the `metal` feature is active. On non-macOS targets
+/// the feature is intentionally off, so this only runs on macOS.
+#[cfg(target_os = "macos")]
+#[test]
+fn metal_backend_is_compiled_in_on_macos() {
+    // whisper.cpp 1.8.x reports Metal as a `Metal : …` section; older versions
+    // used `METAL = 1`. Either proves the backend is compiled in.
+    let info = whisper_rs::print_system_info();
+    assert!(
+        info.contains("Metal :") || info.contains("METAL = 1"),
+        "macOS build must compile in Metal (whisper system info: {info})"
+    );
+}

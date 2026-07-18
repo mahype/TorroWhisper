@@ -172,6 +172,12 @@ impl Log for FileLogger {
         }
         let target = metadata.target();
         target.starts_with("torrowhisper")
+            // whisper.cpp / GGML output is routed here via install_logging_hooks()
+            // under the `whisper_rs::*_logging_hook` targets. Admitting it at info
+            // captures the ggml backend-init banner (`ggml_metal_init: …`, GPU
+            // device name, backend selection) that proves Metal is initialised
+            // and the inference actually runs on the GPU (#43).
+            || target.starts_with("whisper_rs")
             || matches!(
                 target,
                 "bridge" | "dictation" | "app" | "panic" | "models" | "diag"

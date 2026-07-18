@@ -4,6 +4,19 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 > _TorroWhisper was previously released as **DonnyWhisper** (and before that as **Open Whisper**); entries for 0.4.x and earlier predate the first rename._
 
+## [Unreleased]
+
+### Added
+- **Metal GPU acceleration for Whisper** (#43) — the macOS build now compiles `whisper-rs` with the `metal` feature, so transcription runs on the GPU (Apple Silicon and Intel) instead of the CPU; Windows/Linux keep the CPU-only build via per-target Cargo dependencies. On first model load the log records whether Metal is compiled in (`GPU acceleration: Metal ENABLED`), the bundled whisper.cpp version, and — now that the log filter admits `whisper_rs` output — the ggml Metal init banner (GPU name, backend selection) that proves the GPU is actually used.
+- **Per-stage dictation timing** (#43) — every dictation logs a consolidated breakdown from recording stop to inserted text (audio length, model load, resampling, Whisper state creation, Whisper inference, LLM post-processing, text insertion, total, and real-time factor). Whisper and LLM post-processing are timed separately so the diagnostics can tell which one dominates. The latest breakdown is also shown in Settings → Diagnostics.
+- **Model & thread benchmark** (#43) — Settings → Diagnostics has a *Run benchmark* button that transcribes a fixed, embedded German reference clip with each installed model (Q5_0 vs FP16 Turbo and others) and across thread counts (1/2/4/6/8), reporting load time, inference time, real-time factor, memory footprint and a rough quality score. Choose the fastest option from measurements instead of assumptions — quantization is not automatically fastest, and with Metal active the CPU thread count barely matters.
+- **Background model warmup** (#43) — the active Whisper model is now preloaded in the background after launch and after a model switch, so the first dictation of a session doesn't pay the load cost inline. A "Loading speech model…" hint shows while it warms.
+- **Expert Whisper decoding settings** (#43) — Settings → Diagnostics exposes the inference thread count (0 = auto) and a *Force single segment* toggle, both benchmark-informed. A single Whisper inference now runs at a time process-wide, keeping the pipeline ready for a future streaming mode.
+
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 ## [0.5.0] — 2026-07-14
 
 ### Added

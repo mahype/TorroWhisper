@@ -951,6 +951,10 @@ struct AppSettings: Codable, Equatable {
     var dictionary: [DictionaryEntry]
     var historyEnabled: Bool
     var historyMaxEntries: UInt32
+    /// Whisper inference thread count; 0 = auto (#43).
+    var whisperThreadCount: UInt32
+    /// Force a single Whisper segment (expert, #43).
+    var whisperSingleSegment: Bool
 
     static let `default` = AppSettings(
         onboardingCompleted: false,
@@ -996,7 +1000,9 @@ struct AppSettings: Codable, Equatable {
         uiLanguage: .system,
         dictionary: [],
         historyEnabled: true,
-        historyMaxEntries: historyMaxEntriesDefault
+        historyMaxEntries: historyMaxEntriesDefault,
+        whisperThreadCount: 0,
+        whisperSingleSegment: false
     )
 }
 
@@ -1115,6 +1121,7 @@ struct RuntimeStatusDTO: Codable, Equatable {
     var lastMicSwitchMessage: String
     var micSwitchEventCount: UInt64
     var historyRevision: UInt64
+    var dictationModelWarming: Bool
 
     static let empty = RuntimeStatusDTO(
         isRecording: false,
@@ -1140,8 +1147,56 @@ struct RuntimeStatusDTO: Codable, Equatable {
         activeInputDeviceName: "",
         lastMicSwitchMessage: "",
         micSwitchEventCount: 0,
-        historyRevision: 0
+        historyRevision: 0,
+        dictationModelWarming: false
     )
+}
+
+/// Per-stage latency of the most recent dictation (#43). Mirrors the Rust
+/// `StageTimingDto`; `revision == 0` means no dictation has been measured yet.
+struct StageTimingDTO: Codable, Equatable {
+    var audioSecs: Float
+    var whisperLoadSecs: Float
+    var resampleSecs: Float
+    var stateSecs: Float
+    var inferenceSecs: Float
+    var postProcessingSecs: Float
+    var insertionSecs: Float
+    var totalAfterStopSecs: Float
+    var realTimeFactor: Float
+    var revision: UInt64
+
+    static let empty = StageTimingDTO(
+        audioSecs: 0, whisperLoadSecs: 0, resampleSecs: 0, stateSecs: 0,
+        inferenceSecs: 0, postProcessingSecs: 0, insertionSecs: 0,
+        totalAfterStopSecs: 0, realTimeFactor: 0, revision: 0
+    )
+}
+
+/// One measured benchmark run (#43). Mirrors the Rust `BenchmarkRowDto`.
+struct BenchmarkRowDTO: Codable, Equatable, Identifiable {
+    var kind: String
+    var modelLabel: String
+    var modelAvailable: Bool
+    var threadCount: UInt32
+    var loadSecs: Float
+    var inferenceSecs: Float
+    var realTimeFactor: Float
+    var loadRssMb: Float
+    var qualityScore: Float
+    var transcript: String
+    var note: String
+
+    // Stable identity for SwiftUI lists: kind + model + thread count is unique
+    // within a report.
+    var id: String { "\(kind)-\(modelLabel)-\(threadCount)" }
+}
+
+/// Result of a benchmark run (#43). Mirrors the Rust `BenchmarkReportDto`.
+struct BenchmarkReportDTO: Codable, Equatable {
+    var audioSecs: Float
+    var referenceText: String
+    var rows: [BenchmarkRowDTO]
 }
 
 struct MicSwitchEventDTO: Codable {

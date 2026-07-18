@@ -2,6 +2,7 @@
 mod audio_export;
 #[allow(dead_code)]
 mod autostart;
+mod benchmark;
 mod diagnostics;
 #[allow(dead_code)]
 mod dictation;
@@ -41,14 +42,14 @@ use std::{
 };
 
 use autostart::AutostartManager;
-use dictation::{DictationController, DictationOutcome, MicSwitchEvent};
+use dictation::{DictationController, DictationOutcome, DictationTiming, MicSwitchEvent};
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
 use llm_model_manager::LlmModelDownloadManager;
 use model_manager::ModelDownloadManager;
 use torrowhisper_core::{
     AppSettings, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto, HistoryEntry,
     LlmModelStatusDto, LlmPreset, LlmRegistryEntryDto, ModelPreset, ModelStatusDto,
-    RecordingLevelsDto, RemoteModelBackend, RemoteModelDto, RuntimeStatusDto,
+    RecordingLevelsDto, RemoteModelBackend, RemoteModelDto, RuntimeStatusDto, StageTimingDto,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -65,6 +66,16 @@ struct BridgeRuntime {
     hotkey: Option<HotKeyController>,
     post_processing_rx: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
     pending_post_processing: Option<PendingPostProcessing>,
+    /// When the current post-processing run started, so its duration can be
+    /// folded into the per-dictation timing report (#43).
+    post_processing_started: Option<std::time::Instant>,
+    /// Whisper-side timing of the in-flight dictation, completed with
+    /// post-processing + insertion once the transcript is delivered (#43).
+    pending_timing: Option<DictationTiming>,
+    /// Post-processing duration measured for the in-flight dictation.
+    pending_post_secs: f32,
+    /// Latency breakdown of the most recently completed dictation (#43).
+    last_timing: StageTimingDto,
     dictation_trigger_count: u64,
     last_status: String,
     last_transcript: String,
@@ -173,6 +184,10 @@ impl BridgeRuntime {
             hotkey,
             post_processing_rx: None,
             pending_post_processing: None,
+            post_processing_started: None,
+            pending_timing: None,
+            pending_post_secs: 0.0,
+            last_timing: StageTimingDto::default(),
             dictation_trigger_count: 0,
             last_status,
             last_transcript: String::new(),
@@ -259,7 +274,17 @@ impl BridgeRuntime {
         local_llm::maybe_unload_shared_runtime(self.settings.local_llm_auto_unload_secs);
 
         if let Some(rx) = &self.post_processing_rx {
-            match rx.try_recv() {
+            let result = rx.try_recv();
+            // A terminal result arrived (success or failure) → record how long
+            // post-processing ran for the timing report (#43).
+            if !matches!(result, Err(std::sync::mpsc::TryRecvError::Empty)) {
+                self.pending_post_secs = self
+                    .post_processing_started
+                    .take()
+                    .map(|started| started.elapsed().as_secs_f32())
+                    .unwrap_or(0.0);
+            }
+            match result {
                 Ok(Ok(processed_text)) => {
                     self.post_processing_rx = None;
                     let was_cancelled = self.cancelled.load(Ordering::Relaxed);
@@ -362,7 +387,9 @@ impl BridgeRuntime {
                 DictationOutcome::PendingTranscriptSave(base) => {
                     self.pending_transcript_save = Some(base);
                 }
-                DictationOutcome::TranscriptReady(transcript) => {
+                DictationOutcome::TranscriptReady { transcript, timing } => {
+                    self.pending_timing = timing;
+                    self.pending_post_secs = 0.0;
                     let was_cancelled = self.cancelled.load(Ordering::Relaxed);
                     if was_cancelled {
                         self.finish_transcript(transcript, "Transcript ready.", true);
@@ -385,6 +412,7 @@ impl BridgeRuntime {
                             let _ = tx.send(result);
                         });
                         self.post_processing_rx = Some(rx);
+                        self.post_processing_started = Some(std::time::Instant::now());
                         let status = format!("Whisper transcript ready. Processing '{mode_name}'.");
                         self.pending_post_processing = Some(PendingPostProcessing {
                             raw_transcript: transcript,
@@ -394,10 +422,12 @@ impl BridgeRuntime {
                         self.last_status = status;
                     } else {
                         // No LLM step — run the fast dictionary/auto-correct pipeline inline.
+                        let pipeline_started = std::time::Instant::now();
                         let registry = pipeline::StageRegistry::with_builtins();
                         let processed =
                             pipeline::run(&registry, &self.settings, &transcript, &self.cancelled)
                                 .unwrap_or(transcript);
+                        self.pending_post_secs = pipeline_started.elapsed().as_secs_f32();
                         self.finish_transcript(processed, "Transcript ready.", false);
                     }
                 }
@@ -500,6 +530,10 @@ impl BridgeRuntime {
         }
 
         if was_cancelled {
+            // Cancelled dictations get no timing report; drop the in-flight
+            // measurement so it can't leak into the next dictation.
+            self.pending_timing = None;
+            self.pending_post_secs = 0.0;
             self.last_status = if self.settings.history_enabled && !transcript.trim().is_empty() {
                 "Dictation cancelled — saved to history.".to_owned()
             } else {
@@ -508,6 +542,7 @@ impl BridgeRuntime {
             return;
         }
 
+        let insertion_started = std::time::Instant::now();
         if self.settings.insert_text_automatically {
             match text_inserter::insert_text_into_active_app(&transcript, &self.settings) {
                 Ok(message) => {
@@ -537,6 +572,62 @@ impl BridgeRuntime {
             self.note_dictation_success();
             self.last_status = ready_status.to_owned();
         }
+        self.finalize_timing(insertion_started.elapsed().as_secs_f32());
+    }
+
+    /// Completes the per-dictation timing report (#43): folds the whisper-side
+    /// stages (seeded at recording stop) together with the post-processing and
+    /// insertion durations measured here, logs a single consolidated line, and
+    /// stores the result for the diagnostics UI. No-op when no measurement was
+    /// in flight (e.g. a dictation started before this build).
+    fn finalize_timing(&mut self, insertion_secs: f32) {
+        let Some(t) = self.pending_timing.take() else {
+            return;
+        };
+        let post_secs = std::mem::take(&mut self.pending_post_secs);
+        let total = t.stop_instant.elapsed().as_secs_f32();
+        let rtf = if t.audio_secs > 0.0 {
+            t.inference_secs / t.audio_secs
+        } else {
+            0.0
+        };
+        let timing = StageTimingDto {
+            audio_secs: t.audio_secs,
+            whisper_load_secs: t.whisper_load_secs,
+            resample_secs: t.resample_secs,
+            state_secs: t.state_secs,
+            inference_secs: t.inference_secs,
+            post_processing_secs: post_secs,
+            insertion_secs,
+            total_after_stop_secs: total,
+            real_time_factor: rtf,
+            revision: self.last_timing.revision.wrapping_add(1),
+        };
+        log::info!(
+            target: "dictation",
+            "timing report — audio {:.1}s | whisper: load {:.2}s, resample {:.2}s, \
+             state {:.2}s, inference {:.2}s | post-processing {:.2}s | insertion {:.2}s | \
+             total after stop {:.2}s | real-time factor {:.2}",
+            timing.audio_secs,
+            timing.whisper_load_secs,
+            timing.resample_secs,
+            timing.state_secs,
+            timing.inference_secs,
+            timing.post_processing_secs,
+            timing.insertion_secs,
+            timing.total_after_stop_secs,
+            timing.real_time_factor
+        );
+        self.last_timing = timing;
+    }
+
+    fn last_timing(&mut self) -> StageTimingDto {
+        self.last_timing
+    }
+
+    /// Starts a background preload of the active whisper model (#43).
+    fn warm_up_active_model(&mut self) {
+        self.dictation.start_model_warmup(&self.settings);
     }
 
     fn record_history_entry(&mut self, transcript: &str, was_cancelled: bool) {
@@ -628,6 +719,9 @@ impl BridgeRuntime {
             || previous_model != self.settings.local_model
         {
             self.dictation.invalidate_model_cache();
+            // Warm the newly selected model in the background so the next
+            // dictation doesn't pay the load cost inline (#43).
+            self.dictation.start_model_warmup(&self.settings);
         }
 
         Ok(self.last_status.clone())
@@ -1076,6 +1170,7 @@ impl BridgeRuntime {
             ),
             mic_switch_event_count: self.dictation.mic_switch_event_count(),
             history_revision: self.history_revision,
+            dictation_model_warming: self.dictation.is_model_warming(),
         }
     }
 
@@ -1376,6 +1471,17 @@ fn log_settings_summary(settings: &AppSettings) {
         settings.post_processing_enabled,
         settings.active_provider_summary()
     );
+    log::info!(
+        target: "bridge",
+        "whisper decoding: threads {}, single_segment {}, language '{}'",
+        if settings.whisper_thread_count == 0 {
+            "auto".to_owned()
+        } else {
+            settings.whisper_thread_count.to_string()
+        },
+        settings.whisper_single_segment,
+        settings.transcription_language
+    );
 }
 
 #[derive(Deserialize)]
@@ -1462,6 +1568,9 @@ pub extern "C" fn ow_session_started() -> *mut c_char {
     // Start the once-per-minute diagnostics heartbeat now that a session is
     // live (#39, Part B). Idempotent, so repeated calls spawn no extra thread.
     diagnostics::start_heartbeat();
+    // Preload the active whisper model in the background so the first dictation
+    // of the session is already warm (#43).
+    with_runtime_value(BridgeRuntime::warm_up_active_model);
     response_ok(SessionStartResponse {
         previous_ended_abnormally,
     })
@@ -1705,6 +1814,31 @@ pub extern "C" fn ow_get_runtime_status() -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_recording_levels() -> *mut c_char {
     response_ok(with_runtime_value(BridgeRuntime::recording_levels))
+}
+
+/// Latency breakdown of the most recently completed dictation (#43). Returns a
+/// `StageTimingDto`; `revision == 0` means no dictation has been measured yet.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_get_last_timing() -> *mut c_char {
+    response_ok(with_runtime_value(BridgeRuntime::last_timing))
+}
+
+/// Runs the whisper model & thread benchmark over the embedded reference clip
+/// (#43) and returns a `BenchmarkReportDto`. Deliberately bypasses the shared
+/// `thread_local` runtime — it loads settings from disk and its own contexts —
+/// so the caller can run it on a background thread without freezing the UI or
+/// spinning up a second runtime with conflicting side effects.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_run_whisper_benchmark(request_json: *const c_char) -> *mut c_char {
+    // An absent/empty/invalid payload just means "default sweep".
+    let request = parse_json_arg::<torrowhisper_core::BenchmarkRequestDto>(
+        request_json,
+        "BenchmarkRequestDto",
+    )
+    .unwrap_or_default();
+    let mut settings = settings_store::load().unwrap_or_default();
+    settings.normalize();
+    response_from_result(benchmark::run_benchmark(&settings, &request))
 }
 
 #[unsafe(no_mangle)]

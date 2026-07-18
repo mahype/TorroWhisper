@@ -372,3 +372,27 @@
 "Save" = "Save";
 
 "medium" = "medium";
+
+/* Whisper performance, timing & benchmark (#43) */
+"No dictation measured yet." = "No dictation measured yet.";
+"Audio length" = "Audio length";
+"Model load" = "Model load";
+"Resampling" = "Resampling";
+"Whisper state creation" = "Whisper state creation";
+"Whisper inference" = "Whisper inference";
+"Post-processing (LLM)" = "Post-processing (LLM)";
+"Text insertion" = "Text insertion";
+"Total after stop" = "Total after stop";
+"Real-time factor" = "Real-time factor";
+"Last dictation timing" = "Last dictation timing";
+"Whisper and LLM post-processing are timed separately, so you can tell which one dominates." = "Whisper and LLM post-processing are timed separately, so you can tell which one dominates.";
+"Run benchmark" = "Run benchmark";
+"Benchmarking… this can take a while." = "Benchmarking… this can take a while.";
+"Model & thread benchmark" = "Model & thread benchmark";
+"Transcribes a fixed reference clip with each installed model and across thread counts (1/2/4/6/8), so the fastest option can be chosen from real measurements instead of assumptions." = "Transcribes a fixed reference clip with each installed model and across thread counts (1/2/4/6/8), so the fastest option can be chosen from real measurements instead of assumptions.";
+"Whisper threads" = "Whisper threads";
+"Auto" = "Auto";
+"Force single segment" = "Force single segment";
+"Whisper (expert)" = "Whisper (expert)";
+"Threads 0 = automatic. Single segment can be faster on very short dictations but may hurt punctuation on longer ones. Choose values based on the benchmark above." = "Threads 0 = automatic. Single segment can be faster on very short dictations but may hurt punctuation on longer ones. Choose values based on the benchmark above.";
+"Loading speech model…" = "Loading speech model…";
