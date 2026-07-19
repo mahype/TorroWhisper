@@ -124,8 +124,9 @@ Maschinenlesbar in `tokens/tokens.json` des Design-Repos, in Swift gespiegelt in
 
 | Element | Datei | Hinweis |
 |---|---|---|
-| App-Icon | `Resources/Brand/torro-logo-square.svg` | rotes Quadrat mit Hörnern |
+| App-Icon | `Resources/Brand/torrowhisper-icon.svg` | Produkt-Icon: Hörner oben, Pegel-Glyph darunter, weiß auf rotem Verlauf (Design-Guide 07/08) |
 | Hörner-Signet | `Resources/Brand/horns-{white,red,black}.svg` | kleine Akzente, Loader, Wasserzeichen |
+| Grund-Quadrat | `Resources/Brand/torro-logo-square.svg` | nur Hörner auf Rot — Familien-Grundform, **nicht** das App-Icon |
 | Wortmarke | nur im Design-Repo | „TORROFORMS" — gehört zur Forms-Marke, **nicht** in diese App |
 
 **So:**
@@ -149,13 +150,17 @@ Maschinenlesbar in `tokens/tokens.json` des Design-Repos, in Swift gespiegelt in
   weiß/rot/schwarz sind dieselbe Geometrie) und ohne Resource-Plumbing durch das
   `.app`-Bundle auskommt. Natürliches Seitenverhältnis ≈ 1.73:1 → mit
   `.aspectRatio(contentMode: .fit)` layouten.
-- **Logo-Kachel:** `TorroLogoTile` — Signet auf rotem Squircle, für Stellen an
-  denen sich die App selbst repräsentiert (Onboarding, „Über"). Die Hörner
-  werden dort mit den Maßverhältnissen aus `torro-logo-square.svg` platziert
-  (das Signet ist dort geometrisch identisch, nur 1:10 skaliert), damit die
-  Kachel das App-Icon in klein *ist* und kein Nachbau.
+- **Pegel-Glyph:** [`TorroWaveform`](apps/torrowhisper-macos/Sources/TorroWhisper/TorroBrand.swift)
+  ist der Funktions-Glyph der App (fünf gerundete Balken), als Shape aus dem
+  24×24-Glyph in `torrowhisper-icon.svg` konvertiert — analog zum Signet
+  einfärbbar und ohne Resource-Plumbing.
+- **Logo-Kachel:** `TorroLogoTile` — Hörner-Signet über dem Pegel-Glyph auf rotem
+  Verlaufs-Squircle, für Stellen an denen sich die App selbst repräsentiert
+  (Onboarding, „Über"). Beide Elemente werden mit den Maßverhältnissen aus
+  `torrowhisper-icon.svg` platziert (120-Einheiten-Icon), damit die Kachel das
+  App-Icon in klein *ist* und kein Nachbau.
 - **App-Icon:** wird von [`scripts/generate-app-icon.swift`](scripts/generate-app-icon.swift)
-  aus `torro-logo-square.svg` erzeugt (`swift scripts/generate-app-icon.swift`
+  aus `torrowhisper-icon.svg` erzeugt (`swift scripts/generate-app-icon.swift`
   im Repo-Root). Das Skript rendert den Vektor unverändert und legt nur die
   macOS-Squircle-Maske darüber. Icon-Änderungen gehen über das Skript, nicht
   über manuell bearbeitete `.icns`.
@@ -174,6 +179,7 @@ Maschinenlesbar in `tokens/tokens.json` des Design-Repos, in Swift gespiegelt in
 gh repo clone mahype/torro-design /tmp/torro-design -- --depth 1
 cp /tmp/torro-design/logo/horns/horns-*.svg \
    /tmp/torro-design/logo/icon-square/torro-logo-square.svg \
+   /tmp/torro-design/logo/icon-square/products/torrowhisper-icon.svg \
    apps/torrowhisper-macos/Resources/Brand/
 swift scripts/generate-app-icon.swift
 ```

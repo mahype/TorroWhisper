@@ -98,27 +98,81 @@ struct TorroHorns: Shape {
     }
 }
 
-/// The app-icon lockup at UI scale: the horns signet on the brand's red tile.
-/// Use where the app represents itself (onboarding, About) — the guide asks for
-/// the signet on full red rather than a shrunken wordmark at small sizes.
+/// The audio-level glyph from the product app icon: five rounded vertical bars.
 ///
-/// The horns are placed at the ratios taken from `torro-logo-square.svg`, so
-/// this is the app icon in miniature rather than a lookalike. The frame it gets
-/// has the signet's own aspect ratio, so nothing is distorted.
+/// Converted from the 24×24 glyph baked into `Resources/Brand/torrowhisper-icon.svg`
+/// (the brand repo's `logo/icon-square/products/`). It is a `Shape`, not a bundled
+/// image, so it tints via `foregroundStyle` and needs no resource plumbing. The
+/// glyph is the app's "function glyph" in the Torro product-icon system (design
+/// guide, sections 07/08) — horns identify the family, this bar identifies Whisper.
+///
+/// The source is drawn as five round-capped strokes; here each stroke is a filled
+/// capsule of the same width and centre so the fill reproduces the round caps
+/// exactly. The 24×24 box is aspect-fitted into whatever rect it is given.
+struct TorroWaveform: Shape {
+    /// Edge length of the source glyph viewBox the coordinates below are in.
+    static let sourceViewBox: CGFloat = 24
+    /// Stroke width of the source bars, in glyph units.
+    private static let strokeWidth: CGFloat = 2.2
+    /// Bar centre-x and its vertical extent (y-top, y-bottom), in glyph units —
+    /// taken 1:1 from the SVG's five `<line>` elements.
+    private static let bars: [(x: CGFloat, top: CGFloat, bottom: CGFloat)] = [
+        (4, 10, 14), (8, 7, 17), (12, 4, 20), (16, 8, 16), (20, 11, 13),
+    ]
+
+    func path(in rect: CGRect) -> Path {
+        let vb = Self.sourceViewBox
+        let scale = min(rect.width, rect.height) / vb
+        let drawn = vb * scale
+        let originX = rect.minX + (rect.width - drawn) / 2
+        let originY = rect.minY + (rect.height - drawn) / 2
+        let w = Self.strokeWidth * scale
+
+        var path = Path()
+        for bar in Self.bars {
+            let cx = originX + bar.x * scale
+            let top = originY + bar.top * scale - w / 2
+            let height = (bar.bottom - bar.top) * scale + w
+            let box = CGRect(x: cx - w / 2, y: top, width: w, height: height)
+            path.addRoundedRect(in: box, cornerSize: CGSize(width: w / 2, height: w / 2))
+        }
+        return path
+    }
+}
+
+/// The app-icon lockup at UI scale: the horns signet above the audio-level glyph
+/// on the brand's red-gradient tile. Use where the app represents itself
+/// (onboarding, About) — the guide asks for the product icon rather than a
+/// shrunken wordmark at small sizes.
+///
+/// Signet and glyph are placed at the ratios taken from
+/// `Resources/Brand/torrowhisper-icon.svg` (a 120-unit icon: horns at x35.5 y19
+/// w49 h28, waveform at x37 y56 w46 h46), so this is the app icon in miniature
+/// rather than a lookalike.
 struct TorroLogoTile: View {
     var size: CGFloat = 44
 
-    private var hornsWidth: CGFloat { size * TorroHorns.contentBox.width / TorroHorns.sourceViewBox }
-    private var hornsHeight: CGFloat { size * TorroHorns.contentBox.height / TorroHorns.sourceViewBox }
+    /// Scale from the 120-unit source icon to the requested tile size.
+    private var k: CGFloat { size / 120 }
 
     var body: some View {
         RoundedRectangle(cornerRadius: size * 0.2237, style: .continuous)
-            .fill(Color.torroRed)
+            .fill(
+                LinearGradient(colors: [.torroRed, .torroRedDeep],
+                               startPoint: .top, endPoint: .bottom)
+            )
             .frame(width: size, height: size)
             .overlay {
                 TorroHorns()
                     .fill(.white)
-                    .frame(width: hornsWidth, height: hornsHeight)
+                    .frame(width: 49 * k, height: 28 * k)
+                    .position(x: 60 * k, y: 33 * k)
+            }
+            .overlay {
+                TorroWaveform()
+                    .fill(.white)
+                    .frame(width: 46 * k, height: 46 * k)
+                    .position(x: 60 * k, y: 79 * k)
             }
             .accessibilityHidden(true)
     }

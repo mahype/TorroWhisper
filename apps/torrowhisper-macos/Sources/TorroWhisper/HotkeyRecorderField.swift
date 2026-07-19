@@ -60,10 +60,14 @@ struct HotkeyRecorderField: View {
                         Text("Clear", bundle: .module)
                     }
                 } else {
+                    // Neutral system button — the design guide reserves the one
+                    // prominent (brand-red) button per surface for the wizard/
+                    // sheet footer primary; an inline "Record" control stays a
+                    // plain grey push button.
                     Button(action: onStartCapture) {
                         Text("Record", bundle: .module)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                 }
             }
 
