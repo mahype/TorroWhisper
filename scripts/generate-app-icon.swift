@@ -2,12 +2,14 @@
 // Generates the TorroWhisper AppIcon.icns from the brand vector.
 // Run from the repo root: `swift scripts/generate-app-icon.swift`.
 //
-// The source of truth is apps/torrowhisper-macos/Resources/Brand/torro-logo-square.svg,
-// mirrored from the mahype/torro-design repo (logo/icon-square/). The SVG is
-// rendered as-is — flat Torro Red with the white horns signet, no gradients,
-// no shadow, no recoloring (see AGENTS.md "Design & Marke"). The only thing
-// this script adds is the macOS squircle mask, because the brand asset is a
-// hard square and macOS expects the rounded tile.
+// The source of truth is apps/torrowhisper-macos/Resources/Brand/torrowhisper-icon.svg,
+// mirrored from the mahype/torro-design repo (logo/icon-square/products/). It is
+// the product-family icon (design guide, sections 07/08): the white horns signet
+// on top, the white audio-level glyph below, both on the Torro-Red gradient
+// #D50C0C→#A50A0A. The SVG is rendered as-is — no recoloring, no shadow (see
+// AGENTS.md "Design & Marke"). The only thing this script adds is the macOS
+// squircle mask, because the brand asset is a hard square and macOS expects the
+// rounded tile.
 //
 // NSImage reads SVG natively (macOS 11+), so this needs no external tooling.
 
@@ -20,7 +22,7 @@ import UniformTypeIdentifiers
 let fm = FileManager.default
 let cwd = fm.currentDirectoryPath
 let resourcesDir = "\(cwd)/apps/torrowhisper-macos/Resources"
-let brandSVG = "\(resourcesDir)/Brand/torro-logo-square.svg"
+let brandSVG = "\(resourcesDir)/Brand/torrowhisper-icon.svg"
 let iconsetDir = "\(resourcesDir)/AppIcon.iconset"
 let icnsPath = "\(resourcesDir)/AppIcon.icns"
 
