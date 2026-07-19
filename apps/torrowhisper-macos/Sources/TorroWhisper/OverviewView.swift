@@ -146,7 +146,7 @@ struct StatusTile: View {
         HStack(alignment: .top, spacing: 10) {
             Circle()
                 .fill(status.color)
-                .frame(width: 9, height: 9)
+                .frame(width: TorroMetrics.statusDot, height: TorroMetrics.statusDot)
                 .padding(.top, 5)
                 .accessibilityHidden(true)
 

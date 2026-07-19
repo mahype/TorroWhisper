@@ -187,3 +187,37 @@ swift scripts/generate-app-icon.swift
 Danach `TorroBrand.swift` gegen `tokens/tokens.json` abgleichen; wenn sich die
 Hörner-Geometrie geändert hat, `TorroHorns` neu aus dem SVG konvertieren.
 **Keine Fonts mitkopieren.**
+
+### Bewusste Abweichungen von `app-design.md`
+
+Diese Punkte weichen absichtlich vom Guide ab. **Nicht „korrigieren"** — wer sie
+ändern will, ändert zuerst diese Begründung.
+
+- **Sheets ohne „Abbrechen".** Der Guide fordert im Sheet-Fuß `Abbrechen` + einen
+  Primär-Button. Das setzt ein Sheet voraus, das etwas *committet*. Der
+  Modus-Editor, `CloudModelsSheet` und `LanguageModelsManagerSheet` schreiben
+  aber direkt ins Model (`modeBinding`, `saveKey`, `saveSettings`) — Änderungen
+  greifen sofort. Ein „Abbrechen" hätte dort nichts zurückzunehmen und würde
+  Zurücknehmbarkeit vortäuschen. Sie tragen deshalb nur „Fertig". Der einzige
+  echte Commit-Dialog, `urlAddDialog` in `LanguageModelsManagerSheet`, folgt der
+  Spec vollständig (520 × 420, Abbrechen + ein Primär).
+- **Sheet-Größen über 520 × 420.** Aus demselben Grund: Manager-Flächen mit
+  Listen (Modelle, API-Schlüssel) sind keine Wizards. Der feste Guide-Rahmen
+  gilt hier für `urlAddDialog`, nicht für die Manager.
+- **Ungenutzte Bausteine in `TorroBrandUI.swift` sind Absicht.**
+  `TorroCard(isHighlighted:)` und die `TorroChip`-Varianten `.counter`, `.new`,
+  `.neutral` haben derzeit keinen Aufrufer: die App hat keine klickbaren Karten
+  und nichts zählbar Offenes. Sie bilden das Vokabular des Guides vollständig ab,
+  damit die nächste Fläche es vorfindet — kein toter Code zum Wegräumen.
+- **Schritt-Rail im Onboarding:** die Titel bleiben `subheadline` statt
+  `headline`. Der Guide beschreibt eine einzelne Schritt-Zeile im Inhalt; hier
+  stehen fünf Einträge als Navigations-Rail untereinander, die in `headline`
+  lauter wären als der Inhalt daneben. Kreis (18 pt) und monospaced Ziffern
+  folgen der Spec.
+
+### ⚠️ `swift/TorroBrandUI.swift` im Design-Repo ist veraltet
+
+Das Drop-in im Design-Repo ist noch die ältere „Hero als Karte"-Fassung
+(Radius 14, weiße Randlinie, Versalhöhe 15 in einer Karte), während die Prosa in
+`app-design.md` den **randlosen** Hero fordert. Diese App folgt der Prosa.
+**Das Drop-in nicht blind einkopieren** — das macht den randlosen Hero rückgängig.

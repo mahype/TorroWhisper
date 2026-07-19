@@ -53,7 +53,6 @@ struct LanguageModelsManagerSheet: View {
                 .scrollContentBackground(.hidden)
             }
         } footer: {
-            Spacer()
             Button(action: onDone) {
                 Text("Done", bundle: .module)
             }
@@ -66,11 +65,15 @@ struct LanguageModelsManagerSheet: View {
         }
     }
 
+    /// Unlike the manager around it, this one really commits something — so it
+    /// is the guide's wizard sheet proper: fixed 520 × 420, Cancel plus exactly
+    /// one primary in the foot.
     private var urlAddDialog: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Add language model by URL", bundle: .module)
-                .font(.headline)
-
+        TorroSheetFrame(
+            symbol: "link.badge.plus",
+            title: Text("Add language model by URL", bundle: .module),
+            subtitle: Text("After adding, the file is fetched via the 'Download' button. Hugging Face 'resolve/main' links are recommended.", bundle: .module)
+        ) {
             Form {
                 TextField(text: $urlDialogName) {
                     Text("Display name", bundle: .module)
@@ -80,39 +83,33 @@ struct LanguageModelsManagerSheet: View {
                 }
             }
             .formStyle(.grouped)
-
-            Text("After adding, the file is fetched via the 'Download' button. Hugging Face 'resolve/main' links are recommended.", bundle: .module)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack {
-                Spacer()
-                Button {
-                    isShowingUrlDialog = false
-                } label: {
-                    Text("Cancel", bundle: .module)
-                }
-                Button {
-                    let trimmedName = urlDialogName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let trimmedUrl = urlDialogUrl.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmedName.isEmpty, !trimmedUrl.isEmpty else { return }
-                    model.addCustomUrlLlm(name: trimmedName, url: trimmedUrl)
-                    urlDialogName = ""
-                    urlDialogUrl = ""
-                    isShowingUrlDialog = false
-                } label: {
-                    Text("Add", bundle: .module)
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-                .disabled(
-                    urlDialogName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || urlDialogUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
+            .scrollContentBackground(.hidden)
+        } footer: {
+            Button {
+                isShowingUrlDialog = false
+            } label: {
+                Text("Cancel", bundle: .module)
             }
+            .keyboardShortcut(.cancelAction)
+            Button {
+                let trimmedName = urlDialogName.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedUrl = urlDialogUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedName.isEmpty, !trimmedUrl.isEmpty else { return }
+                model.addCustomUrlLlm(name: trimmedName, url: trimmedUrl)
+                urlDialogName = ""
+                urlDialogUrl = ""
+                isShowingUrlDialog = false
+            } label: {
+                Text("Add", bundle: .module)
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
+            .disabled(
+                urlDialogName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || urlDialogUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
         }
-        .padding(20)
-        .frame(minWidth: 420, idealWidth: 480, minHeight: 240)
+        .frame(width: 520, height: 420)
     }
 
     @ViewBuilder
@@ -464,12 +461,12 @@ struct LanguageModelsManagerSheet: View {
                         Text(preset.displayName)
                             .font(.body.weight(.medium))
                         if status?.isLoaded == true {
-                            Text("Loaded", bundle: .module)
-                                .font(.caption2.weight(.semibold))
-                                .padding(.vertical, 2)
-                                .padding(.horizontal, 6)
-                                .background(Color.torroAccent.opacity(0.14), in: Capsule())
-                                .foregroundStyle(Color.torroAccent)
+                            // "Loaded" is a state, and brand red is never a status
+                            // color (design guide §Farbe) — green means "in order".
+                            TorroStatusChip(
+                                text: L("Loaded", locale: locale),
+                                color: .green
+                            )
                         }
                     }
                     Text(preset.description(locale: locale))

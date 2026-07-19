@@ -25,7 +25,6 @@ struct SettingsView: View {
             .listStyle(.sidebar)
             .frame(minWidth: 240, idealWidth: 240)
             .navigationSplitViewColumnWidth(240)
-            .toolbar(removing: .sidebarToggle)
             .safeAreaInset(edge: .bottom) {
                 // The still wordmark foot (design guide §Wortmarke im Produkt) —
                 // theme-aware, without its own ground, centered with equal margins
@@ -36,6 +35,9 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }
+            // The sidebar reads as a panel in front of the content column
+            // (design guide §Fenster) — a soft edge shadow, not a border.
+            .shadow(color: .black.opacity(0.12), radius: 6, x: 2, y: 0)
         } detail: {
             Group {
                 if detailSection == .overview {
@@ -101,7 +103,9 @@ struct SettingsView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .frame(width: 820, height: 720)
+        // Design guide §Fenster: at least 1080 × 660. Below that the 720-wide
+        // content column cannot fit beside the sidebar at all.
+        .frame(minWidth: 1080, minHeight: 660)
     }
 
     private var detailSection: SettingsSection {
@@ -965,7 +969,7 @@ struct SettingsView: View {
                 // (design guide "Statuspunkt"; accessibility audit #10).
                 Circle()
                     .fill(runtimeAccent)
-                    .frame(width: 8, height: 8)
+                    .frame(width: TorroMetrics.statusDot, height: TorroMetrics.statusDot)
                     .accessibilityHidden(true)
                 Text(model.bridgeError ?? runtimeLabel)
                     .font(.callout)

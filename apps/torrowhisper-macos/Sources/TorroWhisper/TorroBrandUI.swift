@@ -138,7 +138,7 @@ struct TorroBrandHero: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            TorroWordmark(product: product, capHeight: 16, style: .onBrand)
+            TorroWordmark(product: product, capHeight: 15, style: .onBrand)
             // No `.fixedSize(...)` here: outside a ScrollView it drives the
             // window's fitting-size negotiation into the text's minimum width
             // and the whole split view lays out collapsed and clipped. Plain
@@ -154,12 +154,11 @@ struct TorroBrandHero: View {
         .padding(.top, 6)
         .padding(.bottom, 16)
         .background {
-            // Vertical, not diagonal: one unbroken red from the window's top
-            // edge (the expanded bounds reach it) down to the deep-red foot.
+            // Diagonal, top left to bottom right (design guide §Der Hero).
             LinearGradient(
                 colors: [.torroRed, .torroRedDeep],
-                startPoint: .top,
-                endPoint: .bottom
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
             // The signet as a watermark, cropped by the band on the right rather
             // than floating. An overlay, not a sibling — its fixed 150-pt height
@@ -226,6 +225,15 @@ extension View {
         modifier(TorroCard(cornerRadius: cornerRadius, isHighlighted: isHighlighted))
     }
 
+}
+
+// MARK: - Shared metrics
+
+enum TorroMetrics {
+    /// Status dot diameter. The guide allows 8–9 pt; pinning it here keeps the
+    /// dot the same size in the overview, the settings foot and the indicator
+    /// instead of drifting per view.
+    static let statusDot: CGFloat = 9
 }
 
 // MARK: - Button tint
@@ -373,12 +381,16 @@ struct TorroStatusChip: View {
 // MARK: - Sheet chrome
 
 /// The guide's sheet/wizard frame: a head (a brand-red SF symbol · title · an
-/// optional subtitle) — Divider — content — Divider — a foot the caller fills
-/// (error slot on the left, Cancel + exactly one primary button on the right).
+/// optional subtitle) — Divider — content — Divider — a foot.
+///
+/// The foot's left slot is the error message and belongs to the frame, so every
+/// sheet reports failures in the same place and the same way; `footer` fills the
+/// right side with Cancel and exactly one primary button.
 struct TorroSheetFrame<Content: View, Footer: View>: View {
     var symbol: String
     var title: Text
     var subtitle: Text?
+    var errorText: String?
     @ViewBuilder var content: () -> Content
     @ViewBuilder var footer: () -> Footer
 
@@ -386,12 +398,14 @@ struct TorroSheetFrame<Content: View, Footer: View>: View {
         symbol: String,
         title: Text,
         subtitle: Text? = nil,
+        errorText: String? = nil,
         @ViewBuilder content: @escaping () -> Content,
         @ViewBuilder footer: @escaping () -> Footer
     ) {
         self.symbol = symbol
         self.title = title
         self.subtitle = subtitle
+        self.errorText = errorText
         self.content = content
         self.footer = footer
     }
@@ -424,6 +438,19 @@ struct TorroSheetFrame<Content: View, Footer: View>: View {
             Divider()
 
             HStack(spacing: 10) {
+                if let errorText, !errorText.isEmpty {
+                    Label {
+                        Text(errorText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    .labelStyle(.titleAndIcon)
+                }
+                Spacer(minLength: 0)
                 footer()
             }
             .padding(.horizontal, 20)

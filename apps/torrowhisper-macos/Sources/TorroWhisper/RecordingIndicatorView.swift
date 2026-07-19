@@ -443,9 +443,29 @@ struct RecordingIndicatorView: View {
         TimelineView(.animation(minimumInterval: 0.05, paused: !isBlinkPhase)) { context in
             Circle()
                 .fill(statusDotColor)
-                .frame(width: 8 * scale, height: 8 * scale)
+                .frame(width: TorroMetrics.statusDot * scale, height: TorroMetrics.statusDot * scale)
                 .opacity(dotOpacity(at: context.date))
                 .shadow(color: phase == .recording ? Color.red.opacity(0.6) : .clear, radius: 3 * scale)
+        }
+        // A dot never explains itself (design guide §Statuspunkt): it always
+        // carries a tooltip and an accessibility label.
+        .help(statusDotLabel)
+        .accessibilityLabel(Text("Status", bundle: .module))
+        .accessibilityValue(statusDotLabel)
+    }
+
+    /// What the dot's color means, in words.
+    private var statusDotLabel: String {
+        if isCancelling {
+            return L("Cancelling — saving to history…", locale: locale)
+        }
+        switch phase {
+        case .recording: return L("Recording", locale: locale)
+        case .transcribing: return L("Transcribing…", locale: locale)
+        case .postProcessing: return L("Post-processing in progress", locale: locale)
+        case .modelNotReady: return L("Loading speech model…", locale: locale)
+        case .error: return L("Error", locale: locale)
+        case .done: return L("Done", locale: locale)
         }
     }
 

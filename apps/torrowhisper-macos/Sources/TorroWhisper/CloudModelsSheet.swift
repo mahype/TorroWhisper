@@ -38,7 +38,6 @@ struct CloudModelsSheet: View {
             }
             .formStyle(.grouped)
         } footer: {
-            Spacer()
             Button {
                 onClose()
             } label: {

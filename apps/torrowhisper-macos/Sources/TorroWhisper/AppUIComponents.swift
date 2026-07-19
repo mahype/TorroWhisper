@@ -283,7 +283,6 @@ struct ModeEditorSheet: View {
                 stageCatalog = (try? BridgeClient().listPipelineStages()) ?? []
             }
         } footer: {
-            Spacer()
             Button(action: onDone) {
                 Text("Done", bundle: .module)
             }
@@ -614,17 +613,19 @@ struct StepRail: View {
 
             ForEach(Array(steps.enumerated()), id: \.offset) { index, title in
                 HStack(spacing: 10) {
+                    // Number circle 18 pt, digits monospaced so the column does
+                    // not jitter between steps (design guide §Schritt-Zeile).
                     ZStack {
                         Circle()
                             .fill(index == currentStep ? Color.torroAccent : Color.secondary.opacity(0.18))
-                            .frame(width: 20, height: 20)
+                            .frame(width: 18, height: 18)
                         if index < currentStep {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.white)
                         } else {
                             Text("\(index + 1)")
-                                .font(.caption.weight(.semibold))
+                                .font(.caption.weight(.bold).monospacedDigit())
                                 .foregroundStyle(index == currentStep ? Color.white : Color.secondary)
                         }
                     }

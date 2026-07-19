@@ -193,7 +193,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @objc private func showSettings(_ sender: Any?) {
         let window = settingsWindow ?? makeWindow(
             title: L("TorroWhisper Settings", locale: currentLocale),
-            size: NSSize(width: 820, height: 720),
+            size: NSSize(width: 1080, height: 660),
+            resizable: true,
             rootView: SettingsView(
                 model: model,
                 updaterController: updaterController,
