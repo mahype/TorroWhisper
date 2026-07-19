@@ -1,3 +1,4 @@
+import CoreText
 import SwiftUI
 
 // Torro brand UI shell — the reusable building blocks from the design guide's
@@ -8,11 +9,36 @@ import SwiftUI
 // the hero, the card surface, the button style, the tile badge, the chips and
 // the sheet chrome on top.
 //
-// LICENSE NOTE: the guide's wordmark and hero are set in Frutiger LT 95
-// UltraBlack. This repo is public and must not ship Frutiger (see AGENTS.md
-// §"Lizenz-Grenze"), so the display cut is deliberately replaced by a heavy
-// system font. In this app the brand carries through color and the signet,
-// not the typeface.
+// LICENSE NOTE: the wordmark is set in Frutiger LT 95 UltraBlack, which is
+// commercially licensed and must never be committed to this public repo. The
+// app ships the cut as a bundle resource that is pulled in from the private
+// `torro-design` repo at build time and is git-ignored here (AGENTS.md
+// §"Lizenz-Grenze"). A checkout without the file still builds and runs — the
+// wordmark then falls back to the heaviest system cut.
+
+// MARK: - Display cut
+
+/// Frutiger LT 95 UltraBlack, the brand's display cut, registered for this
+/// process only so it never lands in the user's font book. `nil` when the
+/// resource is absent — a public clone that never fetched the licensed file.
+private let brandDisplayFontName: String? = {
+    guard let url = Bundle.module.url(forResource: "FrutigerLT-UltraBlack", withExtension: "ttf"),
+          CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+    else { return nil }
+    return "FrutigerLT-UltraBlack"
+}()
+
+extension Font {
+    /// The display cut at the given size, or the heaviest system cut when
+    /// Frutiger is not in the bundle. Only the wordmark uses this — UI text is
+    /// system text throughout (design guide §Typografie).
+    static func torroDisplay(size: CGFloat) -> Font {
+        guard let name = brandDisplayFontName else {
+            return .system(size: size, weight: .heavy)
+        }
+        return .custom(name, fixedSize: size)
+    }
+}
 
 // MARK: - Drawn brand shape (single horn)
 
@@ -52,9 +78,8 @@ struct TorroHorn: Shape {
 // MARK: - Wordmark
 
 /// The product lockup after the TORROFORMS pattern: horns on both sides, the
-/// name in a heavy system cut (Frutiger is not shipped here — see the license
-/// note above), "TORRO" in the leading tone and the product name in the
-/// secondary tone.
+/// name in the display cut (`Font.torroDisplay`), "TORRO" in the leading tone
+/// and the product name in the secondary tone.
 ///
 ///     TorroWordmark(product: "WHISPER", style: .onBrand)  // on the red hero
 ///     TorroWordmark(product: "WHISPER", style: .still)    // sidebar foot
@@ -103,9 +128,9 @@ struct TorroWordmark: View {
                 + Text(verbatim: product).foregroundStyle(productColor)
             horn(mirrored: true)
         }
-        // A heavy system cut stands in for Frutiger's UltraBlack. Frutiger's
-        // caps sit at ~0.7 em, so the same size heuristic keeps the geometry.
-        .font(.system(size: capHeight / 0.7, weight: .heavy))
+        // Frutiger's caps sit at ~0.7 em; the heavy system fallback is close
+        // enough that the same heuristic holds for both.
+        .font(.torroDisplay(size: capHeight / 0.7))
         .lineLimit(1)
         .fixedSize()
         .accessibilityElement()

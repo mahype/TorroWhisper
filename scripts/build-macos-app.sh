@@ -193,6 +193,20 @@ if ! $copied_localizable; then
     exit 1
 fi
 
+# --- Copy the brand display cut ----------------------------------------------
+# Frutiger LT 95 UltraBlack sets the wordmark. It is commercially licensed
+# (Linotype/Monotype) and therefore git-ignored in this public repo — pull it in
+# from the private torro-design repo before building (see AGENTS.md
+# §"Lizenz-Grenze"). Missing is not an error: the wordmark then falls back to
+# the heaviest system cut and the build stays green for anyone cloning publicly.
+brand_font="apps/torrowhisper-macos/Sources/TorroWhisper/Resources/FrutigerLT-UltraBlack.ttf"
+if [[ -f "$brand_font" ]]; then
+    cp "$brand_font" "$app/Contents/Resources/FrutigerLT-UltraBlack.ttf"
+    echo "==> Bundled the brand display cut (Frutiger LT 95 UltraBlack)"
+else
+    echo "==> note: $brand_font missing — the wordmark falls back to the system cut"
+fi
+
 # --- Copy InfoPlist localizations into main bundle ---------------------------
 # These are looked up by macOS for permission dialogs (NSMicrophoneUsageDescription,
 # etc.) and must live at Contents/Resources/{lang}.lproj/InfoPlist.strings.

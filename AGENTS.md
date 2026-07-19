@@ -78,13 +78,32 @@ ableiten — die App ist nicht die Quelle, `torro-design` ist es.
 `mahype/torro-design` ist **privat**, `mahype/TorroWhisper` ist **öffentlich**.
 Daraus folgt eine harte Regel:
 
-- **Keine Schriftdateien aus `torro-design` in dieses Repo übernehmen.**
-  *Frutiger LT* und *Minion Pro* sind kommerziell lizenziert (Linotype/Monotype
-  bzw. Adobe) und ausdrücklich nicht zur Weitergabe bestimmt. Sie hier
-  einzuchecken wäre eine Lizenzverletzung.
-- Für Text in der App deshalb **System-Fonts** (SF Pro / `.system`) verwenden.
-  Frutiger ist der Marken-Font für Logo und Kommunikationsmaterial, nicht für
-  UI-Fließtext einer Open-Source-App.
+- **Keine Schriftdateien einchecken.** *Frutiger LT* und *Minion Pro* sind
+  kommerziell lizenziert (Linotype/Monotype bzw. Adobe) und nicht zur Weitergabe
+  bestimmt. Sie hier zu committen wäre eine Lizenzverletzung.
+- **Aber: die Wortmarke läuft trotzdem in Frutiger.** Der Design-Guide setzt sie
+  in *Frutiger LT 95 UltraBlack*, und ohne den Schnitt sieht TorroWhisper nicht
+  aus wie die Familie. Deshalb wird die TTF wie bei TorroMail als
+  Bundle-Ressource ausgeliefert — sie liegt unter
+  `apps/torrowhisper-macos/Sources/TorroWhisper/Resources/FrutigerLT-UltraBlack.ttf`
+  und ist dort **per `.gitignore` ausgeschlossen**. Nicht ins Repo, wohl aber ins
+  `.app`. Beschafft wird sie aus dem privaten Design-Repo:
+
+  ```bash
+  gh repo clone mahype/torro-design /tmp/torro-design -- --depth 1
+  cp /tmp/torro-design/fonts/frutiger/LTe50335.ttf \
+     apps/torrowhisper-macos/Sources/TorroWhisper/Resources/FrutigerLT-UltraBlack.ttf
+  ```
+
+  `scripts/build-macos-app.sh` und `scripts/dev.sh` kopieren sie von dort ins
+  Bundle bzw. neben die Dev-Binary. Im Release-Workflow kommt sie aus dem Secret
+  `FRUTIGER_TTF_B64` (siehe [`docs/RELEASING.md`](docs/RELEASING.md)); `TorroBrandUI.swift` registriert sie
+  **prozess-lokal** (`CTFontManagerRegisterFontsForURL(…, .process, …)`), sie
+  landet also nie in der Schriftsammlung des Nutzers. **Fehlt die Datei, baut und
+  läuft die App trotzdem** — die Wortmarke fällt dann auf den schwersten
+  Systemschnitt zurück. Ein öffentlicher Clone darf daran nie scheitern.
+- **UI-Text bleibt System-Font** (SF Pro / `.system`). Frutiger ist ausschließlich
+  Wortmarken-Schnitt (Hero, Sidebar-Fuß), nie UI-Fließtext.
 - **Grafik-Assets** (Logo, Hörner, Bulle) sind Eigenassets aus „Torro Forms" und
   dürfen übernommen werden. Übernommene Vektoren liegen unter
   [`apps/torrowhisper-macos/Resources/Brand/`](apps/torrowhisper-macos/Resources/Brand/).
@@ -114,9 +133,9 @@ Maschinenlesbar in `tokens/tokens.json` des Design-Repos, in Swift gespiegelt in
 ### Typografie
 
 - Hausschrift der Marke ist **Frutiger LT**, Logo-Schnitt **95 UltraBlack**.
-- **In dieser App wird sie nicht ausgeliefert** (siehe Lizenz-Grenze). UI-Text
-  nutzt die System-Schrift; Marken-Wirkung entsteht hier über Farbe und Signet,
-  nicht über den Font.
+- Der Schnitt wird **als Bundle-Ressource ausgeliefert, aber nicht committet**
+  (siehe Lizenz-Grenze) und trägt allein die **Wortmarke**. UI-Text nutzt die
+  System-Schrift.
 - Sekundärschrift der Marke: Minion Pro (Print/Fließtext) — für diese App
   irrelevant.
 
@@ -186,7 +205,8 @@ swift scripts/generate-app-icon.swift
 
 Danach `TorroBrand.swift` gegen `tokens/tokens.json` abgleichen; wenn sich die
 Hörner-Geometrie geändert hat, `TorroHorns` neu aus dem SVG konvertieren.
-**Keine Fonts mitkopieren.**
+**Fonts nur als git-ignorierte Bundle-Ressource** (siehe Lizenz-Grenze) — nie
+committen.
 
 ### Design-Entscheidungen gehören in den Guide
 

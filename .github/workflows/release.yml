@@ -83,6 +83,31 @@ jobs:
           echo "Using signing identity: $identity"
           echo "MACOS_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
 
+      # Frutiger LT 95 UltraBlack sets the wordmark. It is commercially licensed
+      # and must never live in this public repo, so it is git-ignored and rides
+      # in as a base64 secret instead — decoded into the very path the build
+      # script looks at. Without the secret the build still succeeds and the
+      # wordmark falls back to the heaviest system cut (see AGENTS.md
+      # §"Lizenz-Grenze"), so a fork without the secret can cut releases too.
+      - name: Restore the brand display cut
+        env:
+          FRUTIGER_TTF_B64: ${{ secrets.FRUTIGER_TTF_B64 }}
+        run: |
+          if [[ -z "$FRUTIGER_TTF_B64" ]]; then
+            echo "note: FRUTIGER_TTF_B64 not set — the wordmark ships in the system cut"
+            exit 0
+          fi
+          dest=apps/torrowhisper-macos/Sources/TorroWhisper/Resources/FrutigerLT-UltraBlack.ttf
+          echo "$FRUTIGER_TTF_B64" | base64 --decode > "$dest"
+          # A truncated or mis-pasted secret would silently ship a broken font,
+          # so verify it is a real TrueType file before the build consumes it.
+          if [[ "$(file -b --mime-type "$dest")" != font/* ]]; then
+            echo "error: FRUTIGER_TTF_B64 did not decode to a font file" >&2
+            rm -f "$dest"
+            exit 1
+          fi
+          echo "Restored $(wc -c < "$dest") bytes"
+
       - name: Build universal .app
         run: ./scripts/build-macos-app.sh
 

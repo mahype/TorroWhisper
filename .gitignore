@@ -20,3 +20,8 @@ dist
 .claude
 .worktrees
 artifacts
+
+# Frutiger LT is commercially licensed (Linotype/Monotype) and must never be
+# committed to this public repo. The build copies it in from the private
+# torro-design repo; see AGENTS.md §Lizenz-Grenze.
+apps/torrowhisper-macos/Sources/TorroWhisper/Resources/FrutigerLT-UltraBlack.ttf

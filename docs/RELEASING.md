@@ -58,6 +58,25 @@ Configure these under **Settings → Secrets and variables → Actions**:
 | `APPLE_TEAM_ID` | 10-character Team ID from [developer.apple.com → Membership](https://developer.apple.com/account/#MembershipDetailsCard) |
 | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password generated at [appleid.apple.com](https://appleid.apple.com/account/manage) → *Sign-In and Security* → *App-Specific Passwords* |
 | `SPARKLE_ED_PRIVATE_KEY` | Sparkle Ed25519 private key (generated once with `generate_keys`). Used by `scripts/update-appcast.sh` to sign each DMG. |
+| `FRUTIGER_TTF_B64` | Base64-encoded *Frutiger LT 95 UltraBlack* TTF. Optional — without it the wordmark ships in the system cut. |
+
+### Generating `FRUTIGER_TTF_B64`
+
+The wordmark is set in Frutiger LT 95 UltraBlack. The cut is commercially
+licensed (Linotype/Monotype) and therefore **git-ignored in this public repo**
+(see [AGENTS.md](../AGENTS.md) §"Lizenz-Grenze") — the release workflow decodes
+it from a secret instead, straight into the path the build script reads.
+
+```bash
+gh repo clone mahype/torro-design /tmp/torro-design -- --depth 1
+base64 -i /tmp/torro-design/fonts/frutiger/LTe50335.ttf | pbcopy
+# paste into the FRUTIGER_TTF_B64 secret
+```
+
+The secret is optional by design: a fork or a maintainer without the license can
+still cut a release, and the wordmark then falls back to the heaviest system
+cut. The workflow verifies the decoded bytes really are a font and fails loudly
+if the secret is truncated, rather than shipping a broken face.
 
 ### Generating `MACOS_CERTIFICATE_P12`
 
