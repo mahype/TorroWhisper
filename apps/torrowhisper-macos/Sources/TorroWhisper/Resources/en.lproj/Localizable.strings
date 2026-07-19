@@ -406,3 +406,4 @@
 "Whisper (expert)" = "Whisper (expert)";
 "Threads 0 = automatic. Single segment can be faster on very short dictations but may hurt punctuation on longer ones. Choose values based on the benchmark above." = "Threads 0 = automatic. Single segment can be faster on very short dictations but may hurt punctuation on longer ones. Choose values based on the benchmark above.";
 "Loading speech model…" = "Loading speech model…";
+"Dictation" = "Dictation";

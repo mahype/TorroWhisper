@@ -11,6 +11,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Berechtigung" } }
       }
     },
+    "Dictation" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Diktat" } }
+      }
+    },
     "Dictation failed" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Diktat fehlgeschlagen" } }

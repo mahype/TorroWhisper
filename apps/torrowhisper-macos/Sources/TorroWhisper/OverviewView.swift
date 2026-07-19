@@ -11,24 +11,31 @@ struct OverviewView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("At a glance", bundle: .module)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 16) {
+                // The one thing the user can decide here, on the surface rather
+                // than in a permanent footer bar: what dictation is doing, and
+                // the button that starts or stops it.
+                dictationCard
 
-                // Independent services sit side by side as tiles, not stacked
-                // as a list (design guide §Status-Kachel).
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10),
-                    ],
-                    spacing: 10
-                ) {
-                    StatusTile(title: L("Microphone", locale: locale), state: micState, status: micStatus)
-                    StatusTile(title: L("Accessibility", locale: locale), state: accessibilityState, status: accessibilityStatus)
-                    StatusTile(title: model.selectedModelDisplayName, state: modelState, status: modelStatus)
-                    StatusTile(title: L("Hotkey", locale: locale), state: hotkeyState, status: hotkeyStatus)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("At a glance", bundle: .module)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    // Independent services sit side by side as tiles, not stacked
+                    // as a list (design guide §Status-Kachel).
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 10),
+                            GridItem(.flexible(), spacing: 10),
+                        ],
+                        spacing: 10
+                    ) {
+                        StatusTile(title: L("Microphone", locale: locale), state: micState, status: micStatus)
+                        StatusTile(title: L("Accessibility", locale: locale), state: accessibilityState, status: accessibilityStatus)
+                        StatusTile(title: model.selectedModelDisplayName, state: modelState, status: modelStatus)
+                        StatusTile(title: L("Hotkey", locale: locale), state: hotkeyState, status: hotkeyStatus)
+                    }
                 }
             }
             .padding(20)
@@ -48,6 +55,74 @@ struct OverviewView: View {
         }
         .navigationTitle("")
         .toolbarBackground(.hidden, for: .windowToolbar)
+    }
+
+    // MARK: - Dictation
+
+    /// A status tile that also carries the app's primary action. Dictation is
+    /// normally started with the hotkey; this is the same decision spelled out
+    /// on the surface, where the guide wants it — not parked in a footer bar
+    /// under every pane.
+    private var dictationCard: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Circle()
+                .fill(dictationStatus.color)
+                .frame(width: TorroMetrics.statusDot, height: TorroMetrics.statusDot)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Dictation", bundle: .module)
+                    .font(.headline)
+                Text(dictationState)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 10)
+
+            Button {
+                model.toggleDictation()
+            } label: {
+                Text(model.runtime.isRecording ? "Stop" : "Start dictation", bundle: .module)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .torroCard()
+        // The dot does not explain itself (design guide §Statuspunkt): the
+        // sentence beside it says the same thing, and the pair is announced once.
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Broken is red; everything else the runtime reports — recording,
+    /// transcribing, post-processing — is the app working as intended and stays
+    /// green. Brand red is never a status color, and system red means broken,
+    /// not "busy" (design guide §Statusfarben).
+    private var dictationStatus: OverviewStatus {
+        model.bridgeError == nil ? .ok : .error
+    }
+
+    private var dictationState: String {
+        if let error = model.bridgeError {
+            return error
+        }
+        if model.runtime.isRecording {
+            return L("Recording active", locale: locale)
+        }
+        if model.runtime.isPostProcessing {
+            return L("Post-processing in progress", locale: locale)
+        }
+        if model.runtime.isTranscribing {
+            return L("Transcription in progress", locale: locale)
+        }
+        if model.runtime.dictationModelWarming {
+            return L("Loading speech model…", locale: locale)
+        }
+        return model.runtime.lastStatus.isEmpty
+            ? L("Ready", locale: locale)
+            : L(model.runtime.lastStatus, locale: locale)
     }
 
     // MARK: - Microphone

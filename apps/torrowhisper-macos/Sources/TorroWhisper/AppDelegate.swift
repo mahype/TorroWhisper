@@ -212,6 +212,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             // the overview while the form panes keep their system toolbar.
             window.styleMask.insert(.fullSizeContentView)
             window.titlebarAppearsTransparent = true
+            // Do not draw the title: over the hero it would float in the middle
+            // of the red, and on the form panes the sidebar already says where
+            // the user is (design guide §Fenster — titlebar native and minimal).
+            // `window.title` stays set, so the Window menu and Mission Control
+            // still name the window.
+            window.titleVisibility = .hidden
         }
         settingsWindow = window
         show(window)

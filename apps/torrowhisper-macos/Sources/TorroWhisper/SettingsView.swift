@@ -23,20 +23,31 @@ struct SettingsView: View {
                     .tag(section)
             }
             .listStyle(.sidebar)
-            .frame(minWidth: 240, idealWidth: 240)
-            .navigationSplitViewColumnWidth(240)
+            // Design guide §Fenster: 200–280, ideal 220 — and resizable, the
+            // same range TorroMail uses. A fixed width is not in the spec.
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
             .safeAreaInset(edge: .bottom) {
                 // The still wordmark foot (design guide §Wortmarke im Produkt) —
                 // theme-aware, without its own ground, centered with equal margins
                 // left and right and a touch larger than a footnote: the quiet
-                // signature. The red is reserved for the hero.
-                TorroWordmark(product: "WHISPER", capHeight: 12, style: .still)
-                    .opacity(0.85)
+                // signature. The red is reserved for the hero. Same recipe and
+                // measurements as TorroMail's `SidebarBrandFooter`; no opacity of
+                // its own — the `.still` style already carries the quiet tone.
+                TorroWordmark(product: "WHISPER", capHeight: 11, style: .still)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 14)
             }
-            // The sidebar reads as a panel in front of the content column
-            // (design guide §Fenster) — a soft edge shadow, not a border.
+            // The sidebar is an opaque surface, not translucent material
+            // (design guide §Fenster): the sidebar material blends against what
+            // is behind the window and falls back to exactly this grey whenever
+            // the compositor cannot sample — first frames after the window
+            // opens, window not key, Mission Control, screen capture. The
+            // surface flickered between two states anyway; we take the stable
+            // one. Applied after the wordmark inset so list and foot share one
+            // ground, and it reads as a panel in front of the content column —
+            // a soft edge shadow, not a border.
+            .scrollContentBackground(.hidden)
+            .background(Color(nsColor: .windowBackgroundColor))
             .shadow(color: .black.opacity(0.12), radius: 6, x: 2, y: 0)
         } detail: {
             Group {
@@ -49,9 +60,6 @@ struct SettingsView: View {
                     .formStyle(.grouped)
                     .navigationTitle(detailSection.title(locale: locale))
                 }
-            }
-            .safeAreaInset(edge: .bottom) {
-                bottomBar
             }
             .sheet(isPresented: $isEditingMode) {
                 ModeEditorSheet(model: model) {
@@ -102,7 +110,9 @@ struct SettingsView: View {
                 Text("This removes TorroWhisper from the Accessibility list so you can add it again. You will need to re-grant access afterwards.", bundle: .module)
             }
         }
-        .navigationSplitViewStyle(.balanced)
+        // No `.navigationSplitViewStyle(...)`: the default is what TorroMail
+        // uses, and `.balanced` was the reason the sidebar's reveal chevron ended
+        // up floating free in the hero's red.
         // Design guide §Fenster: at least 1080 × 660. Below that the 720-wide
         // content column cannot fit beside the sidebar at all.
         .frame(minWidth: 1080, minHeight: 660)
@@ -962,44 +972,6 @@ struct SettingsView: View {
         NSWorkspace.shared.open(url)
     }
 
-    private var bottomBar: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 6) {
-                // The status dot never carries meaning on its own: the label
-                // beside it says the same thing, it has a tooltip, and it is
-                // hidden from VoiceOver so the status is announced once, as text
-                // (design guide "Statuspunkt"; accessibility audit #10).
-                Circle()
-                    .fill(runtimeAccent)
-                    .frame(width: TorroMetrics.statusDot, height: TorroMetrics.statusDot)
-                    .accessibilityHidden(true)
-                Text(model.bridgeError ?? runtimeLabel)
-                    .font(.callout)
-                    .foregroundStyle(model.bridgeError == nil ? Color.primary : Color.red)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            // The status dot does not explain itself (design guide §Statuspunkt):
-            // give the whole line a tooltip, and announce it as one element with
-            // "Status" as the label and the runtime text as its value.
-            .help(model.bridgeError ?? runtimeLabel)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(Text("Status", bundle: .module))
-            .accessibilityValue(Text(model.bridgeError ?? runtimeLabel))
-
-            Spacer()
-
-            Button {
-                model.toggleDictation()
-            } label: {
-                Text(model.runtime.isRecording ? "Stop" : "Start dictation", bundle: .module)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
-        .background(.regularMaterial)
-    }
-
     private var deviceNames: [String] {
         var names = model.devices.map(\.name)
         if names.isEmpty {
@@ -1010,37 +982,5 @@ struct SettingsView: View {
             names.insert(saved, at: 0)
         }
         return names
-    }
-
-    private var runtimeLabel: String {
-        if model.runtime.isRecording {
-            return L("Recording active", locale: locale)
-        }
-        if model.runtime.isPostProcessing {
-            return L("Post-processing in progress", locale: locale)
-        }
-        if model.runtime.isTranscribing {
-            return L("Transcription in progress", locale: locale)
-        }
-        if model.runtime.dictationModelWarming {
-            return L("Loading speech model…", locale: locale)
-        }
-        return model.runtime.lastStatus.isEmpty ? L("Ready", locale: locale) : L(model.runtime.lastStatus, locale: locale)
-    }
-
-    private var runtimeAccent: Color {
-        if model.bridgeError != nil {
-            return .red
-        }
-        if model.runtime.isRecording {
-            return .red
-        }
-        if model.runtime.isPostProcessing {
-            return .purple
-        }
-        if model.runtime.isTranscribing {
-            return .orange
-        }
-        return .green
     }
 }
