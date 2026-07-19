@@ -1243,6 +1243,26 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Warnung" } }
       }
     },
+    "At a glance" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Auf einen Blick" } }
+      }
+    },
+    "Local dictation for your Mac. Speak — and the text lands where you're typing." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Lokales Diktieren für den Mac. Sprich – und der Text landet dort, wo du gerade tippst." } }
+      }
+    },
+    "Not downloaded" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nicht geladen" } }
+      }
+    },
+    "Not granted" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nicht erteilt" } }
+      }
+    },
     "Welcome" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Willkommen" } }
