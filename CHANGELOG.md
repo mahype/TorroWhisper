@@ -6,6 +6,14 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-07-19
+
+### Fixed
+- **Permissions can be granted where they are diagnosed** — microphone and accessibility access could only be handed over in the onboarding wizard. Afterwards, Settings → Diagnostics reported a missing grant as a collapsed card whose only advice was prose ("enable TorroWhisper under Microphone in System Settings → Privacy & Security"), leaving the user to hunt for a switch the app could have flipped itself. Cards with a warning or an error now start expanded, and the two permission entries carry the same button the wizard offers — it triggers the native prompt when macOS has not asked yet, otherwise it deep-links straight into the matching privacy pane, and the diagnosis re-reads itself afterwards.
+
+### Changed
+- **The log file moved to Diagnostics** — log access and the diagnostics snapshot sat under Help while the status cards they belong to lived in Diagnostics. Support material for one problem now stands in one place.
+
 ## [0.6.0] — 2026-07-19
 
 ### Added
@@ -207,7 +215,8 @@ First public release. Everything below has landed since the project was initiali
 - CI runner bumped to `macos-15` for a newer Metal.framework ([`47caf7d`](https://github.com/mahype/TorroWhisper/commit/47caf7d)); Xcode 16 pinned on `macos-14` for Swift 6 ([`a1a2b63`](https://github.com/mahype/TorroWhisper/commit/a1a2b63)).
 - Legacy egui desktop app removed ([`82a3f6d`](https://github.com/mahype/TorroWhisper/commit/82a3f6d)).
 
-[Unreleased]: https://github.com/mahype/TorroWhisper/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/mahype/TorroWhisper/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/mahype/TorroWhisper/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/mahype/TorroWhisper/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mahype/TorroWhisper/compare/v0.4.2...v0.5.0
 [0.3.0]: https://github.com/mahype/TorroWhisper/compare/v0.2.1...v0.3.0
