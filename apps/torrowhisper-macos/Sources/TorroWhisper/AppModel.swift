@@ -848,7 +848,8 @@ final class AppModel: ObservableObject {
                 title: L("Microphone permission", locale: locale),
                 status: .error,
                 problem: L("Microphone access is not granted yet.", locale: locale),
-                recommendation: L("Enable TorroWhisper under Microphone in System Settings → Privacy & Security.", locale: locale)
+                recommendation: L("Enable TorroWhisper under Microphone in System Settings → Privacy & Security.", locale: locale),
+                fix: .microphonePermission
             )
         }
 
@@ -865,7 +866,8 @@ final class AppModel: ObservableObject {
                 title: L("Accessibility permission", locale: locale),
                 status: .warning,
                 problem: L("Accessibility access is not granted yet.", locale: locale),
-                recommendation: L("Enable TorroWhisper under Accessibility in System Settings → Privacy & Security so it can type into other apps.", locale: locale)
+                recommendation: L("Enable TorroWhisper under Accessibility in System Settings → Privacy & Security so it can type into other apps.", locale: locale),
+                fix: .accessibilityPermission
             )
         }
 

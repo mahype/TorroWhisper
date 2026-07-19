@@ -1078,11 +1078,29 @@ struct LlmModelStatusDTO: Codable, Identifiable, Equatable {
     var id: String { presetLabel }
 }
 
+/// A one-click remedy a diagnostic item can offer. Only Swift-side items set
+/// this; the Rust bridge omits the key, so it decodes as `nil`.
+enum DiagnosticFix: String, Codable {
+    case microphonePermission
+    case accessibilityPermission
+
+    /// Localization key of the button that triggers the fix. Shares the wording
+    /// with the onboarding wizard so both places read the same.
+    var buttonKey: String {
+        switch self {
+        case .microphonePermission: return "Grant microphone access"
+        case .accessibilityPermission: return "Grant accessibility access"
+        }
+    }
+}
+
 struct DiagnosticItemDTO: Codable, Identifiable {
     var title: String
     var status: DiagnosticStatus
     var problem: String
     var recommendation: String
+    /// Set when the item can be fixed from inside the app (see `DiagnosticFix`).
+    var fix: DiagnosticFix?
 
     var id: String { title + problem }
 }

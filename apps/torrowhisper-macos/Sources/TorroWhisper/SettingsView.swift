@@ -646,16 +646,53 @@ struct SettingsView: View {
 
         Section {
             ForEach(model.diagnostics.items) { item in
-                DiagnosticDisclosureCard(item: item)
+                DiagnosticDisclosureCard(item: item, onFix: applyDiagnosticFix)
                     .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             }
         } header: {
             Text("Details", bundle: .module)
         }
 
+        logFileSection
         lastTimingSection
         benchmarkSection
         whisperExpertSection
+    }
+
+    /// Log file access and the diagnostics snapshot — support material, so it
+    /// lives next to the diagnostics status cards instead of in Help.
+    @ViewBuilder
+    private var logFileSection: some View {
+        Section {
+            Text("TorroWhisper writes events and errors to a log file. Attach it when reporting problems.", bundle: .module)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Button {
+                revealLogFileInFinder()
+            } label: {
+                Text("Show log file in Finder", bundle: .module)
+            }
+            Button {
+                copyRecentLogToClipboard()
+            } label: {
+                Text("Copy recent log to clipboard", bundle: .module)
+            }
+            HStack(spacing: 10) {
+                Button {
+                    writeDiagnosticsToLog()
+                } label: {
+                    Text("Write diagnostics to log", bundle: .module)
+                }
+                if let confirmation = diagnosticsLogConfirmation {
+                    Text(confirmation)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Log file", bundle: .module)
+        }
     }
 
     /// Per-stage latency of the most recent dictation (#43).
@@ -891,36 +928,20 @@ struct SettingsView: View {
             Text("Setup", bundle: .module)
         }
 
-        Section {
-            Text("TorroWhisper writes events and errors to a log file. Attach it when reporting problems.", bundle: .module)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+    }
 
-            Button {
-                revealLogFileInFinder()
-            } label: {
-                Text("Show log file in Finder", bundle: .module)
-            }
-            Button {
-                copyRecentLogToClipboard()
-            } label: {
-                Text("Copy recent log to clipboard", bundle: .module)
-            }
-            HStack(spacing: 10) {
-                Button {
-                    writeDiagnosticsToLog()
-                } label: {
-                    Text("Write diagnostics to log", bundle: .module)
-                }
-                if let confirmation = diagnosticsLogConfirmation {
-                    Text(confirmation)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        } header: {
-            Text("Diagnostics", bundle: .module)
+    /// Runs the remedy a diagnostic item offers, so permissions can be granted
+    /// right where the problem is reported instead of only in the onboarding
+    /// wizard. The status is re-read afterwards because macOS may grant the
+    /// permission immediately (native prompt) rather than via System Settings.
+    private func applyDiagnosticFix(_ fix: DiagnosticFix) {
+        switch fix {
+        case .microphonePermission:
+            model.checkAndRequestMicrophoneAccess()
+        case .accessibilityPermission:
+            model.checkAndRequestAccessibilityAccess()
         }
+        model.refreshDiagnostics()
     }
 
     /// Asks the bridge to append a diagnostics snapshot (settings, hotkey,

@@ -547,10 +547,22 @@ struct DiagnosticStatusBadge: View {
 
 struct DiagnosticDisclosureCard: View {
     let item: DiagnosticItemDTO
+    /// Invoked when the user taps the item's remedy button. Nil when the caller
+    /// cannot act on fixes.
+    var onFix: ((DiagnosticFix) -> Void)?
     @Environment(\.locale) private var locale
+    /// Problems start expanded — a finding the user has to hunt for is a finding
+    /// they never act on. Healthy items stay collapsed.
+    @State private var isExpanded: Bool
+
+    init(item: DiagnosticItemDTO, onFix: ((DiagnosticFix) -> Void)? = nil) {
+        self.item = item
+        self.onFix = onFix
+        _isExpanded = State(initialValue: item.status == .warning || item.status == .error)
+    }
 
     var body: some View {
-        DisclosureGroup {
+        DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(L(item.problem, locale: locale))
                     .font(.caption)
@@ -561,6 +573,15 @@ struct DiagnosticDisclosureCard: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
+
+                if let fix = item.fix, let onFix {
+                    Button {
+                        onFix(fix)
+                    } label: {
+                        Text(L(fix.buttonKey, locale: locale))
+                    }
+                    .padding(.top, 4)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 6)

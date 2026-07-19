@@ -6,6 +6,11 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Lokales Diktieren für macOS" } }
       }
     },
+    "Log file" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Logdatei" } }
+      }
+    },
     "Accessibility permission" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Berechtigung" } }
