@@ -1018,9 +1018,9 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Live-Text — beim Diktieren mitlesen" } }
       }
     },
-    "Displays the recognized text in the recording window while you speak. Only the final result is inserted." : {
+    "Displays the recognized text in the recording window while you speak. Only the final result is inserted. The text lags a sentence or two behind and falls further behind the longer you speak — speech recognition only works on whole passages, not word by word." : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zeigt den erkannten Text bereits während des Sprechens im Aufnahmefenster an. Eingefügt wird nur das endgültige Ergebnis." } }
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zeigt den erkannten Text bereits während des Sprechens im Aufnahmefenster an. Eingefügt wird nur das endgültige Ergebnis. Der Text hinkt ein bis zwei Sätze hinterher und fällt umso weiter zurück, je länger Sie sprechen — die Spracherkennung arbeitet nur auf ganzen Passagen, nicht Wort für Wort." } }
       }
     },
     "Listening…" : {

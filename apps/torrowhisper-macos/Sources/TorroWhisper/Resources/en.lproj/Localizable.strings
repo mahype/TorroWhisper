@@ -197,7 +197,7 @@
 "Recording display" = "Recording display";
 "Waveform — focus on speaking" = "Waveform — focus on speaking";
 "Live text — read while dictating" = "Live text — read while dictating";
-"Displays the recognized text in the recording window while you speak. Only the final result is inserted." = "Displays the recognized text in the recording window while you speak. Only the final result is inserted.";
+"Displays the recognized text in the recording window while you speak. Only the final result is inserted. The text lags a sentence or two behind and falls further behind the longer you speak — speech recognition only works on whole passages, not word by word." = "Displays the recognized text in the recording window while you speak. Only the final result is inserted. The text lags a sentence or two behind and falls further behind the longer you speak — speech recognition only works on whole passages, not word by word.";
 "Listening…" = "Listening…";
 "Silence stop" = "Silence stop";
 "Small" = "Small";

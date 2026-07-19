@@ -223,8 +223,10 @@ struct SettingsView: View {
             }
 
             if model.settings.liveTranscriptionEnabled {
+                // Say the trade-off plainly instead of letting the user discover
+                // it mid-sentence: the preview cannot keep up, by construction.
                 Text(
-                    "Displays the recognized text in the recording window while you speak. Only the final result is inserted.",
+                    "Displays the recognized text in the recording window while you speak. Only the final result is inserted. The text lags a sentence or two behind and falls further behind the longer you speak — speech recognition only works on whole passages, not word by word.",
                     bundle: .module
                 )
                 .font(.caption)

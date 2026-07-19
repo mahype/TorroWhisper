@@ -266,11 +266,22 @@ struct RecordingIndicatorView: View {
     /// height and overflows the flexible frame upward, so the newest words
     /// are always visible — no scroll state, no per-update animation (which
     /// also satisfies Reduce Motion). The top fade signals "continues above".
+    ///
+    /// The height comes from `GeometryReader`, like the waveform styles do, and
+    /// for the same reason: `.frame(maxHeight: .infinity)` never shrinks below
+    /// its child, so a growing transcript used to push the dark box — and with
+    /// it the whole bubble, including the stop button — out of the panel.
     private var transcriptWindow: some View {
-        transcriptContent
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-            .clipped()
-            .mask(topFadeMask)
+        GeometryReader { geo in
+            transcriptContent
+                .frame(
+                    width: geo.size.width,
+                    height: geo.size.height,
+                    alignment: .bottomLeading
+                )
+                .clipped()
+        }
+        .mask(topFadeMask)
     }
 
     @ViewBuilder
@@ -311,13 +322,13 @@ struct RecordingIndicatorView: View {
             .foregroundStyle(pendingColor)
     }
 
-    /// Caps the rendered text at a tail well beyond what three lines can show
-    /// (~165 visible chars), so layout cost stays O(1) however long the
-    /// dictation gets. Walks at most `maxChars` from the end (never the whole
-    /// string) and snaps to a word boundary so the faded top line never
-    /// starts mid-word.
+    /// Caps the rendered text at a tail a little beyond what the window can
+    /// show (~165 visible chars over three lines), so layout cost stays O(1)
+    /// however long the dictation gets — the surplus is what the top fade eats.
+    /// Walks at most `maxChars` from the end (never the whole string) and snaps
+    /// to a word boundary so the faded top line never starts mid-word.
     private func displayCommitted(_ committed: String) -> String {
-        let maxChars = 600
+        let maxChars = 260
         guard
             let cut = committed.index(
                 committed.endIndex, offsetBy: -maxChars, limitedBy: committed.startIndex

@@ -202,7 +202,7 @@
 "Recording display" = "Aufnahme-Anzeige";
 "Waveform — focus on speaking" = "Wellenform — Konzentration aufs Sprechen";
 "Live text — read while dictating" = "Live-Text — beim Diktieren mitlesen";
-"Displays the recognized text in the recording window while you speak. Only the final result is inserted." = "Zeigt den erkannten Text bereits während des Sprechens im Aufnahmefenster an. Eingefügt wird nur das endgültige Ergebnis.";
+"Displays the recognized text in the recording window while you speak. Only the final result is inserted. The text lags a sentence or two behind and falls further behind the longer you speak — speech recognition only works on whole passages, not word by word." = "Zeigt den erkannten Text bereits während des Sprechens im Aufnahmefenster an. Eingefügt wird nur das endgültige Ergebnis. Der Text hinkt ein bis zwei Sätze hinterher und fällt umso weiter zurück, je länger Sie sprechen — die Spracherkennung arbeitet nur auf ganzen Passagen, nicht Wort für Wort.";
 "Listening…" = "Höre zu …";
 "Silence stop" = "Silence-Stopp";
 "Small" = "Klein";

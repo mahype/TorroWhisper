@@ -980,7 +980,7 @@ struct AppSettings: Codable, Equatable {
         waveformColor: .accent,
         largeRecordingIndicator: false,
         highContrastRecordingIndicator: false,
-        liveTranscriptionEnabled: true,
+        liveTranscriptionEnabled: false,
         saveAudioRecordings: false,
         saveTranscripts: false,
         saveDirectory: "",

@@ -876,6 +876,12 @@ pub struct AppSettings {
     /// Live transcription while recording (#41): a streaming worker keeps
     /// transcribing the growing take and the bubble shows committed/pending
     /// text as the user speaks. Only the final pass is ever inserted.
+    ///
+    /// Off by default. Whisper has no incremental decoding — every preview is a
+    /// re-decode — so the text always trails what is being said by a sentence or
+    /// two, and the lag grows with the length of the take. Reading it while
+    /// speaking competes with forming the next sentence, so the waveform is the
+    /// better default; this stays for those who want it.
     pub live_transcription_enabled: bool,
     /// Save each (non-cancelled) dictation's audio as an MP3 into `save_directory`.
     pub save_audio_recordings: bool,
@@ -1194,7 +1200,7 @@ impl Default for AppSettings {
             waveform_color: WaveformColor::default(),
             large_recording_indicator: false,
             high_contrast_recording_indicator: false,
-            live_transcription_enabled: true,
+            live_transcription_enabled: false,
             save_audio_recordings: false,
             save_transcripts: false,
             save_directory: String::new(),
@@ -1482,13 +1488,13 @@ mod tests {
     }
 
     #[test]
-    fn live_transcription_defaults_on_and_survives_legacy_settings() {
-        assert!(AppSettings::default().live_transcription_enabled);
+    fn live_transcription_defaults_off_and_survives_legacy_settings() {
+        assert!(!AppSettings::default().live_transcription_enabled);
 
         // Settings files written before #41 lack the field; the container-level
-        // #[serde(default)] must fill it from Default (= enabled).
+        // #[serde(default)] must fill it from Default (= disabled).
         let legacy: AppSettings = serde_json::from_str("{}").expect("legacy settings parse");
-        assert!(legacy.live_transcription_enabled);
+        assert!(!legacy.live_transcription_enabled);
     }
 
     #[test]
