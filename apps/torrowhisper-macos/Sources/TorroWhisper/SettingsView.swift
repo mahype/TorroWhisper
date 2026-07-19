@@ -939,15 +939,24 @@ struct SettingsView: View {
     private var bottomBar: some View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
+                // The status dot never carries meaning on its own: the label
+                // beside it says the same thing, it has a tooltip, and it is
+                // hidden from VoiceOver so the status is announced once, as text
+                // (design guide "Statuspunkt"; accessibility audit #10).
                 Circle()
                     .fill(runtimeAccent)
                     .frame(width: 8, height: 8)
+                    .help(Text(model.bridgeError ?? runtimeLabel))
+                    .accessibilityHidden(true)
                 Text(model.bridgeError ?? runtimeLabel)
                     .font(.callout)
                     .foregroundStyle(model.bridgeError == nil ? Color.primary : Color.red)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text("Status", bundle: .module))
+            .accessibilityValue(Text(model.bridgeError ?? runtimeLabel))
 
             Spacer()
 
