@@ -456,7 +456,9 @@ struct RecordingIndicatorView: View {
                 .fill(statusDotColor)
                 .frame(width: TorroMetrics.statusDot * scale, height: TorroMetrics.statusDot * scale)
                 .opacity(dotOpacity(at: context.date))
-                .shadow(color: phase == .recording ? Color.red.opacity(0.6) : .clear, radius: 3 * scale)
+                // The glow follows the status color; it must not smuggle red
+                // back in as "recording".
+                .shadow(color: phase == .recording ? statusDotColor.opacity(0.6) : .clear, radius: 3 * scale)
         }
         // A dot never explains itself (design guide §Statuspunkt): it always
         // carries a tooltip and an accessibility label.
@@ -490,17 +492,19 @@ struct RecordingIndicatorView: View {
         return (h & 0b11) == 0 ? 0.0 : 1.0
     }
 
+    /// Only the four palette colors, with their fixed meanings (design guide
+    /// §Statusfarben): green is "running, in order" — which covers recording,
+    /// transcribing and post-processing alike; the blink, not a second color,
+    /// is what says "still working". Orange waits on the user, red means broken.
+    /// Yellow is not in the palette, and red is not "recording".
     private var statusDotColor: Color {
         if isCancelling {
             return .orange
         }
         switch phase {
-        case .recording: return .red
-        case .transcribing: return .yellow
-        case .postProcessing: return .yellow
+        case .recording, .transcribing, .postProcessing, .done: return .green
         case .modelNotReady: return .orange
         case .error: return .red
-        case .done: return .green
         }
     }
 
