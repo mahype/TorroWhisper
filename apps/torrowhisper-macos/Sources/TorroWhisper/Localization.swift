@@ -67,5 +67,8 @@ struct LocalizedRoot<Content: View>: View {
             // to carry the brand accent — it tints the controls that read the
             // system accent on their own (prominent buttons, toggles, pickers).
             .tint(.torroAccent)
+            // …but not ordinary push buttons: there the tint would color the
+            // label, and the guide forbids red button text. See the style.
+            .buttonStyle(TorroNeutralButtonStyle())
     }
 }

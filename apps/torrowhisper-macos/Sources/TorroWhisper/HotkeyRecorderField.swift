@@ -67,7 +67,10 @@ struct HotkeyRecorderField: View {
                     Button(action: onStartCapture) {
                         Text("Record", bundle: .module)
                     }
+                    // Choosing a style here bypasses the root's neutral style, so
+                    // the app tint has to be dropped explicitly.
                     .buttonStyle(.bordered)
+                    .tint(nil)
                 }
             }
 

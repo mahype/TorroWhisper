@@ -226,11 +226,27 @@ extension View {
         modifier(TorroCard(cornerRadius: cornerRadius, isHighlighted: isHighlighted))
     }
 
-    /// The standard macOS push button. Brand red is a ground/accent color — on a
-    /// control it would tint the label instead of the fill (unreadable), so
-    /// buttons drop the app tint and keep the system look.
-    func torroButton() -> some View {
-        buttonStyle(.bordered).tint(nil)
+}
+
+// MARK: - Button tint
+
+/// Drops the app-wide brand tint from ordinary push buttons.
+///
+/// Brand red is a ground/accent color. On a system button the tint colors the
+/// *label* instead of the fill, and red text on a dark ground is unreadable —
+/// the design guide rules it out outright ("Kein Button trägt seine Bedeutung
+/// über die Textfarbe"). Applied once at the app root it reaches every button
+/// that has not chosen a style of its own, so a new button is neutral by
+/// default instead of having to remember to opt out.
+///
+/// Buttons that set their own style stay untouched on purpose: `borderedProminent`
+/// footer primaries keep the red *fill* with a white label, and the occasional
+/// `borderless` text accent (the guide's "Log öffnen") is allowed to be red.
+struct TorroNeutralButtonStyle: PrimitiveButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        // Inside a PrimitiveButtonStyle the style resets to `.automatic`, so this
+        // rebuilds the button in its native look — only the tint is cleared.
+        Button(configuration).tint(nil)
     }
 }
 
