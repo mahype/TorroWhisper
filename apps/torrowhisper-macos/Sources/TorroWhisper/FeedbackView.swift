@@ -4,19 +4,22 @@ import SwiftUI
 struct FeedbackView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Send feedback", bundle: .module)
-                    .font(.title2.weight(.semibold))
-                Text("Thanks for helping make TorroWhisper better. Pick a channel:", bundle: .module)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                TorroBadge(symbol: "bubble.left.and.text.bubble.right.fill", size: 34, variant: .own)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Send feedback", bundle: .module)
+                        .font(.headline)
+                    Text("Thanks for helping make TorroWhisper better. Pick a channel:", bundle: .module)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
             }
 
             VStack(spacing: 10) {
                 FeedbackChannelTile(
                     iconSystemName: "ladybug.fill",
-                    iconColor: .torroAccent,
                     title: "GitHub Issues",
                     subtitle: L("Report bugs or submit feature requests.", locale: .current),
                     actionLabel: L("Open on GitHub", locale: .current),
@@ -38,7 +41,6 @@ struct FeedbackView: View {
 
 struct FeedbackChannelTile: View {
     let iconSystemName: String
-    let iconColor: Color
     let title: String
     let subtitle: String
     let actionLabel: String
@@ -46,11 +48,9 @@ struct FeedbackChannelTile: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: iconSystemName)
-                .font(.title3)
-                .foregroundStyle(iconColor)
-                .frame(width: 28)
-                .accessibilityHidden(true)
+            // A foreign service (GitHub) — the brand does not rub off, so the
+            // badge is the neutral variant (design guide §Kachel-Badges).
+            TorroBadge(symbol: iconSystemName, size: 34, variant: .foreign)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -68,13 +68,6 @@ struct FeedbackChannelTile: View {
                 .controlSize(.regular)
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.secondary.opacity(0.15))
-        )
+        .torroCard(cornerRadius: 10)
     }
 }

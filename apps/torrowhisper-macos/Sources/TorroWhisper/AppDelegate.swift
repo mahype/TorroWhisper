@@ -204,6 +204,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         )
         if settingsWindow == nil {
             window.delegate = self
+            // The overview's hero runs its red up to the window's top edge behind
+            // the toolbar (design guide §Fenster, like TorroMail). That needs a
+            // full-size content view under a transparent titlebar; the per-pane
+            // `.toolbarBackground(.hidden)` in SwiftUI then lets the red show on
+            // the overview while the form panes keep their system toolbar.
+            window.styleMask.insert(.fullSizeContentView)
+            window.titlebarAppearsTransparent = true
         }
         settingsWindow = window
         show(window)

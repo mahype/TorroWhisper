@@ -235,6 +235,10 @@
 "Transcription is used as-is." = "Transkription wird unverändert übernommen.";
 "Transcription model" = "Transkriptionsmodell";
 "Tray-first, local, and built for everyday use. Default is local Whisper; Ollama and LM Studio stay optional." = "Tray-first, lokal und für den Alltag. Standard ist lokales Whisper; Ollama und LM Studio bleiben optional.";
+"Local dictation for your Mac. Speak — and the text lands where you're typing." = "Lokales Diktieren für den Mac. Sprich – und der Text landet dort, wo du gerade tippst.";
+"At a glance" = "Auf einen Blick";
+"Not granted" = "Nicht erteilt";
+"Not downloaded" = "Nicht geladen";
 "Trigger" = "Trigger";
 "Turbo" = "Turbo";
 "Turbo+" = "Turbo+";

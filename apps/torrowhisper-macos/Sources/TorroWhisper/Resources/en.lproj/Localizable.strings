@@ -230,6 +230,10 @@
 "Transcription is used as-is." = "Transcription is used as-is.";
 "Transcription model" = "Transcription model";
 "Tray-first, local, and built for everyday use. Default is local Whisper; Ollama and LM Studio stay optional." = "Tray-first, local, and built for everyday use. Default is local Whisper; Ollama and LM Studio stay optional.";
+"Local dictation for your Mac. Speak — and the text lands where you're typing." = "Local dictation for your Mac. Speak — and the text lands where you're typing.";
+"At a glance" = "At a glance";
+"Not granted" = "Not granted";
+"Not downloaded" = "Not downloaded";
 "Trigger" = "Trigger";
 "Turbo" = "Turbo";
 "Turbo+" = "Turbo+";

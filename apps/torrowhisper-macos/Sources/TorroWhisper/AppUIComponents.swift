@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 enum SettingsSection: String, CaseIterable, Identifiable {
+    case overview
     case recording
     case modes
     case dictionary
@@ -16,6 +17,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     func title(locale: Locale) -> String {
         switch self {
+        case .overview:
+            return L("Overview", locale: locale)
         case .recording:
             return L("Recording", locale: locale)
         case .modes:
@@ -39,6 +42,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     var symbolName: String {
         switch self {
+        case .overview:
+            return "square.grid.2x2.fill"
         case .recording:
             return "mic.fill"
         case .modes:
@@ -211,13 +216,10 @@ struct ModeEditorSheet: View {
     @State private var stageCatalog: [StageCatalogEntry] = []
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Edit post-processing", bundle: .module)
-                    .font(.title3.weight(.semibold))
-                Spacer()
-            }
-
+        TorroSheetFrame(
+            symbol: "square.text.square",
+            title: Text("Edit post-processing", bundle: .module)
+        ) {
             Form {
                 Section {
                     TextField(text: model.modeBinding(for: \.name)) {
@@ -280,16 +282,14 @@ struct ModeEditorSheet: View {
             .onAppear {
                 stageCatalog = (try? BridgeClient().listPipelineStages()) ?? []
             }
-
-            HStack {
-                Spacer()
-                Button(action: onDone) {
-                    Text("Done", bundle: .module)
-                }
-                .keyboardShortcut(.defaultAction)
+        } footer: {
+            Spacer()
+            Button(action: onDone) {
+                Text("Done", bundle: .module)
             }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
         }
-        .padding(20)
         .frame(minWidth: 460, idealWidth: 520, minHeight: 380, idealHeight: 440)
     }
 
@@ -469,12 +469,7 @@ struct HistoryEntryRow: View {
                             .foregroundStyle(.secondary)
                     }
                     if entry.wasCancelled {
-                        Text(L("Cancelled", locale: locale))
-                            .font(.caption.weight(.semibold))
-                            .padding(.vertical, 1)
-                            .padding(.horizontal, 6)
-                            .background(Color.orange.opacity(0.18), in: Capsule())
-                            .foregroundStyle(.orange)
+                        TorroChip(text: L("Cancelled", locale: locale), kind: .exception)
                     }
                     Spacer(minLength: 0)
                 }
@@ -534,12 +529,7 @@ struct DiagnosticStatusBadge: View {
     @Environment(\.locale) private var locale
 
     var body: some View {
-        Text(status.label(locale: locale))
-            .font(.caption.weight(.semibold))
-            .padding(.vertical, 3)
-            .padding(.horizontal, 7)
-            .background(backgroundColor.opacity(0.14), in: Capsule())
-            .foregroundStyle(backgroundColor)
+        TorroStatusChip(text: status.label(locale: locale), color: backgroundColor)
     }
 
     private var backgroundColor: Color {

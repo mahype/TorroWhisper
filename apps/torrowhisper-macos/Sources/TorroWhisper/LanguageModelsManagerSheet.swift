@@ -26,41 +26,40 @@ struct LanguageModelsManagerSheet: View {
     @Environment(\.locale) private var locale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Manage language models", bundle: .module)
-                    .font(.title3.weight(.semibold))
-                Spacer()
-            }
-
-            Picker("", selection: $selectedTab) {
-                ForEach(LanguageModelsManagerTab.allCases) { tab in
-                    Text(tab.title(locale: locale)).tag(tab)
+        TorroSheetFrame(
+            symbol: "brain.head.profile",
+            title: Text("Manage language models", bundle: .module)
+        ) {
+            VStack(spacing: 0) {
+                Picker("", selection: $selectedTab) {
+                    ForEach(LanguageModelsManagerTab.allCases) { tab in
+                        Text(tab.title(locale: locale)).tag(tab)
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(.horizontal, 20)
+                .padding(.top, 14)
 
-            Form {
-                switch selectedTab {
-                case .transcription:
-                    transcriptionContent
-                case .postProcessing:
-                    postProcessingContent
+                Form {
+                    switch selectedTab {
+                    case .transcription:
+                        transcriptionContent
+                    case .postProcessing:
+                        postProcessingContent
+                    }
                 }
+                .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
             }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-
-            HStack {
-                Spacer()
-                Button(action: onDone) {
-                    Text("Done", bundle: .module)
-                }
-                .keyboardShortcut(.defaultAction)
+        } footer: {
+            Spacer()
+            Button(action: onDone) {
+                Text("Done", bundle: .module)
             }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
         }
-        .padding(20)
         .frame(minWidth: 640, idealWidth: 700, minHeight: 480, idealHeight: 560)
         .sheet(isPresented: $isShowingUrlDialog) {
             urlAddDialog

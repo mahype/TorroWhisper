@@ -21,22 +21,10 @@ struct CloudModelsSheet: View {
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Cloud models & API keys", bundle: .module)
-                    .font(.headline)
-                Spacer()
-                Button {
-                    onClose()
-                } label: {
-                    Text("Done", bundle: .module)
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding()
-
-            Divider()
-
+        TorroSheetFrame(
+            symbol: "key.fill",
+            title: Text("Cloud models & API keys", bundle: .module)
+        ) {
             Form {
                 modelSection
                 apiKeysSection
@@ -49,6 +37,15 @@ struct CloudModelsSheet: View {
                 }
             }
             .formStyle(.grouped)
+        } footer: {
+            Spacer()
+            Button {
+                onClose()
+            } label: {
+                Text("Done", bundle: .module)
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
         }
         .frame(width: 540, height: 600)
         .onAppear(perform: reload)

@@ -5,7 +5,7 @@ struct SettingsView: View {
     @ObservedObject var model: AppModel
     let updaterController: UpdaterController
     let onReopenOnboarding: () -> Void
-    @State private var selectedSection: SettingsSection? = .recording
+    @State private var selectedSection: SettingsSection? = .overview
     @State private var isEditingMode: Bool = false
     @State private var isManagingLanguageModels: Bool = false
     @State private var managerTab: LanguageModelsManagerTab = .transcription
@@ -26,12 +26,28 @@ struct SettingsView: View {
             .frame(minWidth: 240, idealWidth: 240)
             .navigationSplitViewColumnWidth(240)
             .toolbar(removing: .sidebarToggle)
-        } detail: {
-            Form {
-                detailContent(for: detailSection)
+            .safeAreaInset(edge: .bottom) {
+                // The still wordmark foot (design guide §Wortmarke im Produkt) —
+                // theme-aware, without its own ground, centered with equal margins
+                // left and right and a touch larger than a footnote: the quiet
+                // signature. The red is reserved for the hero.
+                TorroWordmark(product: "WHISPER", capHeight: 12, style: .still)
+                    .opacity(0.85)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
             }
-            .formStyle(.grouped)
-            .navigationTitle(detailSection.title(locale: locale))
+        } detail: {
+            Group {
+                if detailSection == .overview {
+                    OverviewView(model: model)
+                } else {
+                    Form {
+                        detailContent(for: detailSection)
+                    }
+                    .formStyle(.grouped)
+                    .navigationTitle(detailSection.title(locale: locale))
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 bottomBar
             }
@@ -89,12 +105,16 @@ struct SettingsView: View {
     }
 
     private var detailSection: SettingsSection {
-        selectedSection ?? .recording
+        selectedSection ?? .overview
     }
 
     @ViewBuilder
     private func detailContent(for section: SettingsSection) -> some View {
         switch section {
+        case .overview:
+            // The overview is rendered outside the grouped form (it carries the
+            // edge-to-edge hero), so nothing goes here.
+            EmptyView()
         case .recording:
             recordingContent
         case .modes:
@@ -942,12 +962,18 @@ struct SettingsView: View {
                 Circle()
                     .fill(runtimeAccent)
                     .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
                 Text(model.bridgeError ?? runtimeLabel)
                     .font(.callout)
                     .foregroundStyle(model.bridgeError == nil ? Color.primary : Color.red)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
+            // The status dot does not explain itself (design guide §Statuspunkt):
+            // give the whole line a tooltip and a combined a11y label.
+            .help(model.bridgeError ?? runtimeLabel)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(model.bridgeError ?? runtimeLabel)
 
             Spacer()
 
