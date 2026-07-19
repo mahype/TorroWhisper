@@ -6,6 +6,15 @@
     <description>Official update feed for Open Whisper.</description>
     <language>en</language>
     <item>
+      <title>Version 0.6.1</title>
+      <pubDate>Sun, 19 Jul 2026 13:31:23 +0000</pubDate>
+      <sparkle:shortVersionString>0.6.1</sparkle:shortVersionString>
+      <sparkle:version>0.6.1</sparkle:version>
+      <description>&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a href="https://github.com/mahype/TorroWhisper/compare/v0.5.0...v0.6.1"&gt;https://github.com/mahype/TorroWhisper/compare/v0.5.0...v0.6.1&lt;/a&gt;&lt;/p&gt;</description>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/mahype/TorroWhisper/releases/download/v0.6.1/TorroWhisper-0.6.1.dmg" sparkle:edSignature="Xov1so3/Dh2k6xbygTHEqWqIEKI9l+UPkUrsVu/qgN3pItC8hg8CoXEn/x3Vlfz+QNhOLBblmGN0HQMJqe7CBQ==" length="26550143" type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 0.5.0</title>
       <pubDate>Tue, 14 Jul 2026 20:02:21 +0000</pubDate>
       <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
