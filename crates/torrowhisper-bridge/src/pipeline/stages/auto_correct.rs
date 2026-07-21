@@ -1,8 +1,8 @@
 //! Auto-correct stage (ROADMAP #4). v1 supports `off` and `llm`; `spell_check`
 //! (NSSpellChecker, Swift-side) is a placeholder that skips for now.
 
-use torrowhisper_core::{AppSettings, LlmModelRef, STAGE_AUTO_CORRECT, STAGE_LLM};
 use serde_json::json;
+use torrowhisper_core::{AppSettings, LlmModelRef, STAGE_AUTO_CORRECT, STAGE_LLM};
 
 use crate::llm;
 use crate::pipeline::PipelineStage;

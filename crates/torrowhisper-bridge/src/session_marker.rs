@@ -82,7 +82,9 @@ mod tests {
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn with_temp_log_dir(test: impl FnOnce()) {
-        let guard = ENV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let guard = ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let dir = std::env::temp_dir().join(format!(
             "ow-session-test-{}-{:p}",
             std::process::id(),

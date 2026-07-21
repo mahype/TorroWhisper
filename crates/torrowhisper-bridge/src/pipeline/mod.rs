@@ -11,11 +11,11 @@ mod stages;
 
 use std::sync::{Arc, atomic::AtomicBool};
 
+use serde_json::Value;
 use torrowhisper_core::{
     AppSettings, ProcessingMode, STAGE_AUTO_CORRECT, STAGE_DICTIONARY, STAGE_LLM,
     StageCatalogEntryDto,
 };
-use serde_json::Value;
 
 use self::context::{PipelineContext, StageError, StageOutcome, StageOutcomeKind};
 use self::stages::{
@@ -275,8 +275,10 @@ mod tests {
 
     #[test]
     fn cancelled_pipeline_errors() {
-        let mut settings = AppSettings::default();
-        settings.post_processing_enabled = true; // would run the LLM step
+        let settings = AppSettings {
+            post_processing_enabled: true, // would run the LLM step
+            ..AppSettings::default()
+        };
         let registry = StageRegistry::with_builtins();
         let cancelled = Arc::new(AtomicBool::new(true));
         assert!(run(&registry, &settings, "text", &cancelled).is_err());

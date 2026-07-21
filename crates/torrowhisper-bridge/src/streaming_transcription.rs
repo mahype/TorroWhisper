@@ -424,8 +424,7 @@ fn voiced_gate_reached(voiced_samples: usize, sample_rate: u32) -> bool {
 }
 
 fn enough_new_audio(previous_len: usize, current_len: usize, sample_rate: u32) -> bool {
-    current_len.saturating_sub(previous_len)
-        >= ms_to_samples(STREAM_MIN_NEW_AUDIO_MS, sample_rate)
+    current_len.saturating_sub(previous_len) >= ms_to_samples(STREAM_MIN_NEW_AUDIO_MS, sample_rate)
 }
 
 #[cfg(test)]
@@ -559,13 +558,8 @@ mod tests {
         let silence_chunk = vec![0.0_f32; chunk_len];
         let settle_deadline = Instant::now() + Duration::from_secs(45);
         let mut last_advance = Instant::now();
-        while Instant::now() < settle_deadline
-            && last_advance.elapsed() < Duration::from_secs(10)
-        {
-            buffer
-                .lock()
-                .unwrap()
-                .push_chunk(&silence_chunk, &event_tx);
+        while Instant::now() < settle_deadline && last_advance.elapsed() < Duration::from_secs(10) {
+            buffer.lock().unwrap().push_chunk(&silence_chunk, &event_tx);
             thread::sleep(Duration::from_millis(100));
             let dto = snapshot_dto(&output);
             if dto.revision > snapshots.last().unwrap().revision {
@@ -577,7 +571,10 @@ mod tests {
 
         let last = snapshots.last().unwrap();
         let full_text = format!("{} {}", last.committed, last.pending).to_lowercase();
-        eprintln!("streaming revisions: {:?}", snapshots.iter().map(|s| s.revision).collect::<Vec<_>>());
+        eprintln!(
+            "streaming revisions: {:?}",
+            snapshots.iter().map(|s| s.revision).collect::<Vec<_>>()
+        );
         eprintln!("final streaming text: {full_text}");
 
         let revisions: Vec<u64> = snapshots.iter().map(|s| s.revision).collect();

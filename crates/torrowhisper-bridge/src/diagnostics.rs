@@ -184,7 +184,10 @@ fn newest_matching_report(dir: &Path, session_start: Option<SystemTime>) -> Opti
         {
             continue;
         }
-        if best.as_ref().is_none_or(|(best_mtime, _)| modified > *best_mtime) {
+        if best
+            .as_ref()
+            .is_none_or(|(best_mtime, _)| modified > *best_mtime)
+        {
             best = Some((modified, path));
         }
     }
@@ -267,7 +270,9 @@ fn parse_crash_report(content: &str) -> Option<CrashInfo> {
         exception_type: string_at(&root, &["exception", "type"]),
         signal: string_at(&root, &["exception", "signal"]),
         indicator: string_at(&root, &["termination", "indicator"]),
-        faulting_thread: root.get("faultingThread").and_then(serde_json::Value::as_i64),
+        faulting_thread: root
+            .get("faultingThread")
+            .and_then(serde_json::Value::as_i64),
         ..CrashInfo::default()
     };
 
@@ -321,7 +326,10 @@ mod tests {
         assert_eq!(info.signal.as_deref(), Some("SIGTRAP"));
         assert_eq!(info.indicator.as_deref(), Some("Trace/BPT trap: 5"));
         assert_eq!(info.faulting_thread, Some(5));
-        assert_eq!(info.faulting_queue.as_deref(), Some("com.apple.root.utility-qos"));
+        assert_eq!(
+            info.faulting_queue.as_deref(),
+            Some("com.apple.root.utility-qos")
+        );
         assert_eq!(
             info.top_frame.as_deref(),
             Some("closure #1 in AudioDeviceMonitor.start()")
@@ -371,7 +379,9 @@ mod tests {
 
     #[test]
     fn is_crash_report_matches_prefix_and_ext() {
-        assert!(is_crash_report(Path::new("/x/TorroWhisper-2026-07-15-075102.ips")));
+        assert!(is_crash_report(Path::new(
+            "/x/TorroWhisper-2026-07-15-075102.ips"
+        )));
         assert!(!is_crash_report(Path::new("/x/OtherApp-2026.ips")));
         assert!(!is_crash_report(Path::new("/x/TorroWhisper-2026.crash")));
     }

@@ -7,10 +7,12 @@
 
 use std::sync::{Arc, atomic::AtomicBool};
 
-use torrowhisper_core::OpenAiCompatibleProvider;
 use serde_json::{Value, json};
+use torrowhisper_core::OpenAiCompatibleProvider;
 
-use super::{LlmProvider, USER_AGENT, build_http_client, build_system_prompt, stream_chat_completion};
+use super::{
+    LlmProvider, USER_AGENT, build_http_client, build_system_prompt, stream_chat_completion,
+};
 
 pub(super) struct OpenAiCompatibleProviderImpl {
     provider: OpenAiCompatibleProvider,

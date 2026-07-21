@@ -1108,7 +1108,11 @@ impl AppSettings {
         }
 
         for id in seeds {
-            if !self.enabled_model_ids.iter().any(|existing| existing == &id) {
+            if !self
+                .enabled_model_ids
+                .iter()
+                .any(|existing| existing == &id)
+            {
                 self.enabled_model_ids.push(id);
             }
         }
@@ -1118,8 +1122,7 @@ impl AppSettings {
     /// user has curated nothing yet, so everything counts as enabled (the
     /// "show all" fallback the pickers rely on).
     pub fn is_model_enabled(&self, stable_id: &str) -> bool {
-        self.enabled_model_ids.is_empty()
-            || self.enabled_model_ids.iter().any(|id| id == stable_id)
+        self.enabled_model_ids.is_empty() || self.enabled_model_ids.iter().any(|id| id == stable_id)
     }
 
     /// Whether a transcription (Whisper) model `stable_id` is enabled app-wide.
@@ -1902,8 +1905,10 @@ mod tests {
 
     #[test]
     fn per_role_enable_lists_are_independent() {
-        let mut settings = AppSettings::default();
-        settings.enabled_transcription_ids = vec!["local_preset:Standard".to_owned()];
+        let settings = AppSettings {
+            enabled_transcription_ids: vec!["local_preset:Standard".to_owned()],
+            ..AppSettings::default()
+        };
         // Curating transcription must not affect the general role's "show all".
         assert!(settings.is_transcription_enabled("local_preset:Standard"));
         assert!(!settings.is_transcription_enabled("local_preset:Tiny"));
@@ -1912,9 +1917,14 @@ mod tests {
 
     #[test]
     fn normalize_seeds_explicit_ollama_post_processing_choice() {
-        let mut settings = AppSettings::default();
-        settings.active_post_processing_backend = PostProcessingBackend::Ollama;
-        settings.ollama.model_name = "llama3.1:8b".to_owned();
+        let mut settings = AppSettings {
+            active_post_processing_backend: PostProcessingBackend::Ollama,
+            ollama: ExternalProviderSettings {
+                model_name: "llama3.1:8b".to_owned(),
+                ..ExternalProviderSettings::ollama_defaults()
+            },
+            ..AppSettings::default()
+        };
         settings.normalize();
         assert!(
             settings
@@ -1930,9 +1940,14 @@ mod tests {
 
     #[test]
     fn seeding_does_not_resurrect_a_user_disabled_model() {
-        let mut settings = AppSettings::default();
-        settings.active_post_processing_backend = PostProcessingBackend::Ollama;
-        settings.ollama.model_name = "mistral".to_owned();
+        let mut settings = AppSettings {
+            active_post_processing_backend: PostProcessingBackend::Ollama,
+            ollama: ExternalProviderSettings {
+                model_name: "mistral".to_owned(),
+                ..ExternalProviderSettings::ollama_defaults()
+            },
+            ..AppSettings::default()
+        };
         settings.normalize();
         assert!(settings.is_model_enabled("ollama:mistral"));
 
@@ -1945,10 +1960,12 @@ mod tests {
 
     #[test]
     fn enabled_model_ids_seeded_once_then_left_alone() {
-        let mut settings = AppSettings::default();
-        settings.active_post_processing_model = Some(LlmModelRef::Anthropic {
-            model_name: "claude-opus-4-8".to_owned(),
-        });
+        let mut settings = AppSettings {
+            active_post_processing_model: Some(LlmModelRef::Anthropic {
+                model_name: "claude-opus-4-8".to_owned(),
+            }),
+            ..AppSettings::default()
+        };
         settings.normalize();
         let after_first = settings.enabled_model_ids.clone();
         assert_eq!(after_first, vec!["anthropic:claude-opus-4-8".to_owned()]);

@@ -11,8 +11,8 @@ use std::{
 };
 
 use directories::ProjectDirs;
-use torrowhisper_core::{AppSettings, ModelPreset};
 use reqwest::blocking::Client;
+use torrowhisper_core::{AppSettings, ModelPreset};
 
 const USER_AGENT: &str = "torrowhisper/0.1";
 const DOWNLOAD_BUFFER_SIZE: usize = 64 * 1024;

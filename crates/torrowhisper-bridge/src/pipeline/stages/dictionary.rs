@@ -1,7 +1,7 @@
 //! Dictionary replacement stage — wraps `crate::dictionary::apply`.
 
-use torrowhisper_core::{DictionaryEntry, STAGE_DICTIONARY};
 use serde_json::json;
+use torrowhisper_core::{DictionaryEntry, STAGE_DICTIONARY};
 
 use crate::pipeline::PipelineStage;
 use crate::pipeline::context::{PipelineContext, StageError, StageOutcome};

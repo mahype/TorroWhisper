@@ -671,9 +671,9 @@ dependencies = [
 
 [[package]]
 name = "foundation-models"
-version = "0.11.3"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dab48621670bd35c13e8c44be0c837e6da284c1108f89388b905415f6b8c8115"
+checksum = "ad318c5284d0fc576c518dbe688a94c07cae9bc732be8613c0974e9be672a2fb"
 dependencies = [
  "serde",
  "serde_json",

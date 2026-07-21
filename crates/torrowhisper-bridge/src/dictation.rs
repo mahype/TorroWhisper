@@ -344,24 +344,22 @@ impl DictationController {
         thread::spawn(move || {
             let started = Instant::now();
             let path_string = path_for_thread.to_string_lossy().to_string();
-            let result = WhisperContext::new_with_params(
-                &path_string,
-                WhisperContextParameters::default(),
-            )
-            .map(|context| {
-                log::info!(
-                    target: "dictation",
-                    "model warmup complete in {:.1}s ({label})",
-                    started.elapsed().as_secs_f32()
-                );
-                let context = Arc::new(context);
-                warm_inference_graph(&context, &settings_for_thread);
-                (path_for_thread, context)
-            })
-            .map_err(|err| {
-                log::warn!(target: "dictation", "model warmup failed ({label}): {err}");
-                format!("Whisper model warmup failed: {err}")
-            });
+            let result =
+                WhisperContext::new_with_params(&path_string, WhisperContextParameters::default())
+                    .map(|context| {
+                        log::info!(
+                            target: "dictation",
+                            "model warmup complete in {:.1}s ({label})",
+                            started.elapsed().as_secs_f32()
+                        );
+                        let context = Arc::new(context);
+                        warm_inference_graph(&context, &settings_for_thread);
+                        (path_for_thread, context)
+                    })
+                    .map_err(|err| {
+                        log::warn!(target: "dictation", "model warmup failed ({label}): {err}");
+                        format!("Whisper model warmup failed: {err}")
+                    });
             let _ = tx.send(result);
         });
         self.warmup_rx = Some(rx);
@@ -1548,7 +1546,10 @@ const HALLUCINATION_MARKERS: &[&str] = &[
 /// Only the tail is examined, so genuine mid-text content is never affected.
 pub(crate) fn strip_hallucinated_tail(text: &str) -> String {
     let mut sentences = split_sentences(text);
-    while sentences.last().is_some_and(|last| is_hallucinated_sentence(last)) {
+    while sentences
+        .last()
+        .is_some_and(|last| is_hallucinated_sentence(last))
+    {
         sentences.pop();
     }
     sentences.join(" ").trim().to_owned()

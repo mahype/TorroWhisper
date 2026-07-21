@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use torrowhisper_core::{ExternalProviderSettings, RemoteModelBackend, RemoteModelDto};
 use reqwest::blocking::Client;
 use serde::Deserialize;
+use torrowhisper_core::{ExternalProviderSettings, RemoteModelBackend, RemoteModelDto};
 
 const USER_AGENT: &str = "torrowhisper-bridge/0.1";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);

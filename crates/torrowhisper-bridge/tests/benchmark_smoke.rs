@@ -24,7 +24,10 @@ fn benchmark_runs_over_installed_models() {
     unsafe { torrowhisper_bridge::ow_string_free(raw) };
 
     println!("benchmark report:\n{json}");
-    assert!(json.contains("\"ok\":true"), "benchmark FFI must succeed: {json}");
+    assert!(
+        json.contains("\"ok\":true"),
+        "benchmark FFI must succeed: {json}"
+    );
     assert!(json.contains("\"rows\""), "report must carry rows");
     // At least one real measurement (inference_secs > 0) should be present when
     // any model is installed.

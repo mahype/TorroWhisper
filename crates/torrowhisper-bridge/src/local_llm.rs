@@ -27,8 +27,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use torrowhisper_core::LlmPreset;
 use serde::Deserialize;
+use torrowhisper_core::LlmPreset;
 
 use crate::llm_model_manager::default_llm_model_path;
 

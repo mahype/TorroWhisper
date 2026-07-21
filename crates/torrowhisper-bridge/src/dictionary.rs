@@ -1,5 +1,5 @@
-use torrowhisper_core::DictionaryEntry;
 use regex::RegexBuilder;
+use torrowhisper_core::DictionaryEntry;
 
 pub fn apply(entries: &[DictionaryEntry], text: &str) -> String {
     let mut result = text.to_owned();

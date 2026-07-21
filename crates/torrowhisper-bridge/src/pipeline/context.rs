@@ -8,8 +8,8 @@ use std::{
     },
 };
 
-use torrowhisper_core::ModeKind;
 use serde_json::Value;
+use torrowhisper_core::ModeKind;
 
 /// What a stage decided to do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

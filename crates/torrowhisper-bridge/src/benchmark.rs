@@ -39,7 +39,8 @@ const DEFAULT_THREAD_SWEEP: [u32; 5] = [1, 2, 4, 6, 8];
 /// The headline models #43 asks to compare directly: quantized Q5_0 vs FP16
 /// Turbo. Always reported (as "not downloaded" when absent) so the comparison
 /// is never silently incomplete.
-const HEADLINE_MODELS: [ModelPreset; 2] = [ModelPreset::LargeV3TurboQ5_0, ModelPreset::LargeV3Turbo];
+const HEADLINE_MODELS: [ModelPreset; 2] =
+    [ModelPreset::LargeV3TurboQ5_0, ModelPreset::LargeV3Turbo];
 
 /// Runs the benchmark and returns the per-run breakdown. `settings` supplies
 /// the decoding options (single_segment etc.) and the active model for the
@@ -75,7 +76,14 @@ pub fn run_benchmark(
             }
             continue;
         }
-        match measure_run(preset, &samples, settings, auto_threads, audio_secs, &reference_words) {
+        match measure_run(
+            preset,
+            &samples,
+            settings,
+            auto_threads,
+            audio_secs,
+            &reference_words,
+        ) {
             Ok((row, _context)) => rows.push(row),
             Err(err) => rows.push(error_row("model", preset, auto_threads as u32, err)),
         }
@@ -147,8 +155,13 @@ fn measure_run(
     reference_words: &[String],
 ) -> Result<(BenchmarkRowDto, WhisperContext), String> {
     let (context, load_secs, load_rss_mb) = load_context(preset)?;
-    let inference =
-        run_whisper_inference(&context, samples, settings, Some(REFERENCE_LANGUAGE), n_threads)?;
+    let inference = run_whisper_inference(
+        &context,
+        samples,
+        settings,
+        Some(REFERENCE_LANGUAGE),
+        n_threads,
+    )?;
     let rtf = inference.inference_secs / audio_secs;
     let quality = quality_score(reference_words, &inference.text);
     let row = BenchmarkRowDto {
@@ -184,8 +197,7 @@ fn load_context(preset: ModelPreset) -> Result<(WhisperContext, f32, f32), Strin
 }
 
 fn current_rss_mb() -> Option<f32> {
-    crate::diagnostics::process_stats()
-        .map(|stats| stats.resident_bytes as f32 / (1024.0 * 1024.0))
+    crate::diagnostics::process_stats().map(|stats| stats.resident_bytes as f32 / (1024.0 * 1024.0))
 }
 
 /// Headline models first, then the remaining presets — deduplicated.
@@ -202,7 +214,10 @@ fn model_candidates() -> Vec<ModelPreset> {
 /// The model to sweep thread counts on: the active model when downloaded, else
 /// the first available headline model, else nothing.
 fn sweep_model(settings: &AppSettings) -> Option<ModelPreset> {
-    if matches!(preset_model_integrity(settings.local_model), ModelIntegrity::Valid) {
+    if matches!(
+        preset_model_integrity(settings.local_model),
+        ModelIntegrity::Valid
+    ) {
         return Some(settings.local_model);
     }
     HEADLINE_MODELS
@@ -290,8 +305,12 @@ fn decode_reference_wav() -> Result<(Vec<f32>, u32), String> {
 
     while pos + 8 <= bytes.len() {
         let chunk_id = &bytes[pos..pos + 4];
-        let size = u32::from_le_bytes([bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]])
-            as usize;
+        let size = u32::from_le_bytes([
+            bytes[pos + 4],
+            bytes[pos + 5],
+            bytes[pos + 6],
+            bytes[pos + 7],
+        ]) as usize;
         let body_start = pos + 8;
         let body_end = (body_start + size).min(bytes.len());
 
@@ -349,7 +368,10 @@ mod tests {
         let (samples, sample_rate) = decode_reference_wav().expect("embedded reference decodes");
         assert_eq!(sample_rate, 16_000);
         // ~13.6s of 16 kHz audio; assert a sane, non-empty range.
-        assert!(samples.len() > 16_000 * 5, "reference should be several seconds");
+        assert!(
+            samples.len() > 16_000 * 5,
+            "reference should be several seconds"
+        );
         assert!(samples.iter().all(|s| (-1.0..=1.0).contains(s)));
     }
 
@@ -377,7 +399,9 @@ mod tests {
         // older format
         assert!(whisper_metal_compiled_in("WHISPER : METAL = 1 | NEON = 1"));
         // CPU-only build
-        assert!(!whisper_metal_compiled_in("WHISPER : COREML = 0 | CPU : NEON = 1 |"));
+        assert!(!whisper_metal_compiled_in(
+            "WHISPER : COREML = 0 | CPU : NEON = 1 |"
+        ));
     }
 
     #[test]

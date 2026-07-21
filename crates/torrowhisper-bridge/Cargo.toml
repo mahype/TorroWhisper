@@ -50,7 +50,7 @@ whisper-rs = { version = "0.16.0", features = ["log_backend", "metal"] }
 # pulling FluidAudio's unrelated VAD/diarization API into the bridge.
 [target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
 fluidaudio-rs = { version = "0.14.1", default-features = false, features = ["asr"] }
-foundation-models = { version = "0.11.3", features = ["macos_26_0"] }
+foundation-models = { version = "0.9.0", features = ["macos_26_0"] }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 whisper-rs = { version = "0.16.0", features = ["log_backend"] }

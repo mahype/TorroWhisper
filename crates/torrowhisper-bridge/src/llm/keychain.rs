@@ -6,10 +6,10 @@
 //! `set` ever moves a secret across the FFI boundary; status checks return
 //! booleans only.
 
-use torrowhisper_core::LlmBackendKind;
 use security_framework::passwords::{
     delete_generic_password, get_generic_password, set_generic_password,
 };
+use torrowhisper_core::LlmBackendKind;
 
 /// Keychain service name. Matches the `ProjectDirs` qualifier/org/app.
 const SERVICE: &str = "com.gettorro.TorroWhisper.llm";

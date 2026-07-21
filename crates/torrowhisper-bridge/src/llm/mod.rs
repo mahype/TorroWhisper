@@ -28,8 +28,8 @@ use std::{
 
 use serde_json::Value;
 
-use torrowhisper_core::{AppSettings, CustomLlmSource, LlmBackendKind, LlmModelRef, LlmPreset};
 use reqwest::blocking::Client;
+use torrowhisper_core::{AppSettings, CustomLlmSource, LlmBackendKind, LlmModelRef, LlmPreset};
 
 use crate::{llm_model_manager, local_llm};
 
@@ -277,11 +277,10 @@ pub(crate) fn stream_chat_completion(
             .and_then(|choice| choice.get("delta"))
             .and_then(|delta| delta.get("content"))
             .and_then(Value::as_str)
+            && !delta.is_empty()
         {
-            if !delta.is_empty() {
-                full.push_str(delta);
-                on_chunk(delta);
-            }
+            full.push_str(delta);
+            on_chunk(delta);
         }
     }
 

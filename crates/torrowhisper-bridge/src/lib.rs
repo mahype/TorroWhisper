@@ -49,13 +49,13 @@ use dictation::{DictationController, DictationOutcome, DictationTiming, MicSwitc
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState, hotkey::HotKey};
 use llm_model_manager::LlmModelDownloadManager;
 use model_manager::ModelDownloadManager;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use torrowhisper_core::{
     AppSettings, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto, HistoryEntry,
     LlmModelStatusDto, LlmPreset, LlmRegistryEntryDto, ModelPreset, ModelStatusDto,
     ParakeetModelStatusDto, RecordingLevelsDto, RemoteModelBackend, RemoteModelDto,
     RuntimeStatusDto, StageTimingDto, StreamingTranscriptDto, TranscriptionBackend,
 };
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 thread_local! {
     static RUNTIME: RefCell<BridgeRuntime> = RefCell::new(BridgeRuntime::new());
