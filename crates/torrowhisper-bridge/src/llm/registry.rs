@@ -43,6 +43,20 @@ fn build_inner(
 ) -> Vec<LlmRegistryEntryDto> {
     let mut entries = Vec::new();
 
+    let apple_availability = if super::apple_foundation::is_available() {
+        LlmAvailability::Ready
+    } else {
+        LlmAvailability::Unavailable
+    };
+    entries.push(entry(
+        LlmModelRef::AppleSystem,
+        LlmBackendKind::AppleFoundation,
+        "Apple Foundation Models".to_owned(),
+        super::apple_foundation::availability_detail(),
+        apple_availability,
+        None,
+    ));
+
     for preset in LlmPreset::ALL {
         let (availability, progress) = match downloads {
             Some(d) if d.is_downloading_preset(preset) => {

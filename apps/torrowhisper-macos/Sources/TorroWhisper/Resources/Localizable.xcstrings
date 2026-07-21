@@ -1,6 +1,51 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Click in the field, hold the shortcut while dictating a short sentence, then release it." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Klicke in das Feld, halte die Tastenkombination beim Diktieren eines kurzen Satzes gedrückt und lasse sie danach los." } }
+      }
+    },
+    "Click in the field, press the shortcut, dictate a short sentence, then press it again." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Klicke in das Feld, drücke die Tastenkombination, diktiere einen kurzen Satz und drücke sie erneut." } }
+      }
+    },
+    "Complete this short test to finish setup." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Schließe diesen kurzen Test ab, um die Einrichtung zu beenden." } }
+      }
+    },
+    "Everything is set up." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alles ist korrekt eingerichtet." } }
+      }
+    },
+    "Get started" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Loslegen" } }
+      }
+    },
+    "It works — your dictation was inserted successfully." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Es funktioniert – dein Diktat wurde erfolgreich eingefügt." } }
+      }
+    },
+    "Your dictated text will appear here." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dein diktierter Text erscheint hier." } }
+      }
+    },
+    "Your shortcut" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Deine Tastenkombination" } }
+      }
+    },
+    "You're ready to dictate. Try your shortcut once before you get started." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Du kannst jetzt diktieren. Probiere deine Tastenkombination einmal aus, bevor du loslegst." } }
+      }
+    },
     "Local dictation for macOS" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Lokales Diktieren für macOS" } }
@@ -59,6 +104,126 @@
     "Check accessibility access" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Bedienungshilfen-Zugriff prüfen" } }
+      }
+    },
+    "Check" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Überprüfen" } }
+      }
+    },
+    "Complete a successful recording test to finish setup." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Führe einen erfolgreichen Aufnahmetest durch, um die Einrichtung abzuschließen." } }
+      }
+    },
+    "Connect or reload a microphone to continue." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Schließe ein Mikrofon an oder lade die Mikrofone neu, um fortzufahren." } }
+      }
+    },
+    "Grant accessibility access to continue." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Erteile den Bedienungshilfen-Zugriff, um fortzufahren." } }
+      }
+    },
+    "Grant microphone access to continue." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Erteile den Mikrofon-Zugriff, um fortzufahren." } }
+      }
+    },
+    "NVIDIA Parakeet supports 25 European languages and detects the spoken language automatically. TorroWhisper selects your first supported macOS language by default." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "NVIDIA Parakeet unterstützt 25 europäische Sprachen und erkennt die gesprochene Sprache automatisch. TorroWhisper wählt standardmäßig deine erste unterstützte macOS-Sprache." } }
+      }
+    },
+    "No microphone found" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Kein Mikrofon gefunden" } }
+      }
+    },
+    "Parakeet detects the spoken language automatically among its 25 supported languages. The selected default is also used by post-processing and Whisper alternatives." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Parakeet erkennt die gesprochene Sprache automatisch aus seinen 25 unterstützten Sprachen. Die gewählte Standardsprache wird außerdem für die Nachbearbeitung und Whisper-Alternativen verwendet." } }
+      }
+    },
+    "Recording test failed." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Aufnahmetest fehlgeschlagen." } }
+      }
+    },
+    "Recording test not run yet." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Aufnahmetest noch nicht durchgeführt." } }
+      }
+    },
+    "Recording test passed." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Aufnahmetest bestanden." } }
+      }
+    },
+    "Set a valid global hotkey to continue." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Lege einen gültigen globalen Hotkey fest, um fortzufahren." } }
+      }
+    },
+    "Setup check" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Einrichtungsprüfung" } }
+      }
+    },
+    "Speak now…" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Sprich jetzt…" } }
+      }
+    },
+    "Start test recording" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Testaufnahme starten" } }
+      }
+    },
+    "Stop test recording" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Testaufnahme beenden" } }
+      }
+    },
+    "Test recording" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Aufnahme testen" } }
+      }
+    },
+    "The setup is complete only after TorroWhisper successfully records and transcribes a short sentence." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Einrichtung ist erst abgeschlossen, nachdem TorroWhisper einen kurzen Satz erfolgreich aufgenommen und transkribiert hat." } }
+      }
+    },
+    "Transcribing test recording…" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Testaufnahme wird transkribiert…" } }
+      }
+    },
+    "Trigger & hotkey" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Trigger & Hotkey" } }
+      }
+    },
+    "Use the configured hotkey or the button, say a short sentence, then stop the recording." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Verwende den eingerichteten Hotkey oder den Button, sprich einen kurzen Satz und beende dann die Aufnahme." } }
+      }
+    },
+    "Wait until the transcription model is ready." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Warte, bis das Transkriptionsmodell bereit ist." } }
+      }
+    },
+    "Required. NVIDIA Parakeet is downloaded and prepared automatically when this page opens. Other transcription and post-processing models can be configured later in Settings." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Erforderlich. NVIDIA Parakeet wird automatisch geladen und vorbereitet, sobald diese Seite geöffnet wird. Andere Transkriptions- und Nachbearbeitungsmodelle lassen sich später in den Einstellungen konfigurieren." } }
+      }
+    },
+    "Reset" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zurücksetzen" } }
       }
     },
     "Reset accessibility permission" : {

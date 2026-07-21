@@ -13,7 +13,12 @@
 2. Open the DMG and drag **TorroWhisper.app** into the **Applications** folder.
 3. Launch TorroWhisper from Launchpad or Spotlight.
 4. On first launch, macOS will verify the notarized signature. If you see a Gatekeeper warning instead of a regular launch, see [Troubleshooting](#troubleshooting) below.
-5. Follow the in-app onboarding — it walks you through mic selection, model download, and startup behavior.
+5. Follow the in-app onboarding — it walks you through mic selection, permissions, hotkey, and startup behavior. The compatible transcription model is downloaded and prepared automatically: Parakeet on Apple Silicon, Whisper on Intel.
+
+Optional Whisper alternatives and downloadable post-processing models are kept
+out of onboarding. You can add or switch them later under **Settings → Language
+Models**. Apple Foundation Models, when supported, are supplied by macOS and do
+not need a separate TorroWhisper download.
 
 TorroWhisper runs as a **menu bar app**. Look for its icon in the top-right of your screen — there is no Dock icon.
 

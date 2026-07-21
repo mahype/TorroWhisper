@@ -17,6 +17,7 @@ mod local_llm;
 mod logging;
 #[allow(dead_code)]
 mod model_manager;
+mod parakeet;
 mod permission_diagnostics;
 pub mod plugin_api;
 pub mod plugin_log;
@@ -51,8 +52,8 @@ use model_manager::ModelDownloadManager;
 use torrowhisper_core::{
     AppSettings, CustomLlmSource, CustomLlmStatusDto, DeviceDto, DiagnosticsDto, HistoryEntry,
     LlmModelStatusDto, LlmPreset, LlmRegistryEntryDto, ModelPreset, ModelStatusDto,
-    RecordingLevelsDto, RemoteModelBackend, RemoteModelDto, RuntimeStatusDto, StageTimingDto,
-    StreamingTranscriptDto,
+    ParakeetModelStatusDto, RecordingLevelsDto, RemoteModelBackend, RemoteModelDto,
+    RuntimeStatusDto, StageTimingDto, StreamingTranscriptDto, TranscriptionBackend,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -110,6 +111,17 @@ impl BridgeRuntime {
         });
         settings.normalize();
 
+        // Parakeet is compiled only for Apple Silicon. Keep the universal app
+        // usable on Intel Macs by migrating the unsupported default to the
+        // existing Whisper backend before the onboarding state is exposed.
+        #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+        if settings.transcription_backend == TranscriptionBackend::Parakeet {
+            settings.transcription_backend = TranscriptionBackend::Whisper;
+            if let Err(err) = settings_store::save(&settings) {
+                last_status = format!("Settings could not be saved: {err}");
+            }
+        }
+
         let mut autostart = AutostartManager::new();
         let mut dictation = DictationController::new();
         let mut model_downloads = ModelDownloadManager::new();
@@ -117,6 +129,16 @@ impl BridgeRuntime {
 
         for message in dictation.refresh_input_devices(&mut settings) {
             last_status = message;
+        }
+
+        // On a configured installation Parakeet is prepared at launch so the
+        // first dictation is ready quickly. A fresh installation deliberately
+        // waits until the user opens the onboarding transcription step; that
+        // page owns the first download and communicates its progress.
+        if settings.onboarding_completed
+            && settings.transcription_backend == TranscriptionBackend::Parakeet
+        {
+            dictation.prepare_parakeet();
         }
 
         // Older versions pinned the absolute default path of the then-active
@@ -678,6 +700,7 @@ impl BridgeRuntime {
     fn save_settings(&mut self, mut next_settings: AppSettings) -> Result<String, String> {
         let previous_path = self.settings.local_model_path.clone();
         let previous_model = self.settings.local_model;
+        let previous_transcription_backend = self.settings.transcription_backend;
         let previous_input_device_name = self.settings.input_device_name.clone();
         next_settings.normalize();
 
@@ -720,11 +743,17 @@ impl BridgeRuntime {
 
         if previous_path != self.settings.local_model_path
             || previous_model != self.settings.local_model
+            || previous_transcription_backend != self.settings.transcription_backend
         {
             self.dictation.invalidate_model_cache();
-            // Warm the newly selected model in the background so the next
-            // dictation doesn't pay the load cost inline (#43).
-            self.dictation.start_model_warmup(&self.settings);
+            match self.settings.transcription_backend {
+                TranscriptionBackend::Parakeet => self.dictation.prepare_parakeet(),
+                TranscriptionBackend::Whisper => {
+                    // Warm the newly selected model in the background so the
+                    // next dictation doesn't pay the load cost inline (#43).
+                    self.dictation.start_model_warmup(&self.settings);
+                }
+            }
         }
 
         Ok(self.last_status.clone())
@@ -809,6 +838,15 @@ impl BridgeRuntime {
             progress_basis_points,
             expected_size_bytes: self.settings.local_model.download_size_bytes(),
         }
+    }
+
+    fn parakeet_status(&mut self) -> ParakeetModelStatusDto {
+        self.dictation.parakeet_status()
+    }
+
+    fn prepare_parakeet(&mut self) -> String {
+        self.dictation.prepare_parakeet();
+        "Parakeet preparation started.".to_owned()
     }
 
     fn start_model_download(&mut self, preset: Option<ModelPreset>) -> Result<String, String> {
@@ -1708,6 +1746,16 @@ pub extern "C" fn ow_get_model_status() -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_model_status_list() -> *mut c_char {
     response_ok(with_runtime_value(BridgeRuntime::model_status_list))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_get_parakeet_status() -> *mut c_char {
+    response_ok(with_runtime_value(BridgeRuntime::parakeet_status))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_prepare_parakeet() -> *mut c_char {
+    response_ok(with_runtime_value(BridgeRuntime::prepare_parakeet))
 }
 
 #[unsafe(no_mangle)]

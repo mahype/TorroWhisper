@@ -5,12 +5,18 @@ struct OnboardingView: View {
     let onFinish: () -> Void
     @Environment(\.locale) private var locale
 
-    @State private var isManagingLanguageModels = false
-    @State private var managerTab: LanguageModelsManagerTab = .postProcessing
-    @State private var showsPermissionWarning = false
+    @State private var testBaselineSuccessCount: UInt64 = 0
+    @State private var testBaselineErrorCount: UInt64 = 0
+    @State private var recordingTestAttempted = false
+    @State private var recordingTestPassed = false
+    @State private var recordingTestError: String?
+    @State private var automaticInsertionBeforeTest: Bool?
+    @State private var testText = ""
+    @FocusState private var testFieldFocused: Bool
 
-    private static let lastStep = 5
-    private static let permissionsStep = 2
+    private static let transcriptionStep = 1
+    private static let testStep = 3
+    private static let lastStep = testStep
 
     var body: some View {
         HStack(spacing: 0) {
@@ -22,7 +28,6 @@ struct OnboardingView: View {
                     currentStep
                 }
                 .formStyle(.grouped)
-                .scrollDisabled(true)
                 .navigationTitle(stepTitle)
 
                 footer
@@ -31,61 +36,73 @@ struct OnboardingView: View {
         }
         .frame(width: 760, height: 520)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onChange(of: model.onboardingStep) { newStep in
-            // The diagnostics DTO is only computed at app start; re-run it when
-            // the user reaches the diagnostics step so it reflects the model
-            // and device choices made earlier in the wizard.
-            if newStep == Self.lastStep {
-                model.refreshDiagnostics()
-            }
-        }
         .onAppear {
-            if model.onboardingStep == Self.lastStep {
-                model.refreshDiagnostics()
+            model.applyOnboardingLanguageDefault()
+            model.refreshDevices()
+            if model.onboardingStep == Self.transcriptionStep {
+                prepareDefaultTranscriptionModel()
+            }
+            if model.onboardingStep == Self.testStep {
+                prepareRecordingTest()
             }
         }
-        .sheet(isPresented: $isManagingLanguageModels) {
-            LanguageModelsManagerSheet(model: model, selectedTab: $managerTab) {
-                isManagingLanguageModels = false
+        .onChange(of: model.onboardingStep) { _, newStep in
+            if newStep == Self.transcriptionStep {
+                prepareDefaultTranscriptionModel()
+            }
+            if newStep == Self.testStep {
+                prepareRecordingTest()
             }
         }
-        .alert(Text("Permissions missing", bundle: .module), isPresented: $showsPermissionWarning) {
-            Button(role: .cancel) {
-            } label: {
-                Text("Grant permissions", bundle: .module)
+        .onChange(of: model.settings.inputDeviceName) { _, _ in invalidateRecordingTest() }
+        .onChange(of: model.settings.transcriptionLanguage) { _, _ in invalidateRecordingTest() }
+        .onChange(of: model.settings.hotkey) { _, _ in invalidateRecordingTest() }
+        .onChange(of: model.settings.triggerMode) { _, _ in invalidateRecordingTest() }
+        .onChange(of: model.runtime.isRecording) { _, isRecording in
+            if model.onboardingStep == Self.testStep, isRecording {
+                recordingTestAttempted = true
+                recordingTestError = nil
             }
-            Button {
-                model.onboardingStep = min(Self.lastStep, model.onboardingStep + 1)
-            } label: {
-                Text("Continue anyway", bundle: .module)
+        }
+        .onChange(of: model.runtime.dictationSuccessCount) { _, count in
+            guard model.onboardingStep == Self.testStep,
+                  recordingTestAttempted,
+                  count > testBaselineSuccessCount
+            else { return }
+            recordingTestPassed = true
+            recordingTestError = nil
+        }
+        .onChange(of: model.runtime.dictationErrorCount) { _, count in
+            guard model.onboardingStep == Self.testStep,
+                  recordingTestAttempted,
+                  count > testBaselineErrorCount
+            else { return }
+            recordingTestPassed = false
+            recordingTestError = model.runtime.lastDictationError
+        }
+        .onChange(of: model.bridgeError) { _, error in
+            guard model.onboardingStep == Self.testStep,
+                  recordingTestAttempted,
+                  let error,
+                  !error.isEmpty
+            else { return }
+            recordingTestPassed = false
+            recordingTestError = error
+        }
+        .onDisappear {
+            if dictationBusy {
+                model.cancelDictation()
             }
-        } message: {
-            Text(permissionWarningMessageKey, bundle: .module)
+            restoreAutomaticInsertionAfterTest()
         }
-    }
-
-    /// Which warning to show when the user tries to leave the permissions step
-    /// without granting everything — names exactly what is still missing.
-    private var permissionWarningMessageKey: LocalizedStringKey {
-        let microphoneMissing = model.microphoneAuthorizationStatus != .authorized
-        let accessibilityMissing = !model.accessibilityTrusted
-        if microphoneMissing && accessibilityMissing {
-            return "Without microphone and accessibility access, TorroWhisper cannot record dictation or insert text into other apps. Do you really want to continue?"
-        }
-        if microphoneMissing {
-            return "Without microphone access, TorroWhisper cannot record your dictation. Do you really want to continue?"
-        }
-        return "Without accessibility access, TorroWhisper cannot insert the transcribed text into other apps. Do you really want to continue?"
     }
 
     private var stepTitle: String {
         switch model.onboardingStep {
-        case 0: return L("Welcome", locale: locale)
-        case 1: return L("Audio & hotkey", locale: locale)
-        case 2: return L("Permissions", locale: locale)
-        case 3: return L("Language models", locale: locale)
-        case 4: return L("Start & behavior", locale: locale)
-        default: return L("Diagnostics", locale: locale)
+        case 0: return L("Recording", locale: locale)
+        case Self.transcriptionStep: return L("Transcription", locale: locale)
+        case 2: return L("Start & behavior", locale: locale)
+        default: return L("Ready", locale: locale)
         }
     }
 
@@ -93,46 +110,43 @@ struct OnboardingView: View {
     private var currentStep: some View {
         switch model.onboardingStep {
         case 0:
-            Section {
-                Text("Tray-first, local, and built for everyday use. Default is local Whisper; Ollama and LM Studio stay optional.", bundle: .module)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } header: {
-                Text("TorroWhisper", bundle: .module)
-            }
+            recordingSetup
+        case Self.transcriptionStep:
+            transcriptionSetup
+        case 2:
+            behaviorSetup
+        default:
+            recordingTest
+        }
+    }
 
+    private var recordingSetup: some View {
+        Group {
             Section {
-                LabeledContent {
-                    Text(model.settings.inputDeviceName)
-                } label: {
-                    Text("Microphone", bundle: .module)
-                }
-                LabeledContent {
-                    Text(hotkeyDisplayString(model.settings.hotkey))
-                } label: {
-                    Text("Hotkey", bundle: .module)
-                }
-                LabeledContent {
-                    Text(model.selectedModelDisplayName)
-                } label: {
-                    Text("Model", bundle: .module)
-                }
-                LabeledContent {
-                    Text(model.settings.startupBehavior.label(locale: locale))
-                } label: {
-                    Text("System startup", bundle: .module)
-                }
-            } header: {
-                Text("Current selection", bundle: .module)
-            }
-        case 1:
-            Section {
-                Picker(selection: model.binding(for: \.inputDeviceName)) {
-                    ForEach(deviceNames, id: \.self) { device in
-                        Text(device).tag(device)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    if deviceNames.count > 1 {
+                        Picker(selection: microphoneBinding) {
+                            ForEach(deviceNames, id: \.self) { device in
+                                Text(device).tag(device)
+                            }
+                        } label: {
+                            Text("Microphone", bundle: .module)
+                        }
+                    } else {
+                        LabeledContent {
+                            Text(selectedMicrophoneName ?? L("No microphone found", locale: locale))
+                                .foregroundStyle(deviceNames.isEmpty ? .secondary : .primary)
+                        } label: {
+                            Text("Microphone", bundle: .module)
+                        }
                     }
-                } label: {
-                    Text("Microphone", bundle: .module)
+
+                    Button {
+                        model.refreshDevices()
+                    } label: {
+                        Label("Reload microphones", systemImage: "arrow.clockwise")
+                    }
+                    .controlSize(.small)
                 }
 
                 Picker(selection: model.languageBinding()) {
@@ -140,16 +154,27 @@ struct OnboardingView: View {
                         Text(option.label(locale: locale)).tag(option.code)
                     }
                 } label: {
-                    Text("Language", bundle: .module)
-                }
-
-                Button {
-                    model.refreshDevices()
-                } label: {
-                    Text("Reload microphones", bundle: .module)
+                    Text("Default language", bundle: .module)
                 }
             } header: {
                 Text("Audio source", bundle: .module)
+            } footer: {
+                Text("NVIDIA Parakeet supports 25 European languages and detects the spoken language automatically. TorroWhisper selects your first supported macOS language by default.", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Section {
+                permissionRow(
+                    granted: model.microphoneAuthorizationStatus == .authorized,
+                    grantedKey: "Microphone access granted.",
+                    pendingKey: "Microphone access is not granted yet.",
+                    buttonKey: "Grant microphone access",
+                    action: { model.checkAndRequestMicrophoneAccess() }
+                )
+            } header: {
+                Text("Microphone permission", bundle: .module)
             }
 
             Section {
@@ -161,11 +186,7 @@ struct OnboardingView: View {
                     Text("Mode", bundle: .module)
                 }
                 .pickerStyle(.segmented)
-            } header: {
-                Text("Trigger", bundle: .module)
-            }
 
-            Section {
                 HotkeyRecorderField(
                     title: model.hotkeyFieldTitle,
                     currentHotkey: model.settings.hotkey,
@@ -182,25 +203,67 @@ struct OnboardingView: View {
                     onInvalid: { model.failHotkeyCapture($0) }
                 )
             } header: {
-                Text("Global hotkey", bundle: .module)
+                Text("Trigger & hotkey", bundle: .module)
             }
-        case 2:
-            Section {
-                permissionRow(
-                    granted: model.microphoneAuthorizationStatus == .authorized,
-                    grantedKey: "Microphone access granted.",
-                    pendingKey: "Microphone access is not granted yet.",
-                    buttonKey: "Grant microphone access",
-                    action: { model.checkAndRequestMicrophoneAccess() }
-                )
-            } header: {
-                Text("Microphone", bundle: .module)
-            } footer: {
-                Text("Required to record your dictation.", bundle: .module)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        }
+    }
+
+    private var transcriptionSetup: some View {
+        Section {
+            LabeledContent {
+                Text(model.selectedModelDisplayName)
+            } label: {
+                Text("Transcription model", bundle: .module)
             }
 
+            if model.settings.transcriptionBackend == .parakeet {
+                if model.parakeetStatus.isPreparing {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                LabeledContent {
+                    Text(L(model.parakeetStatus.summary, locale: locale))
+                } label: {
+                    Text("Status", bundle: .module)
+                }
+
+                if let error = model.parakeetStatus.error {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        model.prepareParakeet()
+                    } label: {
+                        Text("Try again", bundle: .module)
+                    }
+                }
+            } else if let status = currentWhisperStatus {
+                if status.isDownloading, let basisPoints = status.progressBasisPoints {
+                    ProgressView(value: Double(basisPoints) / 10_000.0)
+                }
+                Text(L(status.summary, locale: locale))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if !status.isDownloaded && !status.isDownloading {
+                    Button {
+                        model.startModelDownload()
+                    } label: {
+                        Text("Try again", bundle: .module)
+                    }
+                }
+            }
+        } header: {
+            Text("Transcription", bundle: .module)
+        } footer: {
+            Text("Required. NVIDIA Parakeet is downloaded and prepared automatically when this page opens. Other transcription and post-processing models can be configured later in Settings.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var behaviorSetup: some View {
+        Group {
             Section {
                 permissionRow(
                     granted: model.accessibilityTrusted,
@@ -218,160 +281,177 @@ struct OnboardingView: View {
             }
 
             Section {
-                Button {
-                    model.refreshDiagnostics()
-                } label: {
-                    Text("Check again", bundle: .module)
-                }
-            } footer: {
-                Text("After granting a permission in System Settings, tap 'Check again' to refresh the status here.", bundle: .module)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        case 3:
-            Section {
-                Picker(selection: model.binding(for: \.localModel)) {
-                    ForEach(ModelPreset.allCases) { preset in
-                        Text(preset.displayName).tag(preset)
-                    }
-                } label: {
-                    Text("Whisper model", bundle: .module)
-                }
-
-                Text("\(model.settings.localModel.description(locale: locale)) (\(model.settings.localModel.downloadSizeText))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let status = currentWhisperStatus {
-                    if status.isDownloading, let basisPoints = status.progressBasisPoints {
-                        ProgressView(value: Double(basisPoints) / 10_000.0)
-                    }
-                    LabeledContent {
-                        Text(L(status.summary, locale: locale))
-                    } label: {
-                        Text("Status", bundle: .module)
-                    }
-                }
-
-                whisperDownloadControl
-            } header: {
-                Text("Transcription", bundle: .module)
-            } footer: {
-                Text("Required. Download the selected transcription model to continue.", bundle: .module)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                if hasPostProcessingModel {
-                    Label {
-                        Text("A post-processing model is installed.", bundle: .module)
-                    } icon: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    }
-                } else {
-                    Text("No post-processing model installed yet.", bundle: .module)
-                        .font(.callout.weight(.medium))
-                    Button {
-                        managerTab = .postProcessing
-                        isManagingLanguageModels = true
-                    } label: {
-                        Label {
-                            Text("Choose a post-processing model", bundle: .module)
-                        } icon: {
-                            Image(systemName: "arrow.down.circle")
-                        }
-                    }
-                }
-            } header: {
-                Text("Post-processing", bundle: .module)
-            } footer: {
-                Text("Optional — only needed if you want post-processing. It runs your dictation through a language model to clean it up: punctuation, capitalization, and filler-word removal. Choose a model now if you want it, or just continue and add one later in Settings.", bundle: .module)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        case 4:
-            Section {
                 Toggle(isOn: model.launchAtLoginBinding) {
                     Text("Launch at login", bundle: .module)
                 }
             } header: {
                 Text("System startup", bundle: .module)
             }
+        }
+    }
 
-            Section {
-                Toggle(isOn: model.binding(for: \.insertTextAutomatically)) {
-                    Text("Insert text automatically", bundle: .module)
-                }
-                Toggle(isOn: model.binding(for: \.restoreClipboardAfterInsert)) {
-                    Text("Restore clipboard after inserting", bundle: .module)
-                }
-            } header: {
-                Text("Text output", bundle: .module)
-            }
+    private var recordingTest: some View {
+        Section {
+            VStack(spacing: 16) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 64, weight: .regular))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.green)
+                    .accessibilityHidden(true)
 
-            Section {
-                Toggle(isOn: model.binding(for: \.vadEnabled)) {
-                    Text("Enable silence stop", bundle: .module)
+                VStack(spacing: 4) {
+                    Text("Everything is set up.", bundle: .module)
+                        .font(.title2.weight(.semibold))
+                    Text("You're ready to dictate. Try your shortcut once before you get started.", bundle: .module)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-            } header: {
-                Text("Dictation stop", bundle: .module)
+
+                VStack(spacing: 4) {
+                    Text("Your shortcut", bundle: .module)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(hotkeyDisplayString(model.settings.hotkey))
+                        .font(.title3.weight(.semibold).monospaced())
+                        .textSelection(.enabled)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(testInstructionKey, bundle: .module)
+                        .font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    ZStack(alignment: .topLeading) {
+                        if testText.isEmpty {
+                            Text("Your dictated text will appear here.", bundle: .module)
+                                .foregroundStyle(.tertiary)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 8)
+                                .allowsHitTesting(false)
+                        }
+
+                        TextEditor(text: $testText)
+                            .focused($testFieldFocused)
+                            .font(.body)
+                            .scrollContentBackground(.hidden)
+                            .padding(.horizontal, 1)
+                    }
+                    .frame(minHeight: 78, maxHeight: 100)
+                    .padding(6)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(
+                                testFieldFocused ? Color.torroAccent : Color(nsColor: .separatorColor),
+                                lineWidth: testFieldFocused ? 2 : 1
+                            )
+                    }
+
+                    recordingTestFeedback
+                }
+                .frame(maxWidth: 440, alignment: .leading)
             }
-        default:
-            Section {
-                Text(L(model.diagnostics.summary, locale: locale))
-                    .font(.subheadline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var recordingTestFeedback: some View {
+        if recordingTestPassed {
+            Label {
+                Text("It works — your dictation was inserted successfully.", bundle: .module)
+            } icon: {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            }
+        } else if model.runtime.isRecording {
+            Label {
+                Text("Speak now…", bundle: .module)
+            } icon: {
+                Image(systemName: "waveform.circle.fill")
+                    .foregroundStyle(.green)
+            }
+        } else if model.runtime.isTranscribing || model.runtime.isPostProcessing {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Transcribing test recording…", bundle: .module)
                     .foregroundStyle(.secondary)
-
-                HStack(spacing: 10) {
-                    Button {
-                        model.refreshDiagnostics()
-                    } label: {
-                        Text("Refresh", bundle: .module)
-                    }
-                    Button {
-                        model.openSystemSettings()
-                    } label: {
-                        Text("Open System Settings", bundle: .module)
-                    }
-                }
-            } header: {
-                Text("Overview", bundle: .module)
             }
-
-            Section {
-                ForEach(model.diagnostics.items) { item in
-                    DiagnosticDisclosureCard(item: item)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+        } else if let recordingTestError, !recordingTestError.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Label {
+                    Text("Recording test failed.", bundle: .module)
+                } icon: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.red)
                 }
-            } header: {
-                Text("Details", bundle: .module)
+                Text(recordingTestError)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+        } else {
+            Text("Complete this short test to finish setup.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var testInstructionKey: LocalizedStringKey {
+        switch model.settings.triggerMode {
+        case .toggle:
+            return "Click in the field, press the shortcut, dictate a short sentence, then press it again."
+        case .pushToTalk:
+            return "Click in the field, hold the shortcut while dictating a short sentence, then release it."
         }
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 12) {
+            if let problem = footerProblem {
+                Label {
+                    Text(problem, bundle: .module)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                }
+                .lineLimit(2)
+            }
+
+            Spacer()
+
             Button {
+                if model.onboardingStep == Self.testStep {
+                    restoreAutomaticInsertionAfterTest()
+                }
                 model.onboardingStep = max(0, model.onboardingStep - 1)
             } label: {
                 Text("Back", bundle: .module)
             }
-            .disabled(model.onboardingStep == 0)
-
-            Spacer()
+            .disabled(model.onboardingStep == 0 || dictationBusy)
 
             if model.onboardingStep == Self.lastStep {
                 Button {
+                    restoreAutomaticInsertionAfterTest()
                     if model.completeOnboarding() {
                         onFinish()
                     }
                 } label: {
-                    Text("Finish", bundle: .module)
+                    Text("Get started", bundle: .module)
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
+                .disabled(
+                    !recordingTestPassed
+                        || !model.requiredOnboardingPermissionsGranted
+                        || dictationBusy
+                )
             } else {
                 Button {
                     advanceToNextStep()
@@ -380,7 +460,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(model.onboardingStep == 3 && !whisperReady)
+                .disabled(!currentStepComplete || dictationBusy)
             }
         }
         .padding(.horizontal, 20)
@@ -388,21 +468,106 @@ struct OnboardingView: View {
         .background(.regularMaterial)
     }
 
-    /// Advances the wizard, but intercepts leaving the permissions step while a
-    /// required permission is still missing: instead of moving on silently, a
-    /// warning dialog explains the consequences and asks for confirmation.
-    private func advanceToNextStep() {
-        if model.onboardingStep == Self.permissionsStep,
-           model.microphoneAuthorizationStatus != .authorized || !model.accessibilityTrusted {
-            showsPermissionWarning = true
-            return
+    private var currentStepComplete: Bool {
+        switch model.onboardingStep {
+        case 0: return recordingConfigurationComplete
+        case Self.transcriptionStep:
+            return transcriptionReady && model.microphoneAuthorizationStatus == .authorized
+        case 2:
+            return model.requiredOnboardingPermissionsGranted
+        default:
+            return recordingTestPassed && model.requiredOnboardingPermissionsGranted
         }
+    }
+
+    private var recordingConfigurationComplete: Bool {
+        !deviceNames.isEmpty
+            && !model.settings.inputDeviceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && TranscriptionLanguageOption.option(for: model.settings.transcriptionLanguage) != nil
+            && !model.settings.hotkey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !model.isCapturingHotkey
+            && model.hotkeyCaptureError == nil
+            && model.microphoneAuthorizationStatus == .authorized
+    }
+
+    private var footerProblem: LocalizedStringKey? {
+        switch model.onboardingStep {
+        case 0:
+            if deviceNames.isEmpty { return "Connect or reload a microphone to continue." }
+            if model.microphoneAuthorizationStatus != .authorized { return "Grant microphone access to continue." }
+            if model.settings.hotkey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || model.isCapturingHotkey
+                || model.hotkeyCaptureError != nil {
+                return "Set a valid global hotkey to continue."
+            }
+            return nil
+        case Self.transcriptionStep:
+            if model.microphoneAuthorizationStatus != .authorized {
+                return "Grant microphone access to continue."
+            }
+            return transcriptionReady ? nil : "Wait until the transcription model is ready."
+        case 2:
+            if model.microphoneAuthorizationStatus != .authorized {
+                return "Grant microphone access to continue."
+            }
+            return model.accessibilityTrusted ? nil : "Grant accessibility access to continue."
+        default:
+            if model.microphoneAuthorizationStatus != .authorized {
+                return "Grant microphone access to continue."
+            }
+            if !model.accessibilityTrusted {
+                return "Grant accessibility access to continue."
+            }
+            return recordingTestPassed ? nil : "Complete a successful recording test to finish setup."
+        }
+    }
+
+    private var dictationBusy: Bool {
+        model.runtime.isRecording || model.runtime.isTranscribing || model.runtime.isPostProcessing
+    }
+
+    private func advanceToNextStep() {
+        guard currentStepComplete, model.saveSettings() else { return }
         model.onboardingStep = min(Self.lastStep, model.onboardingStep + 1)
     }
 
-    /// One permission entry: a green "granted" confirmation once the access is
-    /// in place, otherwise a short note plus the button that requests it (or
-    /// deep-links into System Settings when already denied).
+    private func prepareDefaultTranscriptionModel() {
+        model.prepareDefaultTranscriptionModelForOnboarding()
+    }
+
+    private func prepareRecordingTest() {
+        if automaticInsertionBeforeTest == nil {
+            automaticInsertionBeforeTest = model.settings.insertTextAutomatically
+            if !model.settings.insertTextAutomatically {
+                model.settings.insertTextAutomatically = true
+                _ = model.saveSettings()
+            }
+        }
+        testBaselineSuccessCount = model.runtime.dictationSuccessCount
+        testBaselineErrorCount = model.runtime.dictationErrorCount
+        recordingTestAttempted = false
+        recordingTestPassed = false
+        recordingTestError = nil
+        testText = ""
+        testFieldFocused = false
+    }
+
+    private func invalidateRecordingTest() {
+        guard recordingTestAttempted || recordingTestPassed else { return }
+        prepareRecordingTest()
+    }
+
+    /// The final test temporarily enables insertion so the user can see the
+    /// result in the test field. Their prior Settings choice is restored when
+    /// leaving setup.
+    private func restoreAutomaticInsertionAfterTest() {
+        guard let previous = automaticInsertionBeforeTest else { return }
+        automaticInsertionBeforeTest = nil
+        guard model.settings.insertTextAutomatically != previous else { return }
+        model.settings.insertTextAutomatically = previous
+        _ = model.saveSettings()
+    }
+
     @ViewBuilder
     private func permissionRow(
         granted: Bool,
@@ -429,58 +594,39 @@ struct OnboardingView: View {
     }
 
     private var deviceNames: [String] {
-        var names = model.devices.map(\.name)
-        if names.isEmpty {
-            return [model.settings.inputDeviceName]
+        model.devices.map(\.name)
+    }
+
+    private var selectedMicrophoneName: String? {
+        if deviceNames.contains(model.settings.inputDeviceName) {
+            return model.settings.inputDeviceName
         }
-        let saved = model.settings.inputDeviceName
-        if !saved.isEmpty && !names.contains(saved) {
-            names.insert(saved, at: 0)
-        }
-        return names
+        return model.devices.first(where: \.isSelected)?.name ?? deviceNames.first
+    }
+
+    private var microphoneBinding: Binding<String> {
+        Binding(
+            get: { selectedMicrophoneName ?? "" },
+            set: { newValue in
+                model.settings.inputDeviceName = newValue
+                model.requestAutoSave()
+            }
+        )
     }
 
     private var currentWhisperStatus: ModelStatusDTO? {
         if model.modelStatusList.isEmpty {
             return model.modelStatus
         }
-        return model.modelStatusList.first { $0.backendModelName == model.settings.localModel.whisperModel }
+        return model.modelStatusList.first {
+            $0.backendModelName == model.settings.localModel.whisperModel
+        }
     }
 
-    /// Whether any post-processing (LLM) model is already downloaded. Drives the
-    /// optional hint on the model step — no LLM is offered for download in
-    /// onboarding anymore; the user is pointed at the language-models manager
-    /// instead.
-    private var hasPostProcessingModel: Bool {
-        model.llmStatusList.contains { $0.isDownloaded }
-    }
-
-    /// Gating for the model step: only the transcription model is mandatory.
-    /// Post-processing stays optional, so it never blocks the wizard.
-    private var whisperReady: Bool {
-        currentWhisperStatus?.isDownloaded ?? false
-    }
-
-    /// Manual download control for the transcription model. Nothing downloads
-    /// automatically — the user must click, and cannot continue until the
-    /// selected model is downloaded.
-    @ViewBuilder
-    private var whisperDownloadControl: some View {
-        let status = currentWhisperStatus
-        if status?.isDownloaded ?? false {
-            Label {
-                Text("Downloaded", bundle: .module)
-            } icon: {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-            }
-        } else {
-            Button {
-                model.startModelDownload(preset: model.settings.localModel)
-            } label: {
-                Text((status?.isDownloading ?? false) ? "Loading…" : "Download", bundle: .module)
-            }
-            .disabled(status?.isDownloading ?? false)
+    private var transcriptionReady: Bool {
+        switch model.settings.transcriptionBackend {
+        case .parakeet: return model.parakeetStatus.isReady
+        case .whisper: return currentWhisperStatus?.isDownloaded == true
         }
     }
 }

@@ -241,6 +241,20 @@ enum ModelPreset: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum TranscriptionBackend: String, Codable, CaseIterable, Identifiable {
+    case parakeet
+    case whisper
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .parakeet: return "NVIDIA Parakeet TDT v3"
+        case .whisper: return "OpenAI Whisper"
+        }
+    }
+}
+
 enum LlmPreset: String, Codable, CaseIterable, Identifiable {
     case small
     case medium
@@ -685,17 +699,54 @@ struct TranscriptionLanguageOption: Identifiable, Hashable {
 
     static let automatic = TranscriptionLanguageOption(code: "auto")
 
+    /// Languages supported by the bundled NVIDIA Parakeet TDT 0.6B v3 model.
+    /// Keep this list aligned with the upstream model card. Whisper can handle
+    /// additional languages, but the default setup must only promise what the
+    /// default engine can transcribe.
     static let common: [TranscriptionLanguageOption] = [
         .automatic,
+        TranscriptionLanguageOption(code: "bg"),
+        TranscriptionLanguageOption(code: "hr"),
+        TranscriptionLanguageOption(code: "cs"),
+        TranscriptionLanguageOption(code: "da"),
         TranscriptionLanguageOption(code: "de"),
         TranscriptionLanguageOption(code: "en"),
+        TranscriptionLanguageOption(code: "et"),
+        TranscriptionLanguageOption(code: "fi"),
         TranscriptionLanguageOption(code: "fr"),
+        TranscriptionLanguageOption(code: "el"),
+        TranscriptionLanguageOption(code: "hu"),
         TranscriptionLanguageOption(code: "es"),
         TranscriptionLanguageOption(code: "it"),
+        TranscriptionLanguageOption(code: "lv"),
+        TranscriptionLanguageOption(code: "lt"),
+        TranscriptionLanguageOption(code: "mt"),
         TranscriptionLanguageOption(code: "nl"),
+        TranscriptionLanguageOption(code: "pl"),
         TranscriptionLanguageOption(code: "pt"),
-        TranscriptionLanguageOption(code: "tr"),
+        TranscriptionLanguageOption(code: "ro"),
+        TranscriptionLanguageOption(code: "ru"),
+        TranscriptionLanguageOption(code: "sk"),
+        TranscriptionLanguageOption(code: "sl"),
+        TranscriptionLanguageOption(code: "sv"),
+        TranscriptionLanguageOption(code: "uk"),
     ]
+
+    static func preferredSystemOption(
+        preferredLanguages: [String] = Locale.preferredLanguages
+    ) -> TranscriptionLanguageOption? {
+        let supported = Set(common.dropFirst().map(\.code))
+        for identifier in preferredLanguages {
+            let locale = Locale(identifier: identifier)
+            guard let code = locale.language.languageCode?.identifier.lowercased() else {
+                continue
+            }
+            if supported.contains(code) {
+                return TranscriptionLanguageOption(code: code)
+            }
+        }
+        return nil
+    }
 
     static func option(for storedValue: String) -> TranscriptionLanguageOption? {
         let normalized = storedValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -739,6 +790,7 @@ enum OpenAiCompatibleProviderDTO: String, Codable, Hashable {
 
 /// Which backend serves a model. Raw values match Rust `LlmBackendKind`.
 enum LlmBackendKind: String, Codable, Hashable {
+    case appleFoundation = "apple_foundation"
     case localGguf = "local_gguf"
     case ollama
     case lmStudio = "lm_studio"
@@ -751,6 +803,7 @@ enum LlmBackendKind: String, Codable, Hashable {
 
     var displayName: String {
         switch self {
+        case .appleFoundation: return "Apple Foundation Models"
         case .localGguf: return "Local model"
         case .ollama: return "Ollama"
         case .lmStudio: return "LM Studio"
@@ -767,7 +820,7 @@ enum LlmBackendKind: String, Codable, Hashable {
     var isCloud: Bool {
         switch self {
         case .openAi, .mistral, .deepSeek, .grok, .anthropic, .gemini: return true
-        case .localGguf, .ollama, .lmStudio: return false
+        case .appleFoundation, .localGguf, .ollama, .lmStudio: return false
         }
     }
 }
@@ -778,11 +831,13 @@ enum LlmAvailability: String, Codable, Hashable {
     case downloading
     case corrupt
     case needsApiKey = "needs_api_key"
+    case unavailable
 }
 
 /// Backend-independent model identity. Tagged-enum mirror of Rust `LlmModelRef`
 /// (same `{ "kind": ... }` wire form as `PostProcessingChoice`).
 enum LlmModelRefDTO: Codable, Hashable {
+    case appleSystem
     case localPreset(LlmPreset)
     case localCustom(id: String)
     case ollama(String)
@@ -800,6 +855,7 @@ enum LlmModelRefDTO: Codable, Hashable {
     }
 
     private enum Kind: String, Codable {
+        case appleSystem = "apple_system"
         case localPreset = "local_preset"
         case localCustom = "local_custom"
         case ollama
@@ -812,6 +868,8 @@ enum LlmModelRefDTO: Codable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         switch try container.decode(Kind.self, forKey: .kind) {
+        case .appleSystem:
+            self = .appleSystem
         case .localPreset:
             self = .localPreset(try container.decode(LlmPreset.self, forKey: .preset))
         case .localCustom:
@@ -835,6 +893,8 @@ enum LlmModelRefDTO: Codable, Hashable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
+        case .appleSystem:
+            try container.encode(Kind.appleSystem, forKey: .kind)
         case .localPreset(let preset):
             try container.encode(Kind.localPreset, forKey: .kind)
             try container.encode(preset, forKey: .preset)
@@ -865,6 +925,7 @@ enum LlmModelRefDTO: Codable, Hashable {
     /// registry's `stableId`.
     var stableId: String {
         switch self {
+        case .appleSystem: return "apple_foundation:system"
         case .localPreset(let preset): return "local_preset:\(preset.stableToken)"
         case .localCustom(let id): return "local_custom:\(id)"
         case .ollama(let name): return "ollama:\(name)"
@@ -927,6 +988,7 @@ struct AppSettings: Codable, Equatable {
     var saveAudioRecordings: Bool
     var saveTranscripts: Bool
     var saveDirectory: String
+    var transcriptionBackend: TranscriptionBackend
     var localModel: ModelPreset
     var localModelPath: String
     var localLlm: LlmPreset
@@ -984,6 +1046,7 @@ struct AppSettings: Codable, Equatable {
         saveAudioRecordings: false,
         saveTranscripts: false,
         saveDirectory: "",
+        transcriptionBackend: .parakeet,
         localModel: .standard,
         localModelPath: "",
         localLlm: .medium,
@@ -1049,6 +1112,26 @@ struct ModelStatusDTO: Codable, Identifiable, Equatable {
         isCorrupt: false,
         progressBasisPoints: nil,
         expectedSizeBytes: ModelPreset.standard.downloadSizeBytes
+    )
+}
+
+struct ParakeetModelStatusDTO: Codable, Equatable {
+    var displayLabel: String
+    var summary: String
+    var isSupported: Bool
+    var isReady: Bool
+    var isPreparing: Bool
+    var error: String?
+    var expectedSizeBytes: UInt64
+
+    static let empty = ParakeetModelStatusDTO(
+        displayLabel: "NVIDIA Parakeet TDT v3",
+        summary: "Preparing model status…",
+        isSupported: true,
+        isReady: false,
+        isPreparing: false,
+        error: nil,
+        expectedSizeBytes: 600_000_000
     )
 }
 

@@ -35,10 +35,10 @@ jobs:
 
       # Xcode must be selected BEFORE codeql init so the tracer wraps the
       # right Swift toolchain.
-      - name: Select Xcode 16 (Swift 6)
+      - name: Select Xcode 26 (FoundationModels SDK)
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '16'
+          xcode-version: '26'
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

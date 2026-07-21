@@ -20,7 +20,8 @@ TorroWhisper is split into a **shared Rust core**, an **FFI bridge** that expose
 │  crates/torrowhisper-bridge  (staticlib + rlib)         │
 │                                                         │
 │  lib.rs          FFI entry points, BridgeRuntime        │
-│  dictation.rs    cpal capture + whisper-rs transcription│
+│  dictation.rs    cpal capture + Parakeet/Whisper routing│
+│  parakeet.rs     FluidAudio/Core ML transcription       │
 │  model_manager   Whisper model download & cleanup       │
 │  llm_model_…     Local LLM GGUF download & cleanup      │
 │  local_llm.rs    client for the LLM helper process      │
@@ -64,7 +65,9 @@ Key types:
 - `AppSettings` — the root of everything the user configures.
 - `StartupBehavior` — `AskOnFirstLaunch`, `LaunchAtLogin`, `ManualLaunch`.
 - `TriggerMode` — `PushToTalk`, `Toggle`.
-- `ModelPreset` — the seven Whisper presets (Tiny, Light, Standard, Quality, Large v3 Turbo Q5_0, Large v3 Turbo, Large v3).
+- `TranscriptionBackend` — `Parakeet` (Apple-Silicon default) or `Whisper` (Intel fallback and optional alternative).
+- `ModelPreset` — the seven optional Whisper presets (Tiny, Light, Standard, Quality, Large v3 Turbo Q5_0, Large v3 Turbo, Large v3).
+- `LlmModelRef::AppleSystem` — the system-managed Apple Foundation Models post-processing backend.
 - `LlmPreset` — local Gemma 4 sizes (`Small`, `Medium`, `Large`).
 - `ProcessingMode` — a user-defined post-processing template: `id`, `name`, `prompt`, and an optional `post_processing_choice` that overrides the global backend for this Mode.
 - `PostProcessingChoice` — tagged enum: `LocalPreset { preset }`, `LocalCustom { id }`, `Ollama { model_name }`, `LmStudio { model_name }`.
@@ -81,11 +84,13 @@ Module responsibilities:
 | Module | Responsibility |
 | --- | --- |
 | [lib.rs](../crates/torrowhisper-bridge/src/lib.rs) | FFI entry points, the `BridgeRuntime` aggregate that owns all subsystems |
-| [dictation.rs](../crates/torrowhisper-bridge/src/dictation.rs) | Mic capture via `cpal`, VAD-based silence detection, whisper.cpp transcription |
+| [dictation.rs](../crates/torrowhisper-bridge/src/dictation.rs) | Mic capture via `cpal`, VAD-based silence detection, and routing to Parakeet or Whisper |
+| [parakeet.rs](../crates/torrowhisper-bridge/src/parakeet.rs) | NVIDIA Parakeet TDT v3 through FluidAudio, Core ML, and Apple Neural Engine; first-run preparation and process-lifetime state |
 | [model_manager.rs](../crates/torrowhisper-bridge/src/model_manager.rs) | Download, list, and delete Whisper `.bin` models |
 | [llm_model_manager.rs](../crates/torrowhisper-bridge/src/llm_model_manager.rs) | Download, list, and delete local LLM GGUF files (Gemma 4 presets and user-added custom models) |
 | [local_llm.rs](../crates/torrowhisper-bridge/src/local_llm.rs) | Client for the `torrowhisper-llm-helper` process (line-based JSON over stdin/stdout); idle-based auto-unload and cancellation by killing the helper. llama-cpp-2 lives only in the helper: its bundled ggml is incompatible with whisper-rs's, and linking both into one binary mixes the duplicated symbols and crashes the app |
-| [post_processing.rs](../crates/torrowhisper-bridge/src/post_processing.rs) | Applies the active `ProcessingMode`'s prompt via the resolved `PostProcessingChoice` — dispatches to `local_llm` or to Ollama / LM Studio over HTTP; 45 s timeout; cancellable |
+| [llm/apple_foundation.rs](../crates/torrowhisper-bridge/src/llm/apple_foundation.rs) | System-managed Apple Foundation Models provider for on-device post-processing |
+| [post_processing.rs](../crates/torrowhisper-bridge/src/post_processing.rs) | Applies the active `ProcessingMode`'s prompt via the resolved model provider; 45 s timeout; cancellable |
 | [remote_models.rs](../crates/torrowhisper-bridge/src/remote_models.rs) | Lists models exposed by a running Ollama or LM Studio endpoint for the backend picker |
 | [autostart.rs](../crates/torrowhisper-bridge/src/autostart.rs) | `auto-launch` crate wrapper; writes a `LaunchAgent` plist on macOS, XDG autostart on Linux, registry on Windows. Used as a fallback when the app is **not** running from a `.app` bundle. |
 | [settings_store.rs](../crates/torrowhisper-bridge/src/settings_store.rs) | Reads/writes `~/Library/Application Support/torrowhisper/settings.json` |
@@ -138,7 +143,8 @@ The `BridgeRuntime` lives in a `thread_local! RefCell` on the bridge side. All F
 | Location | Content |
 | --- | --- |
 | `~/Library/Application Support/torrowhisper/settings.json` | `AppSettings` — hotkey, input device, Whisper / LLM presets, Modes, post-processing backend, startup behavior, waveform, VAD |
-| `~/Library/Application Support/torrowhisper/models/` | Downloaded Whisper `.bin` files **and** local LLM `.gguf` files (Gemma 4 presets plus any user-added custom models) |
+| FluidAudio cache under Application Support | Downloaded and Core-ML-compiled Parakeet assets on Apple Silicon |
+| `~/Library/Application Support/torrowhisper/models/` | Optional Whisper `.bin` files **and** local LLM `.gguf` files (Gemma 4 presets plus any user-added custom models) |
 | `~/Library/LaunchAgents/torrowhisper.plist` | *Dev fallback* — written by the `auto-launch` crate when the app runs outside a `.app` bundle |
 | macOS Login Items database (`sfltool dumpbtm`) | *Production* — registered via `SMAppService` from the Swift side when the app runs from a signed bundle |
 

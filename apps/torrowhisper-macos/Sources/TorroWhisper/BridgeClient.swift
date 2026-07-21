@@ -45,6 +45,14 @@ final class BridgeClient {
         try decodeResponse(from: ow_get_model_status_list())
     }
 
+    func getParakeetStatus() throws -> ParakeetModelStatusDTO {
+        try decodeResponse(from: ow_get_parakeet_status())
+    }
+
+    func prepareParakeet() throws -> String {
+        try decodeResponse(from: ow_prepare_parakeet())
+    }
+
     func startModelDownload(preset: ModelPreset?) throws -> String {
         try encodeAndCall(["preset": preset?.rawValue], function: ow_start_model_download)
     }

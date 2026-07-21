@@ -150,6 +150,7 @@ struct CloudModelsSheet: View {
         case .downloadable: suffix = " · " + L("not downloaded", locale: locale)
         case .downloading: suffix = " · " + L("downloading…", locale: locale)
         case .corrupt: suffix = " · " + L("damaged", locale: locale)
+        case .unavailable: suffix = " · " + L("unavailable", locale: locale)
         }
         return "\(entry.displayName)\(suffix)"
     }

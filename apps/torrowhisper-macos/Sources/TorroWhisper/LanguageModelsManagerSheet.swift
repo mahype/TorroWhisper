@@ -115,12 +115,18 @@ struct LanguageModelsManagerSheet: View {
     @ViewBuilder
     private var transcriptionContent: some View {
         Section {
+            parakeetTile
+        } header: {
+            Text("Optimized for Apple Silicon", bundle: .module)
+        }
+
+        Section {
             ForEach(ModelPreset.allCases) { preset in
                 let status = model.modelStatusList.first(where: { $0.backendModelName == preset.whisperModel })
                 whisperTile(preset: preset, status: status)
             }
         } header: {
-            Text("Whisper presets", bundle: .module)
+            Text("Whisper alternatives", bundle: .module)
         }
     }
 
@@ -128,12 +134,33 @@ struct LanguageModelsManagerSheet: View {
     private var postProcessingContent: some View {
         Section {
             Text(
-                "Enable the language models you want available across the whole app as post-processing options. Toggle a model on to make it selectable everywhere; which one post-processing uses is chosen under Post-processing.",
+                "Enable the language models you want available across the whole app. Toggle a model on to make it selectable; choose the active one under Language models.",
                 bundle: .module
             )
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+        }
+
+        Section {
+            if let entry = model.llmRegistry.first(where: { $0.backendKind == .appleFoundation }) {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.displayName)
+                            .font(.body.weight(.medium))
+                        Text(entry.detail)
+                            .font(.caption)
+                            .foregroundStyle(entry.availability == .ready
+                                ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
+                    }
+                    Spacer()
+                    Text("No download", bundle: .module)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Provided by macOS", bundle: .module)
         }
 
         Section {
@@ -245,6 +272,60 @@ struct LanguageModelsManagerSheet: View {
         } header: {
             Text("LM Studio", bundle: .module)
         }
+    }
+
+    @ViewBuilder
+    private var parakeetTile: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(model.parakeetStatus.displayLabel)
+                            .font(.body.weight(.medium))
+                        if model.settings.transcriptionBackend == .parakeet {
+                            TorroStatusChip(text: L("Active", locale: locale), color: .green)
+                        }
+                    }
+                    Text("Fast multilingual transcription through Core ML and Apple Neural Engine.", bundle: .module)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                Text("ca. 600 MB")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            if model.parakeetStatus.isPreparing {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            HStack(spacing: 10) {
+                Text(L(model.parakeetStatus.summary, locale: locale))
+                    .font(.caption)
+                    .foregroundStyle(model.parakeetStatus.error == nil
+                        ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
+                Spacer()
+                if model.parakeetStatus.error != nil {
+                    Button {
+                        model.prepareParakeet()
+                    } label: {
+                        Text("Try again", bundle: .module)
+                    }
+                }
+                if model.parakeetStatus.isReady,
+                   model.settings.transcriptionBackend != .parakeet {
+                    Button {
+                        model.persistTranscriptionBackendImmediately(.parakeet)
+                    } label: {
+                        Text("Use", bundle: .module)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder

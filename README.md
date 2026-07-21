@@ -2,7 +2,7 @@
 
 **Dictate anywhere on your Mac — 100% local.**
 
-Press a hotkey, speak, and your words land in whatever app has focus: mail, chat, your editor, the browser. Transcription runs on your machine with [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Nothing leaves your Mac unless you deliberately configure a remote provider.
+Press a hotkey, speak, and your words land in whatever app has focus: mail, chat, your editor, the browser. On Apple Silicon, transcription uses NVIDIA Parakeet TDT v3 through Core ML and the Apple Neural Engine; Intel Macs use [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Nothing leaves your Mac unless you deliberately configure a remote provider.
 
 > **Status:** macOS 14+ is stable. Windows and Linux UI shells are on the roadmap — the Rust core and bridge already compile cross-platform.
 
@@ -12,7 +12,7 @@ Press a hotkey, speak, and your words land in whatever app has focus: mail, chat
 
 1. **Press** your global hotkey (push-to-talk or toggle).
 2. **Speak** — TorroWhisper records from your chosen mic.
-3. **Clean up** — an optional local LLM pass (Gemma 4 via llama.cpp) fixes punctuation, capitalization, and recognition errors according to the active Mode's prompt.
+3. **Clean up** — an optional on-device language-model pass (Apple Foundation Models by default, with downloadable Gemma alternatives) fixes punctuation, capitalization, and recognition errors according to the active Mode's prompt.
 4. **Done** — the result is pasted into the focused app, with a clipboard fallback if paste is blocked.
 
 TorroWhisper lives in your menu bar. No Dock icon, no window clutter.
@@ -25,7 +25,7 @@ TorroWhisper lives in your menu bar. No Dock icon, no window clutter.
 
 1. Download the [latest DMG](https://github.com/mahype/TorroWhisper/releases/latest).
 2. Drag **TorroWhisper.app** into **Applications** and launch it.
-3. Follow the onboarding — mic, model download, hotkey, autostart.
+3. Follow the onboarding — TorroWhisper downloads and prepares the compatible transcription model automatically.
 
 Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md](docs/INSTALL.md)
 
@@ -41,22 +41,24 @@ Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md
 
 ### Dictation
 
-- **Fully local transcription** with [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — your voice never leaves the machine.
+- **Fully local transcription** with NVIDIA Parakeet TDT v3 on Apple Silicon and [whisper.cpp](https://github.com/ggerganov/whisper.cpp) on Intel — your voice never leaves the machine.
 - **Global hotkey** with push-to-talk or toggle mode, plus a built-in recorder that warns about risky single-key bindings.
 - **Menu-bar-only** UI — no Dock icon, no window clutter.
-- **Guided onboarding** for mic, models, hotkey, and autostart.
+- **Guided zero-choice model setup**: the required transcription model is downloaded automatically; alternative models stay in Settings.
 - **Autostart at login** via native macOS Login Items. The registered launch path is refreshed automatically on each start, so moving the app (e.g., after a reinstall into `/Applications`) doesn't break Launch-at-Login.
 
 ### Transcription models
 
-- Seven Whisper presets ranging from **Tiny (78 MB)** to **Large v3 (3.1 GB)**, including **Large v3 Turbo** and a quantized **Large v3 Turbo Q5_0** for Large-class quality on modest hardware.
+- **NVIDIA Parakeet TDT v3 (~600 MB)** is the Apple-Silicon default, running through FluidAudio, Core ML, and the Apple Neural Engine.
+- Seven optional Whisper presets range from **Tiny (78 MB)** to **Large v3 (3.1 GB)**, including **Large v3 Turbo** and a quantized **Large v3 Turbo Q5_0**.
 - Built-in **Language Models** sheet to download, list, and delete models on demand.
 - Per-session language override or fully automatic language detection.
 
 ### Post-processing with Modes
 
 - **Modes** are prompt templates applied to the raw transcript. Create, edit, and delete them in-app; a default *Cleanup* Mode ships out of the box.
-- **Local LLM backend by default**: quantized **Gemma 4** (Small / Medium / Large) running on-device via [llama-cpp-2](https://crates.io/crates/llama-cpp-2) with Metal acceleration. Models are downloaded and managed alongside your Whisper models; unused models auto-unload after a configurable idle timeout.
+- **System model by default**: Apple Foundation Models provides on-device post-processing on supported Apple-Silicon Macs with Apple Intelligence; macOS manages it, so TorroWhisper does not present a separate download.
+- Optional quantized **Gemma 4** models (Small / Medium / Large) run on-device via [llama-cpp-2](https://crates.io/crates/llama-cpp-2) with Metal acceleration and are downloaded only from Settings.
 - **Custom GGUF models** — bring your own model from a local path or a download URL.
 - **Remote providers** — optional Ollama or LM Studio endpoints; per-Mode override lets a single Mode use a different backend than the global default.
 
@@ -154,5 +156,7 @@ later version. See [LICENSE](LICENSE) for the full text.
 
 It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
 without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. The MP3 export uses LAME via `mp3lame-encoder` (LGPL-3.0); all other
+PURPOSE. The MP3 export uses LAME via `mp3lame-encoder` (LGPL-3.0). Parakeet
+TDT v3 is an NVIDIA model distributed under CC BY 4.0 and is downloaded at
+runtime; the Core ML integration uses FluidAudio (Apache-2.0). Other software
 dependencies are permissively licensed and GPL-compatible.

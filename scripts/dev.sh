@@ -9,6 +9,8 @@ cd "$repo_root"
 
 : "${RUST_LOG:=info}"
 export RUST_LOG
+: "${MACOSX_DEPLOYMENT_TARGET:=14.0}"
+export MACOSX_DEPLOYMENT_TARGET
 
 cat <<'BANNER'
 ────────────────────────────────────────────────────────────────

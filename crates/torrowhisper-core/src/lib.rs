@@ -145,6 +145,24 @@ impl<'de> serde::Deserialize<'de> for WaveformColor {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
+pub enum TranscriptionBackend {
+    #[default]
+    Parakeet,
+    Whisper,
+}
+
+impl TranscriptionBackend {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Parakeet => "NVIDIA Parakeet TDT v3",
+            Self::Whisper => "OpenAI Whisper",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ModelPreset {
     Tiny,
     Light,
@@ -479,6 +497,7 @@ pub enum OpenAiCompatibleProvider {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum LlmBackendKind {
+    AppleFoundation,
     LocalGguf,
     Ollama,
     LmStudio,
@@ -493,6 +512,7 @@ pub enum LlmBackendKind {
 impl LlmBackendKind {
     pub fn label(self) -> &'static str {
         match self {
+            Self::AppleFoundation => "Apple Foundation Models",
             Self::LocalGguf => "local model",
             Self::Ollama => "Ollama",
             Self::LmStudio => "LM Studio",
@@ -537,6 +557,7 @@ impl OpenAiCompatibleProvider {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LlmModelRef {
+    AppleSystem,
     LocalPreset {
         preset: LlmPreset,
     },
@@ -565,6 +586,7 @@ pub enum LlmModelRef {
 impl LlmModelRef {
     pub fn backend_kind(&self) -> LlmBackendKind {
         match self {
+            Self::AppleSystem => LlmBackendKind::AppleFoundation,
             Self::LocalPreset { .. } | Self::LocalCustom { .. } => LlmBackendKind::LocalGguf,
             Self::Ollama { .. } => LlmBackendKind::Ollama,
             Self::LmStudio { .. } => LlmBackendKind::LmStudio,
@@ -587,6 +609,7 @@ impl LlmModelRef {
     /// `openai:gpt-4o-mini`, `anthropic:claude-opus-4-8`.
     pub fn stable_id(&self) -> String {
         match self {
+            Self::AppleSystem => "apple_foundation:system".to_owned(),
             Self::LocalPreset { preset } => format!("local_preset:{}", preset.label()),
             Self::LocalCustom { id } => format!("local_custom:{id}"),
             Self::Ollama { model_name } => format!("ollama:{model_name}"),
@@ -605,6 +628,7 @@ impl LlmBackendKind {
     /// Lowercase token form used in [`LlmModelRef::stable_id`].
     fn label_id(self) -> &'static str {
         match self {
+            Self::AppleFoundation => "apple_foundation",
             Self::LocalGguf => "local",
             Self::Ollama => "ollama",
             Self::LmStudio => "lmstudio",
@@ -652,6 +676,9 @@ pub enum LlmAvailability {
     Corrupt,
     /// Cloud backend with no API key configured.
     NeedsApiKey,
+    /// System-provided model is unavailable on this Mac or in its current
+    /// Apple Intelligence configuration. It cannot be downloaded by the app.
+    Unavailable,
 }
 
 /// One entry in the unified model registry that the UI and plugins query.
@@ -889,6 +916,9 @@ pub struct AppSettings {
     pub save_transcripts: bool,
     /// Destination folder for saved recordings/transcripts. Empty = unset.
     pub save_directory: String,
+    /// Speech-to-text engine. Parakeet is the Apple-Silicon default; Whisper
+    /// remains available as the portable fallback and for additional languages.
+    pub transcription_backend: TranscriptionBackend,
     pub local_model: ModelPreset,
     pub local_model_path: String,
     pub local_llm: LlmPreset,
@@ -901,7 +931,6 @@ pub struct AppSettings {
     /// Registry-selected post-processing model. When set, it overrides the
     /// legacy `PostProcessingChoice` resolution and is the path through which
     /// cloud models become selectable. `None` keeps the legacy behaviour.
-    #[serde(default)]
     pub active_post_processing_model: Option<LlmModelRef>,
     /// Stable IDs ([`LlmModelRef::stable_id`]) of models the user enabled
     /// app-wide. Every model picker (post-processing) shows only enabled
@@ -1043,7 +1072,9 @@ impl AppSettings {
         let mut seeds: Vec<String> = Vec::new();
 
         // Registry-based post-processing selection (incl. cloud) — always explicit.
-        if let Some(model_ref) = &self.active_post_processing_model {
+        if let Some(model_ref) = &self.active_post_processing_model
+            && !matches!(model_ref, LlmModelRef::AppleSystem)
+        {
             seeds.push(model_ref.stable_id());
         }
         // Legacy backend choice, but only when it represents a real pick (a remote
@@ -1155,23 +1186,42 @@ impl AppSettings {
     }
 
     pub fn active_provider_summary(&self) -> String {
+        let transcription = self.transcription_backend.label();
         if !self.post_processing_enabled {
-            return format!("Local Whisper with {}", self.local_model.display_label());
+            return match self.transcription_backend {
+                TranscriptionBackend::Parakeet => transcription.to_owned(),
+                TranscriptionBackend::Whisper => {
+                    format!("{transcription} with {}", self.local_model.display_label())
+                }
+            };
         }
         let mode = self.active_mode();
+        let legacy_post_processing_is_default = self.active_post_processing_backend
+            == PostProcessingBackend::Local
+            && self.active_custom_llm_id.trim().is_empty()
+            && self.local_llm == LlmPreset::default()
+            && mode.post_processing_choice.is_none();
+        if legacy_post_processing_is_default
+            && matches!(
+                self.active_post_processing_model,
+                Some(LlmModelRef::AppleSystem)
+            )
+        {
+            return format!("{transcription} + Apple Foundation Models ({})", mode.name);
+        }
         match self.active_post_processing_backend {
             PostProcessingBackend::Local => {
                 let label = self
                     .active_custom_llm()
                     .map(|entry| entry.name.clone())
                     .unwrap_or_else(|| self.local_llm.display_label().to_owned());
-                format!("Local Whisper + {} ({})", label, mode.name)
+                format!("{transcription} + {} ({})", label, mode.name)
             }
             PostProcessingBackend::Ollama => {
-                format!("Local Whisper + Ollama ({})", mode.name)
+                format!("{transcription} + Ollama ({})", mode.name)
             }
             PostProcessingBackend::LmStudio => {
-                format!("Local Whisper + LM Studio ({})", mode.name)
+                format!("{transcription} + LM Studio ({})", mode.name)
             }
         }
     }
@@ -1204,6 +1254,7 @@ impl Default for AppSettings {
             save_audio_recordings: false,
             save_transcripts: false,
             save_directory: String::new(),
+            transcription_backend: TranscriptionBackend::default(),
             local_model: ModelPreset::default(),
             local_model_path: String::new(),
             local_llm: LlmPreset::default(),
@@ -1212,6 +1263,8 @@ impl Default for AppSettings {
             active_provider: ProviderKind::default(),
             active_post_processing_backend: PostProcessingBackend::default(),
             active_custom_llm_id: String::new(),
+            // Onboarding configures transcription only. Post-processing stays
+            // opt-in and gets an explicit model later in Settings.
             active_post_processing_model: None,
             enabled_model_ids: Vec::new(),
             enabled_transcription_ids: Vec::new(),
@@ -1251,6 +1304,21 @@ pub struct ModelStatusDto {
     /// typically an interrupted or damaged download.
     pub is_corrupt: bool,
     pub progress_basis_points: Option<u16>,
+    pub expected_size_bytes: u64,
+}
+
+/// Runtime/download state for the system-default Parakeet/Core ML engine.
+/// FluidAudio owns the model cache, so there is deliberately no user-selected
+/// file path and no exact byte-progress value to expose.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ParakeetModelStatusDto {
+    pub display_label: String,
+    pub summary: String,
+    pub is_supported: bool,
+    pub is_ready: bool,
+    pub is_preparing: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
     pub expected_size_bytes: u64,
 }
 
@@ -1473,11 +1541,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn defaults_select_local_whisper() {
+    fn defaults_select_parakeet_without_post_processing_model() {
         let settings = AppSettings::default();
 
         assert_eq!(settings.active_provider, ProviderKind::LocalWhisper);
+        assert_eq!(
+            settings.transcription_backend,
+            TranscriptionBackend::Parakeet
+        );
         assert_eq!(settings.local_model, ModelPreset::Standard);
+        assert_eq!(settings.active_post_processing_model, None);
         assert!(!settings.onboarding_completed);
         assert!(settings.insert_text_automatically);
         assert!(settings.restore_clipboard_after_insert);
@@ -1495,6 +1568,20 @@ mod tests {
         // #[serde(default)] must fill it from Default (= disabled).
         let legacy: AppSettings = serde_json::from_str("{}").expect("legacy settings parse");
         assert!(!legacy.live_transcription_enabled);
+        assert_eq!(legacy.transcription_backend, TranscriptionBackend::Parakeet);
+        assert_eq!(legacy.active_post_processing_model, None);
+    }
+
+    #[test]
+    fn apple_system_model_has_stable_registry_identity() {
+        assert_eq!(
+            LlmModelRef::AppleSystem.stable_id(),
+            "apple_foundation:system"
+        );
+        assert_eq!(
+            LlmModelRef::AppleSystem.backend_kind(),
+            LlmBackendKind::AppleFoundation
+        );
     }
 
     #[test]

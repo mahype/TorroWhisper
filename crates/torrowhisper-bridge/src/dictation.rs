@@ -12,6 +12,7 @@ use std::{
 
 use crate::audio_export;
 use crate::model_manager::validated_model_path;
+use crate::parakeet::ParakeetRuntime;
 use crate::streaming_transcription::{
     self, SharedStreamingOutput, StreamingConfig, StreamingOutput, StreamingSession,
 };
@@ -20,7 +21,8 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use torrowhisper_core::{
-    AppSettings, SYSTEM_DEFAULT_DEVICE_LABEL, StreamingTranscriptDto, TriggerMode,
+    AppSettings, ParakeetModelStatusDto, SYSTEM_DEFAULT_DEVICE_LABEL, StreamingTranscriptDto,
+    TranscriptionBackend, TriggerMode,
 };
 use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState,
@@ -103,6 +105,7 @@ pub struct DictationController {
     /// or a model switch is already warm.
     warmup_rx: Option<Receiver<WarmupResult>>,
     model_cache: Option<ModelCache>,
+    parakeet: ParakeetRuntime,
     /// Live-transcription worker for the current recording (#41). `Some` only
     /// while a recording with live preview runs; taken (and joined by the
     /// final-pass thread) at stop, stop-flagged and detached on cancel/error.
@@ -129,6 +132,7 @@ impl DictationController {
             pending_timing_seed: None,
             warmup_rx: None,
             model_cache: None,
+            parakeet: ParakeetRuntime::new(),
             streaming: None,
             streaming_output: Arc::new(Mutex::new(StreamingOutput::new())),
             streaming_finalize_pending: false,
@@ -299,6 +303,14 @@ impl DictationController {
         self.model_cache = None;
     }
 
+    pub fn prepare_parakeet(&self) {
+        self.parakeet.prepare();
+    }
+
+    pub fn parakeet_status(&self) -> ParakeetModelStatusDto {
+        self.parakeet.status()
+    }
+
     /// True while a background model preload is in flight (#43).
     pub fn is_model_warming(&self) -> bool {
         self.warmup_rx.is_some()
@@ -309,6 +321,9 @@ impl DictationController {
     /// model is already cached, a warmup is already running, or the model file
     /// is missing (a real dictation would surface that error instead).
     pub fn start_model_warmup(&mut self, settings: &AppSettings) {
+        if settings.transcription_backend != TranscriptionBackend::Whisper {
+            return;
+        }
         if self.warmup_rx.is_some() {
             return;
         }
@@ -491,14 +506,27 @@ impl DictationController {
             return Ok("Recording already in progress.".to_owned());
         }
 
-        // Same validation as ensure_whisper_context, so a recording never
-        // starts when the later transcription would fail to find the model.
-        let model_path = match validated_model_path(settings) {
-            Ok(path) => path,
-            Err(err) => {
-                self.mark_blocked_now();
-                return Err(format!("Recording blocked: {err}"));
+        // Validate the active engine before recording, so stopping can always
+        // start a transcription instead of discovering a missing model late.
+        let model_path = match settings.transcription_backend {
+            TranscriptionBackend::Parakeet => {
+                if !self.parakeet.is_ready() {
+                    self.parakeet.prepare();
+                    self.mark_blocked_now();
+                    return Err(
+                        "Recording blocked: Parakeet is still being prepared. Check Settings for its status."
+                            .to_owned(),
+                    );
+                }
+                None
             }
+            TranscriptionBackend::Whisper => match validated_model_path(settings) {
+                Ok(path) => Some(path),
+                Err(err) => {
+                    self.mark_blocked_now();
+                    return Err(format!("Recording blocked: {err}"));
+                }
+            },
         };
 
         let resolved_name = resolve_input_device_name(settings, &self.available_input_devices);
@@ -509,8 +537,10 @@ impl DictationController {
         // Every session starts with a cleared live-transcript slot, whether or
         // not a worker spawns — the overlay must never show a previous take.
         streaming_transcription::reset_output(&self.streaming_output);
-        if live_transcription_active(settings) {
-            self.start_streaming_session(settings, &model_path);
+        if live_transcription_active(settings)
+            && let Some(model_path) = &model_path
+        {
+            self.start_streaming_session(settings, model_path);
         }
         play_recording_cue(RecordingCue::Start);
         log::info!(
@@ -581,7 +611,20 @@ impl DictationController {
             outcomes.push(DictationOutcome::PendingTranscriptSave(base));
         }
 
-        let (context, whisper_load_secs) = self.ensure_whisper_context(settings)?;
+        let (engine, model_load_secs) = match settings.transcription_backend {
+            TranscriptionBackend::Parakeet => {
+                if !self.parakeet.is_ready() {
+                    return Err(
+                        "Parakeet is not ready yet. Check Settings for its status.".to_owned()
+                    );
+                }
+                (TranscriptionEngine::Parakeet(self.parakeet.clone()), 0.0)
+            }
+            TranscriptionBackend::Whisper => {
+                let (context, load_secs) = self.ensure_whisper_context(settings)?;
+                (TranscriptionEngine::Whisper(context), load_secs)
+            }
+        };
         let language = normalized_language(&settings.transcription_language);
         let app_settings = settings.clone();
         let (tx, rx) = mpsc::channel();
@@ -591,7 +634,7 @@ impl DictationController {
             target: "dictation",
             "recording stopped ({reason}): {:.1}s audio, starting transcription with '{}'",
             audio_duration.as_secs_f32(),
-            settings.local_model.display_label()
+            settings.transcription_backend.label()
         );
 
         self.streaming_finalize_pending = streaming.is_some();
@@ -603,8 +646,12 @@ impl DictationController {
                 session.join();
             }
             let started = Instant::now();
-            let result =
-                transcribe_with_whisper(context, &app_settings, audio, language.as_deref());
+            let result = match engine {
+                TranscriptionEngine::Parakeet(runtime) => transcribe_with_parakeet(&runtime, audio),
+                TranscriptionEngine::Whisper(context) => {
+                    transcribe_with_whisper(context, &app_settings, audio, language.as_deref())
+                }
+            };
             match &result {
                 Ok(output) => log::info!(
                     target: "dictation",
@@ -630,7 +677,7 @@ impl DictationController {
         self.pending_timing_seed = Some(TimingSeed {
             stop_instant,
             audio_secs: audio_duration.as_secs_f32(),
-            whisper_load_secs,
+            whisper_load_secs: model_load_secs,
         });
 
         outcomes.push(DictationOutcome::Status(format!(
@@ -795,6 +842,11 @@ impl DictationController {
 struct ModelCache {
     path: PathBuf,
     context: Arc<WhisperContext>,
+}
+
+enum TranscriptionEngine {
+    Parakeet(ParakeetRuntime),
+    Whisper(Arc<WhisperContext>),
 }
 
 struct ActiveRecording {
@@ -1326,6 +1378,30 @@ fn transcribe_with_whisper(
     })
 }
 
+fn transcribe_with_parakeet(
+    runtime: &ParakeetRuntime,
+    audio: RecordedAudio,
+) -> Result<TranscriptionOutput, String> {
+    let speech = trim_trailing_silence(&audio.samples, audio.sample_rate, audio.last_voiced_end);
+    let resample_started = Instant::now();
+    let mono_16khz = resample_to_16khz(speech, audio.sample_rate);
+    let resample_secs = resample_started.elapsed().as_secs_f32();
+    if mono_16khz.is_empty() {
+        return Err("No audio data available for Parakeet.".to_owned());
+    }
+
+    let inference_started = Instant::now();
+    let text = runtime.transcribe(&mono_16khz)?;
+    let inference_secs = inference_started.elapsed().as_secs_f32();
+
+    Ok(TranscriptionOutput {
+        text,
+        resample_secs,
+        state_secs: 0.0,
+        inference_secs,
+    })
+}
+
 /// Result of one Whisper decode over already-resampled 16 kHz mono samples.
 pub(crate) struct WhisperInference {
     pub text: String,
@@ -1645,6 +1721,7 @@ pub(crate) fn resolve_thread_count(configured: u32) -> i32 {
 /// legacy field — the bubble can no longer be disabled).
 fn live_transcription_active(settings: &AppSettings) -> bool {
     settings.live_transcription_enabled
+        && settings.transcription_backend == TranscriptionBackend::Whisper
 }
 
 /// Runs one short silent inference right after a model is (pre)loaded. ggml's

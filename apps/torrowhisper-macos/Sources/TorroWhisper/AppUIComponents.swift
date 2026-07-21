@@ -545,54 +545,69 @@ struct DiagnosticStatusBadge: View {
     }
 }
 
-struct DiagnosticDisclosureCard: View {
+struct DiagnosticStatusRow: View {
     let item: DiagnosticItemDTO
     /// Invoked when the user taps the item's remedy button. Nil when the caller
     /// cannot act on fixes.
     var onFix: ((DiagnosticFix) -> Void)?
     @Environment(\.locale) private var locale
-    /// Problems start expanded — a finding the user has to hunt for is a finding
-    /// they never act on. Healthy items stay collapsed.
-    @State private var isExpanded: Bool
-
-    init(item: DiagnosticItemDTO, onFix: ((DiagnosticFix) -> Void)? = nil) {
-        self.item = item
-        self.onFix = onFix
-        _isExpanded = State(initialValue: item.status == .warning || item.status == .error)
-    }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L(item.problem, locale: locale))
-                    .font(.caption)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
-                Text(L(item.recommendation, locale: locale))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
-
-                if let fix = item.fix, let onFix {
-                    Button {
-                        onFix(fix)
-                    } label: {
-                        Text(L(fix.buttonKey, locale: locale))
-                    }
-                    .padding(.top, 4)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 6)
-        } label: {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
                 Text(L(item.title, locale: locale))
                     .font(.body.weight(.medium))
-                Spacer()
+                    .fixedSize()
+
+                if !needsAction {
+                    Text(L(item.problem, locale: locale))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                Spacer(minLength: 8)
+
                 DiagnosticStatusBadge(status: item.status)
+                    .fixedSize()
+            }
+
+            if needsAction {
+                actionDetails
             }
         }
+    }
+
+    /// Healthy and informational checks stay on one line. A warning or error is
+    /// exceptional and therefore gets its explanation without hiding it behind
+    /// a small disclosure target.
+    private var needsAction: Bool {
+        item.status == .warning || item.status == .error
+    }
+
+    private var actionDetails: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L(item.problem, locale: locale))
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+            Text(L(item.recommendation, locale: locale))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+
+            if let fix = item.fix, let onFix {
+                Button {
+                    onFix(fix)
+                } label: {
+                    Text(L(fix.buttonKey, locale: locale))
+                }
+                .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -602,12 +617,10 @@ struct StepRail: View {
 
     private var steps: [String] {
         [
-            L("Welcome", locale: locale),
-            L("Audio & hotkey", locale: locale),
-            L("Permissions", locale: locale),
-            L("Language models", locale: locale),
+            L("Recording", locale: locale),
+            L("Transcription", locale: locale),
             L("Start & behavior", locale: locale),
-            L("Diagnostics", locale: locale),
+            L("Ready", locale: locale),
         ]
     }
 

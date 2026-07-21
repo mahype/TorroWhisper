@@ -34,6 +34,36 @@
 "Without accessibility access, TorroWhisper cannot insert the transcribed text into other apps. Do you really want to continue?" = "Ohne Bedienungshilfen-Zugriff kann TorroWhisper den transkribierten Text nicht in andere Apps einfügen. Möchtest du wirklich fortfahren?";
 "Check again" = "Erneut prüfen";
 "After granting a permission in System Settings, tap 'Check again' to refresh the status here." = "Nachdem du eine Berechtigung in den Systemeinstellungen erteilt hast, tippe auf „Erneut prüfen“, um den Status hier zu aktualisieren.";
+"Complete a successful recording test to finish setup." = "Führe einen erfolgreichen Aufnahmetest durch, um die Einrichtung abzuschließen.";
+"Connect or reload a microphone to continue." = "Schließe ein Mikrofon an oder lade die Mikrofone neu, um fortzufahren.";
+"Grant accessibility access to continue." = "Erteile den Bedienungshilfen-Zugriff, um fortzufahren.";
+"Grant microphone access to continue." = "Erteile den Mikrofon-Zugriff, um fortzufahren.";
+"NVIDIA Parakeet supports 25 European languages and detects the spoken language automatically. TorroWhisper selects your first supported macOS language by default." = "NVIDIA Parakeet unterstützt 25 europäische Sprachen und erkennt die gesprochene Sprache automatisch. TorroWhisper wählt standardmäßig deine erste unterstützte macOS-Sprache.";
+"No microphone found" = "Kein Mikrofon gefunden";
+"Parakeet detects the spoken language automatically among its 25 supported languages. The selected default is also used by post-processing and Whisper alternatives." = "Parakeet erkennt die gesprochene Sprache automatisch aus seinen 25 unterstützten Sprachen. Die gewählte Standardsprache wird außerdem für die Nachbearbeitung und Whisper-Alternativen verwendet.";
+"Recording test failed." = "Aufnahmetest fehlgeschlagen.";
+"Recording test not run yet." = "Aufnahmetest noch nicht durchgeführt.";
+"Recording test passed." = "Aufnahmetest bestanden.";
+"Set a valid global hotkey to continue." = "Lege einen gültigen globalen Hotkey fest, um fortzufahren.";
+"Setup check" = "Einrichtungsprüfung";
+"Speak now…" = "Sprich jetzt…";
+"Start test recording" = "Testaufnahme starten";
+"Stop test recording" = "Testaufnahme beenden";
+"Test recording" = "Aufnahme testen";
+"The setup is complete only after TorroWhisper successfully records and transcribes a short sentence." = "Die Einrichtung ist erst abgeschlossen, nachdem TorroWhisper einen kurzen Satz erfolgreich aufgenommen und transkribiert hat.";
+"Transcribing test recording…" = "Testaufnahme wird transkribiert…";
+"Trigger & hotkey" = "Trigger & Hotkey";
+"Use the configured hotkey or the button, say a short sentence, then stop the recording." = "Verwende den eingerichteten Hotkey oder den Button, sprich einen kurzen Satz und beende dann die Aufnahme.";
+"Wait until the transcription model is ready." = "Warte, bis das Transkriptionsmodell bereit ist.";
+"Click in the field, press the shortcut, dictate a short sentence, then press it again." = "Klicke in das Feld, drücke die Tastenkombination, diktiere einen kurzen Satz und drücke sie erneut.";
+"Click in the field, hold the shortcut while dictating a short sentence, then release it." = "Klicke in das Feld, halte die Tastenkombination beim Diktieren eines kurzen Satzes gedrückt und lasse sie danach los.";
+"Complete this short test to finish setup." = "Schließe diesen kurzen Test ab, um die Einrichtung zu beenden.";
+"Everything is set up." = "Alles ist korrekt eingerichtet.";
+"Get started" = "Loslegen";
+"It works — your dictation was inserted successfully." = "Es funktioniert – dein Diktat wurde erfolgreich eingefügt.";
+"Your dictated text will appear here." = "Dein diktierter Text erscheint hier.";
+"Your shortcut" = "Deine Tastenkombination";
+"You're ready to dictate. Try your shortcut once before you get started." = "Du kannst jetzt diktieren. Probiere deine Tastenkombination einmal aus, bevor du loslegst.";
 "A post-processing model is installed." = "Ein Nachbearbeitungs-Modell ist installiert.";
 "No post-processing model installed yet." = "Noch kein Nachbearbeitungs-Modell installiert.";
 "Choose a post-processing model" = "Nachbearbeitungs-Modell auswählen";
@@ -42,6 +72,29 @@
 "Optional — only needed if you want post-processing. Post-processing runs your dictation through a language model to clean it up: fixing punctuation and capitalization and removing filler words. Download a model here if you want it, or skip and add one later in Settings." = "Optional – nur nötig, wenn du eine Nachbearbeitung möchtest. Die Nachbearbeitung schickt dein Diktat durch ein Sprachmodell, das es aufräumt: Zeichensetzung und Großschreibung korrigieren und Füllwörter entfernen. Lade hier ein Modell herunter, wenn du möchtest, oder überspringe es und füge später eines in den Einstellungen hinzu.";
 "Recording started." = "Aufnahme gestartet.";
 "Dictation" = "Diktat";
+
+/* Automatische, Apple-optimierte Modelleinrichtung */
+"Default local model" = "Lokales Standardmodell";
+"Configured local model" = "Konfiguriertes lokales Modell";
+"Engine" = "Engine";
+"Fast multilingual transcription through Core ML and Apple Neural Engine." = "Schnelle mehrsprachige Transkription über Core ML und die Apple Neural Engine.";
+"Live text is available with Whisper. Parakeet uses the recording waveform and performs the optimized final transcription after you stop speaking." = "Live-Text ist mit Whisper verfügbar. Parakeet zeigt während der Aufnahme die Wellenform und erstellt nach dem Sprechen die optimierte endgültige Transkription.";
+"No download" = "Kein Download";
+"Optimized for Apple Silicon" = "Für Apple Silicon optimiert";
+"Parakeet could not be prepared. Retry from Settings." = "Parakeet konnte nicht vorbereitet werden. Versuche es in den Einstellungen erneut.";
+"Parakeet is ready." = "Parakeet ist bereit.";
+"Parakeet will be downloaded and prepared automatically." = "Parakeet wird automatisch geladen und vorbereitet.";
+"Provided by macOS" = "Von macOS bereitgestellt";
+"Required. The optimized local model is downloaded and prepared automatically. Additional models can be managed later in Settings." = "Erforderlich. Das optimierte lokale Modell wird automatisch geladen und vorbereitet. Weitere Modelle lassen sich später in den Einstellungen verwalten.";
+"Required. NVIDIA Parakeet is downloaded and prepared automatically when this page opens. Other transcription and post-processing models can be configured later in Settings." = "Erforderlich. NVIDIA Parakeet wird automatisch geladen und vorbereitet, sobald diese Seite geöffnet wird. Andere Transkriptions- und Nachbearbeitungsmodelle lassen sich später in den Einstellungen konfigurieren.";
+"Downloading and preparing Parakeet for Apple Neural Engine…" = "Parakeet wird für die Apple Neural Engine geladen und vorbereitet…";
+"Tray-first, private, and optimized for your Mac. TorroWhisper prepares its transcription model automatically." = "Direkt in der Menüleiste, privat und für deinen Mac optimiert. TorroWhisper bereitet das Transkriptionsmodell automatisch vor.";
+"Try again" = "Erneut versuchen";
+"Use" = "Verwenden";
+"Whisper alternatives" = "Whisper-Alternativen";
+"unavailable" = "nicht verfügbar";
+"Language detection" = "Spracherkennung";
+"Parakeet detects the spoken language automatically." = "Parakeet erkennt die gesprochene Sprache automatisch.";
 "Dictation finished." = "Diktat beendet.";
 "Recording not possible. The model is missing." = "Aufnahme nicht möglich. Das Modell fehlt.";
 "Step %d of %d: %@" = "Schritt %d von %d: %@";
@@ -310,6 +363,8 @@
 "Switch microphone automatically when unplugged" = "Mikrofon automatisch wechseln, wenn es entfernt wird";
 "Show notification when microphone changes" = "Benachrichtigung anzeigen, wenn das Mikrofon wechselt";
 "Accessibility" = "Bedienungshilfen";
+"Check" = "Überprüfen";
+"Reset" = "Zurücksetzen";
 "Microphone changed to '%@'." = "Mikrofon gewechselt zu '%@'.";
 
 /* Bridge-Status: Start bei Anmeldung */
@@ -389,7 +444,7 @@
 "Cloud models & API keys…" = "Cloud-Modelle & API-Schlüssel…";
 "not downloaded" = "nicht geladen";
 "downloading…" = "lädt…";
-"Enable the language models you want available across the whole app as post-processing options. Toggle a model on to make it selectable everywhere; which one post-processing uses is chosen under Post-processing." = "Aktiviere die Sprachmodelle, die app-weit als Nachbearbeitungs-Optionen verfügbar sein sollen. Schalte ein Modell ein, um es überall auswählbar zu machen; welches die Nachbearbeitung nutzt, wird unter „Generelle Sprachmodelle“ gewählt.";
+"Enable the language models you want available across the whole app. Toggle a model on to make it selectable; choose the active one under Language models." = "Aktiviere die Sprachmodelle, die app-weit verfügbar sein sollen. Schalte ein Modell ein, um es auswählbar zu machen; das aktive Modell wählst du unter „Sprachmodelle“.";
 "Cloud models need an API key, set under \"Cloud models & API keys\". Enabling one here only makes it selectable; it stays unavailable until a key is stored." = "Cloud-Modelle brauchen einen API-Schlüssel, festgelegt unter „Cloud-Modelle & API-Schlüssel“. Das Einschalten hier macht sie nur auswählbar; sie bleiben ungenutzt, bis ein Schlüssel hinterlegt ist.";
 "Cloud" = "Cloud";
 "Ollama" = "Ollama";

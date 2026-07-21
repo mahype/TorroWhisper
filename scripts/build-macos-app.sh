@@ -13,6 +13,11 @@
 
 set -euo pipefail
 
+# Keep native dependencies and the embedded Swift bridges compatible with the
+# app's declared macOS 14 deployment target even when building on a newer SDK.
+: "${MACOSX_DEPLOYMENT_TARGET:=14.0}"
+export MACOSX_DEPLOYMENT_TARGET
+
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$repo_root"
 

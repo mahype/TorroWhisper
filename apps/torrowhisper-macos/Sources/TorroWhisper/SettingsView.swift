@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SwiftUI
 
 struct SettingsView: View {
@@ -231,8 +232,17 @@ struct SettingsView: View {
             } label: {
                 Text("Recording display", bundle: .module)
             }
+            .disabled(model.settings.transcriptionBackend == .parakeet)
 
-            if model.settings.liveTranscriptionEnabled {
+            if model.settings.transcriptionBackend == .parakeet {
+                Text("Live text is available with Whisper. Parakeet uses the recording waveform and performs the optimized final transcription after you stop speaking.", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if model.settings.liveTranscriptionEnabled,
+               model.settings.transcriptionBackend == .whisper {
                 // Say the trade-off plainly instead of letting the user discover
                 // it mid-sentence: the preview cannot keep up, by construction.
                 Text(
@@ -251,7 +261,7 @@ struct SettingsView: View {
             } label: {
                 Text("Style", bundle: .module)
             }
-            .disabled(model.settings.liveTranscriptionEnabled)
+            .disabled(model.settings.liveTranscriptionEnabled && model.settings.transcriptionBackend == .whisper)
 
             Picker(selection: model.binding(for: \.waveformColor)) {
                 ForEach(WaveformColor.allCases) { color in
@@ -262,7 +272,7 @@ struct SettingsView: View {
             } label: {
                 Text("Color", bundle: .module)
             }
-            .disabled(model.settings.liveTranscriptionEnabled)
+            .disabled(model.settings.liveTranscriptionEnabled && model.settings.transcriptionBackend == .whisper)
 
             Toggle(isOn: model.binding(for: \.largeRecordingIndicator)) {
                 Text("Large view (easier to read)", bundle: .module)
@@ -455,6 +465,42 @@ struct SettingsView: View {
     @ViewBuilder
     private var languageModelsContent: some View {
         Section {
+            Picker(selection: model.transcriptionModelBinding()) {
+                if model.parakeetStatus.isSupported
+                    || model.settings.transcriptionBackend == .parakeet {
+                    Text(model.parakeetStatus.displayLabel)
+                        .tag("parakeet")
+                }
+                ForEach(model.availableModelPresets) { preset in
+                    Text(model.transcriptionModelPickerLabel(preset))
+                        .tag("whisper:\(preset.rawValue)")
+                }
+            } label: {
+                Text("Transcription model", bundle: .module)
+            }
+
+            Picker(selection: model.binding(for: \.activePostProcessingModel)) {
+                if model.settings.activePostProcessingModel == nil {
+                    Text("Configured local model", bundle: .module)
+                        .tag(Optional<LlmModelRefDTO>.none)
+                }
+                ForEach(model.availableRegistryPostProcessingModels) { entry in
+                    Text(entry.displayName).tag(Optional(entry.modelRef))
+                }
+            } label: {
+                Text("Language model", bundle: .module)
+            }
+
+            Button {
+                isManagingLanguageModels = true
+            } label: {
+                Text("Manage language models…", bundle: .module)
+            }
+        } header: {
+            Text("Language models", bundle: .module)
+        }
+
+        Section {
             Picker(selection: model.languageBinding()) {
                 ForEach(model.availableLanguageOptions) { option in
                     Text(option.label(locale: locale)).tag(option.code)
@@ -462,66 +508,18 @@ struct SettingsView: View {
             } label: {
                 Text("Default language", bundle: .module)
             }
-
-            Picker(selection: model.binding(for: \.localModel)) {
-                ForEach(model.availableModelPresets) { preset in
-                    Text(model.whisperPresetPickerLabel(preset)).tag(preset)
-                }
-            } label: {
-                Text("Model", bundle: .module)
-            }
-
-            Text(model.selectedTranscriptionSummaryText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let progress = model.modelDownloadProgress {
-                ProgressView(value: progress)
-            }
-
-            Button {
-                managerTab = .transcription
-                isManagingLanguageModels = true
-            } label: {
-                Text("Manage language models…", bundle: .module)
-            }
         } header: {
-            Text("Transcription", bundle: .module)
+            Text("Language", bundle: .module)
         } footer: {
-            Text("The default language applies app-wide and is used for transcription.", bundle: .module)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-
-        Section {
-            Picker(selection: model.postProcessingChoiceBinding) {
-                ForEach(model.availablePostProcessingChoices) { choice in
-                    Text(model.postProcessingChoicePickerLabel(choice)).tag(choice)
-                }
-            } label: {
-                Text("Model", bundle: .module)
-            }
-
-            Text(model.postProcessingSummaryText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Button {
-                managerTab = .postProcessing
-                isManagingLanguageModels = true
-            } label: {
-                Text("Manage language models…", bundle: .module)
-            }
-        } header: {
-            Text("General models", bundle: .module)
-        } footer: {
-            Text("General-purpose language models for post-processing and other AI features.", bundle: .module)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                model.settings.transcriptionBackend == .parakeet
+                    ? "Parakeet detects the spoken language automatically among its 25 supported languages. The selected default is also used by post-processing and Whisper alternatives."
+                    : "The default language applies app-wide and is used for transcription.",
+                bundle: .module
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
 
         Section {
@@ -599,26 +597,6 @@ struct SettingsView: View {
         } header: {
             Text("Dictation stop", bundle: .module)
         }
-
-        Section {
-            LabeledContent {
-                Text(L(model.runtime.startupSummary, locale: locale))
-            } label: {
-                Text("System startup", bundle: .module)
-            }
-            LabeledContent {
-                Text(model.runtime.hotkeyText)
-            } label: {
-                Text("Hotkey", bundle: .module)
-            }
-            LabeledContent {
-                Text(model.activeModeName)
-            } label: {
-                Text("Post-processing", bundle: .module)
-            }
-        } header: {
-            Text("Currently registered", bundle: .module)
-        }
     }
 
     @ViewBuilder
@@ -646,7 +624,7 @@ struct SettingsView: View {
 
         Section {
             ForEach(model.diagnostics.items) { item in
-                DiagnosticDisclosureCard(item: item, onFix: applyDiagnosticFix)
+                DiagnosticStatusRow(item: item, onFix: applyDiagnosticFix)
                     .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             }
         } header: {
@@ -880,36 +858,45 @@ struct SettingsView: View {
         }
 
         Section {
-            Text(model.microphonePermissionSummary)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
-            Button {
-                model.checkAndRequestMicrophoneAccess()
+            LabeledContent {
+                if model.microphoneAuthorizationStatus == .authorized {
+                    permissionGrantedIndicator(summary: model.microphonePermissionSummary)
+                } else {
+                    Button {
+                        model.checkAndRequestMicrophoneAccess()
+                    } label: {
+                        Text("Check", bundle: .module)
+                    }
+                    .help(model.microphonePermissionSummary)
+                }
             } label: {
-                Text("Check microphone access", bundle: .module)
+                Text("Microphone", bundle: .module)
+            }
+
+            LabeledContent {
+                HStack(spacing: 8) {
+                    if model.accessibilityTrusted {
+                        permissionGrantedIndicator(summary: model.accessibilityPermissionSummary)
+                    } else {
+                        Button {
+                            model.checkAndRequestAccessibilityAccess()
+                        } label: {
+                            Text("Check", bundle: .module)
+                        }
+                        .help(model.accessibilityPermissionSummary)
+                    }
+
+                    Button(role: .destructive) {
+                        isConfirmingAccessibilityReset = true
+                    } label: {
+                        Text("Reset", bundle: .module)
+                    }
+                }
+            } label: {
+                Text("Accessibility", bundle: .module)
             }
         } header: {
-            Text("Microphone permission", bundle: .module)
-        }
-
-        Section {
-            Text(model.accessibilityPermissionSummary)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
-            Button {
-                model.checkAndRequestAccessibilityAccess()
-            } label: {
-                Text("Check accessibility access", bundle: .module)
-            }
-            Button(role: .destructive) {
-                isConfirmingAccessibilityReset = true
-            } label: {
-                Text("Reset accessibility permission", bundle: .module)
-            }
-        } header: {
-            Text("Accessibility permission", bundle: .module)
+            Text("Permissions", bundle: .module)
         } footer: {
             Text("If text insertion stops working even though TorroWhisper is listed under Accessibility, reset the permission and add the app again.", bundle: .module)
         }
@@ -928,6 +915,13 @@ struct SettingsView: View {
             Text("Setup", bundle: .module)
         }
 
+    }
+
+    private func permissionGrantedIndicator(summary: String) -> some View {
+        Image(systemName: "checkmark.circle.fill")
+            .foregroundStyle(.green)
+            .help(summary)
+            .accessibilityLabel(summary)
     }
 
     /// Runs the remedy a diagnostic item offers, so permissions can be granted

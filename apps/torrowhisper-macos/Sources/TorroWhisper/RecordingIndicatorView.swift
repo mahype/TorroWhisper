@@ -367,10 +367,13 @@ struct RecordingIndicatorView: View {
     private var isDonePhase: Bool { phase == .done }
 
     /// Title line in the status row: "Dictation failed" in the error phase,
-    /// "Done" in the done phase, otherwise the model name.
+    /// "Done" in the done phase, otherwise the active mode. The model name is
+    /// only a fallback when post-processing is off. Keeping this to one title
+    /// plus one detail line leaves the compact bubble's height to the waveform.
     private var primaryLineText: String {
         if errorMessage != nil { return L("Dictation failed", locale: locale) }
         if isDonePhase { return L("Done", locale: locale) }
+        if let modeName, !modeName.isEmpty { return modeName }
         return modelName
     }
 
@@ -381,7 +384,7 @@ struct RecordingIndicatorView: View {
 
     /// Centered status line: a leading control — the stop button while
     /// recording (replacing the red dot), otherwise the blinking phase dot —
-    /// next to the model name and a small phase hint underneath ("Stop:
+    /// next to the active mode and a small phase hint underneath ("Stop:
     /// ⌃⇧Space" / "Transcription in progress…"), so every phase looks alike.
     private var infoRow: some View {
         HStack(spacing: 9 * scale) {
@@ -394,18 +397,11 @@ struct RecordingIndicatorView: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
-                if errorMessage == nil, !isDonePhase, let modeName, !modeName.isEmpty {
-                    Text(modeName)
-                        .font(scaledFont(10))
-                        .foregroundStyle(subtleTextStyle)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
                 if !secondaryLineText.isEmpty {
                     Text(secondaryLineText)
                         .font(scaledFont(9))
                         .foregroundStyle(subtleTextStyle)
-                        .lineLimit(2)
+                        .lineLimit(1)
                         .truncationMode(.tail)
                 }
             }

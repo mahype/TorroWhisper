@@ -24,7 +24,10 @@ fn account_for(kind: LlmBackendKind) -> Option<&'static str> {
         LlmBackendKind::Grok => Some("grok_api_key"),
         LlmBackendKind::Anthropic => Some("anthropic_api_key"),
         LlmBackendKind::Gemini => Some("gemini_api_key"),
-        LlmBackendKind::LocalGguf | LlmBackendKind::Ollama | LlmBackendKind::LmStudio => None,
+        LlmBackendKind::AppleFoundation
+        | LlmBackendKind::LocalGguf
+        | LlmBackendKind::Ollama
+        | LlmBackendKind::LmStudio => None,
     }
 }
 

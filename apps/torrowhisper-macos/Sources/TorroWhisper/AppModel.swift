@@ -10,6 +10,7 @@ final class AppModel: ObservableObject {
     @Published var devices: [DeviceDTO] = []
     @Published var modelStatus: ModelStatusDTO = .empty
     @Published var modelStatusList: [ModelStatusDTO] = []
+    @Published var parakeetStatus: ParakeetModelStatusDTO = .empty
     @Published var llmStatusList: [LlmModelStatusDTO] = []
     @Published var customLlmStatusList: [CustomLlmStatusDTO] = []
     @Published var ollamaModels: [RemoteModelDTO] = []
@@ -116,12 +117,20 @@ final class AppModel: ObservableObject {
     }
 
     var availableLanguageOptions: [TranscriptionLanguageOption] {
-        if let current = TranscriptionLanguageOption.option(for: settings.transcriptionLanguage) {
-            return TranscriptionLanguageOption.common.contains(current)
-                ? TranscriptionLanguageOption.common
-                : [current] + TranscriptionLanguageOption.common
+        let automatic = TranscriptionLanguageOption.automatic
+        let localized = TranscriptionLanguageOption.common
+            .filter { $0 != automatic }
+            .sorted {
+                $0.label(locale: settings.effectiveLocale)
+                    .localizedStandardCompare($1.label(locale: settings.effectiveLocale)) == .orderedAscending
+            }
+        guard let current = TranscriptionLanguageOption.option(for: settings.transcriptionLanguage),
+              current != automatic,
+              !localized.contains(current)
+        else {
+            return [automatic] + localized
         }
-        return TranscriptionLanguageOption.common
+        return [automatic, current] + localized
     }
 
     var activeProviderLabel: String {
@@ -129,15 +138,37 @@ final class AppModel: ObservableObject {
     }
 
     var selectedModelDisplayName: String {
-        settings.localModel.displayName
+        switch settings.transcriptionBackend {
+        case .parakeet: return parakeetStatus.displayLabel
+        case .whisper: return settings.localModel.displayName
+        }
     }
 
     var selectedPostProcessingDisplayName: String {
-        postProcessingChoiceLabel(postProcessingChoiceBinding.wrappedValue)
+        if let selected = settings.activePostProcessingModel,
+           let entry = llmRegistry.first(where: { $0.modelRef == selected }) {
+            return entry.displayName
+        }
+        return postProcessingChoiceLabel(postProcessingChoiceBinding.wrappedValue)
+    }
+
+    var availableRegistryPostProcessingModels: [LlmRegistryEntryDTO] {
+        let current = settings.activePostProcessingModel
+        return llmRegistry.filter { entry in
+            entry.availability == .ready || entry.modelRef == current
+        }
     }
 
     var selectedModelStatusText: String {
         let locale = settings.effectiveLocale
+        if settings.transcriptionBackend == .parakeet {
+            if parakeetStatus.isPreparing {
+                return L("Downloading", locale: locale)
+            }
+            return parakeetStatus.isReady
+                ? L("Ready", locale: locale)
+                : L("Not yet loaded", locale: locale)
+        }
         if modelStatus.isDownloading {
             return L("Downloading", locale: locale)
         }
@@ -147,6 +178,9 @@ final class AppModel: ObservableObject {
     }
 
     var selectedTranscriptionSummaryText: String {
+        if settings.transcriptionBackend == .parakeet {
+            return "\(L(parakeetStatus.summary, locale: settings.effectiveLocale)) – ca. 600 MB"
+        }
         let preset = settings.localModel
         let locale = settings.effectiveLocale
         return "\(preset.description(locale: locale)) \u{2013} \(preset.downloadSizeText) \u{2013} \(selectedModelStatusText)"
@@ -154,6 +188,10 @@ final class AppModel: ObservableObject {
 
     var postProcessingSummaryText: String {
         let locale = settings.effectiveLocale
+        if let selected = settings.activePostProcessingModel,
+           let entry = llmRegistry.first(where: { $0.modelRef == selected }) {
+            return entry.detail
+        }
         switch postProcessingChoiceBinding.wrappedValue {
         case .localPreset(let preset):
             return "\(preset.description(locale: locale)) \u{2013} \(preset.approxSizeLabel)"
@@ -174,6 +212,9 @@ final class AppModel: ObservableObject {
 
     var selectedModelSizeText: String {
         let locale = settings.effectiveLocale
+        if settings.transcriptionBackend == .parakeet {
+            return "\(L("approx.", locale: locale)) \(Self.formatByteCount(parakeetStatus.expectedSizeBytes))"
+        }
         if modelStatus.isDownloaded,
            let actual = actualModelFileSize() {
             return "\(Self.formatByteCount(actual)) (\(L("loaded", locale: locale)))"
@@ -409,6 +450,101 @@ final class AppModel: ObservableObject {
         )
     }
 
+    /// A fresh installation starts from the first supported macOS language.
+    /// Unsupported system languages retain Parakeet's automatic detection.
+    /// Reopening onboarding never overwrites an existing user choice.
+    func applyOnboardingLanguageDefault() {
+        guard !settings.onboardingCompleted,
+              selectedLanguageCode == TranscriptionLanguageOption.automatic.code,
+              let preferred = TranscriptionLanguageOption.preferredSystemOption()
+        else {
+            return
+        }
+        settings.transcriptionLanguage = preferred.code
+        requestAutoSave()
+    }
+
+    /// Starts the zero-choice first-run transcription setup when its onboarding
+    /// page becomes visible. Apple Silicon uses Parakeet; unsupported Macs keep
+    /// the bridge-selected Whisper fallback. Completed installations retain
+    /// whatever model the user later chose in Settings.
+    func prepareDefaultTranscriptionModelForOnboarding() {
+        if !settings.onboardingCompleted {
+            var settingsChanged = false
+
+            if parakeetStatus.isSupported,
+               settings.transcriptionBackend != .parakeet {
+                settings.transcriptionBackend = .parakeet
+                settingsChanged = true
+            }
+
+            // Older incomplete onboarding sessions may still carry the former
+            // post-processing default. Keep those models available on disk,
+            // but leave post-processing as an explicit later Settings choice.
+            if settings.activePostProcessingModel != nil {
+                settings.activePostProcessingModel = nil
+                settingsChanged = true
+            }
+            if settings.postProcessingEnabled {
+                settings.postProcessingEnabled = false
+                settingsChanged = true
+            }
+
+            if settingsChanged, !saveSettings() {
+                return
+            }
+        }
+
+        switch settings.transcriptionBackend {
+        case .parakeet:
+            if !parakeetStatus.isReady {
+                prepareParakeet()
+            }
+        case .whisper:
+            guard !settings.onboardingCompleted else { return }
+            let selectedStatus = modelStatusList.first {
+                $0.backendModelName == settings.localModel.whisperModel
+            } ?? modelStatus
+            if !selectedStatus.isDownloaded && !selectedStatus.isDownloading {
+                startModelDownload()
+            }
+        }
+    }
+
+    /// Presents the speech-to-text backend and (for Whisper) its preset as one
+    /// user-facing model choice. The settings page should ask which model to
+    /// use, not expose the backend/preset implementation split.
+    func transcriptionModelBinding() -> Binding<String> {
+        Binding(
+            get: {
+                switch self.settings.transcriptionBackend {
+                case .parakeet:
+                    return "parakeet"
+                case .whisper:
+                    return "whisper:\(self.settings.localModel.rawValue)"
+                }
+            },
+            set: { selection in
+                if selection == "parakeet" {
+                    self.settings.transcriptionBackend = .parakeet
+                } else if selection.hasPrefix("whisper:"),
+                          let preset = ModelPreset(
+                              rawValue: String(selection.dropFirst("whisper:".count))
+                          ) {
+                    self.settings.transcriptionBackend = .whisper
+                    self.settings.localModel = preset
+                } else {
+                    return
+                }
+                self.requestAutoSave()
+            }
+        )
+    }
+
+    func transcriptionModelPickerLabel(_ preset: ModelPreset) -> String {
+        "\(TranscriptionBackend.whisper.displayName) – \(whisperPresetPickerLabel(preset))"
+    }
+
     var postProcessingChoiceBinding: Binding<PostProcessingChoice> {
         Binding(
             get: {
@@ -635,6 +771,7 @@ final class AppModel: ObservableObject {
             devices = try bridge.listInputDevices()
             modelStatus = try bridge.getModelStatus()
             modelStatusList = (try? bridge.getModelStatusList()) ?? []
+            parakeetStatus = (try? bridge.getParakeetStatus()) ?? .empty
             llmStatusList = (try? bridge.getLlmStatusList()) ?? []
             customLlmStatusList = (try? bridge.getCustomLlmStatusList()) ?? []
             llmRegistry = (try? bridge.getLlmRegistry()) ?? []
@@ -680,13 +817,28 @@ final class AppModel: ObservableObject {
                 modelStatusList = list
                 changed = true
             }
+            if let status = try? bridge.getParakeetStatus(), status != parakeetStatus {
+                parakeetStatus = status
+                changed = true
+            }
+            var languageModelStateChanged = false
             if let list = try? bridge.getLlmStatusList(), list != llmStatusList {
                 llmStatusList = list
                 changed = true
+                languageModelStateChanged = true
             }
             if let list = try? bridge.getCustomLlmStatusList(), list != customLlmStatusList {
                 customLlmStatusList = list
                 changed = true
+                languageModelStateChanged = true
+            }
+            // Registry construction checks local files and provider
+            // availability. Only repeat it when the underlying model state
+            // changed instead of performing that work every 350 ms.
+            if languageModelStateChanged,
+               let list = try? bridge.getLlmRegistry(), list != llmRegistry {
+                    llmRegistry = list
+                    changed = true
             }
             checkMicSwitchEvent()
             checkDictationErrorEvent()
@@ -929,9 +1081,22 @@ final class AppModel: ObservableObject {
         persistedSettingsSnapshot = settings
     }
 
+    var requiredOnboardingPermissionsGranted: Bool {
+        microphoneAuthorizationStatus == .authorized && accessibilityTrusted
+    }
+
     func completeOnboarding() -> Bool {
+        guard requiredOnboardingPermissionsGranted else {
+            settings.onboardingCompleted = false
+            refreshDiagnostics()
+            return false
+        }
         settings.onboardingCompleted = true
-        return saveSettings()
+        guard saveSettings() else {
+            settings.onboardingCompleted = false
+            return false
+        }
+        return true
     }
 
     func reopenOnboarding() {
@@ -1017,8 +1182,20 @@ final class AppModel: ObservableObject {
     func persistWhisperPresetImmediately(_ preset: ModelPreset) {
         do {
             var freshSettings = try bridge.loadSettings()
+            freshSettings.transcriptionBackend = .whisper
             freshSettings.localModel = preset
             clearPinnedDefaultModelPath(&freshSettings.localModelPath)
+            _ = try bridge.saveSettings(freshSettings)
+            reloadAll()
+        } catch {
+            publish(error)
+        }
+    }
+
+    func persistTranscriptionBackendImmediately(_ backend: TranscriptionBackend) {
+        do {
+            var freshSettings = try bridge.loadSettings()
+            freshSettings.transcriptionBackend = backend
             _ = try bridge.saveSettings(freshSettings)
             reloadAll()
         } catch {
@@ -1136,6 +1313,16 @@ final class AppModel: ObservableObject {
     func startModelDownload(preset: ModelPreset) {
         do {
             _ = try bridge.startModelDownload(preset: preset)
+            bridgeError = nil
+            poll()
+        } catch {
+            publish(error)
+        }
+    }
+
+    func prepareParakeet() {
+        do {
+            _ = try bridge.prepareParakeet()
             bridgeError = nil
             poll()
         } catch {

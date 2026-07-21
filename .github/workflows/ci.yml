@@ -23,10 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Select Xcode 16 (Swift 6)
+      # FoundationModels is weak-linked so the app still runs on macOS 14,
+      # but compiling the real Apple post-processing backend requires the
+      # macOS 26 SDK. Older SDKs intentionally build the Rust crate as stubs.
+      - name: Select Xcode 26 (FoundationModels SDK)
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '16'
+          xcode-version: '26'
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

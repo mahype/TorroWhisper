@@ -62,7 +62,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // applicationWillTerminate — crash, abort in native code, or kill.
         bridgeClient.sessionStarted()
 
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // Keep a stable identity so macOS and menu-bar managers can remember
+        // the user's visibility and position choice specifically for TorroWhisper.
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.autosaveName = "TorroWhisper.MainStatusItem"
         statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.toolTip = "TorroWhisper"
 
@@ -278,6 +281,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             let preset = ModelPreset(rawValue: raw)
         else { return }
         model.persistWhisperPresetImmediately(preset)
+    }
+
+    @objc private func selectParakeet(_ sender: NSMenuItem) {
+        model.persistTranscriptionBackendImmediately(.parakeet)
     }
 
     @objc private func selectInputDevice(_ sender: NSMenuItem) {
@@ -500,6 +507,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         installEscapeMonitor()
 
         let liveTranscriptEnabled = model.settings.liveTranscriptionEnabled
+            && model.settings.transcriptionBackend == .whisper
 
         // The 30 Hz level feed only drives the waveform mode; in live-text
         // mode nothing renders it, so don't poll for it.
@@ -720,6 +728,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private func rebuildModelMenu() {
         modelMenu.removeAllItems()
+        let parakeetItem = NSMenuItem(
+            title: model.parakeetStatus.displayLabel,
+            action: #selector(selectParakeet(_:)),
+            keyEquivalent: ""
+        )
+        parakeetItem.target = self
+        parakeetItem.state = model.settings.transcriptionBackend == .parakeet ? .on : .off
+        parakeetItem.isEnabled = model.parakeetStatus.isReady
+        modelMenu.addItem(parakeetItem)
+        modelMenu.addItem(.separator())
+
         let activePreset = model.settings.localModel
         for preset in model.availableModelPresets {
             let item = NSMenuItem(
@@ -729,7 +748,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             )
             item.target = self
             item.representedObject = preset.rawValue
-            item.state = (preset == activePreset) ? .on : .off
+            item.state = (model.settings.transcriptionBackend == .whisper && preset == activePreset)
+                ? .on : .off
             modelMenu.addItem(item)
         }
     }

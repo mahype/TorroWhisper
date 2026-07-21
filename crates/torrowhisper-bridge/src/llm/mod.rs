@@ -8,6 +8,7 @@
 //! HTTP calls.
 
 mod anthropic;
+mod apple_foundation;
 mod gemini;
 pub(crate) mod keychain;
 mod lm_studio;
@@ -95,6 +96,7 @@ pub fn provider_for(
     settings: &AppSettings,
 ) -> Result<Box<dyn LlmProvider>, String> {
     match model {
+        LlmModelRef::AppleSystem => Ok(Box::new(apple_foundation::AppleFoundationProvider)),
         LlmModelRef::LocalPreset { preset } => Ok(Box::new(LocalGgufProvider::Preset(*preset))),
         LlmModelRef::LocalCustom { id } => {
             let custom = settings

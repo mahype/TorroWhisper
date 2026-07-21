@@ -161,6 +161,9 @@ struct OverviewView: View {
     }
 
     private var modelStatus: OverviewStatus {
+        if model.settings.transcriptionBackend == .parakeet {
+            return model.parakeetStatus.isReady ? .ok : .attention
+        }
         let status = whisperStatus
         if status?.isDownloaded ?? false {
             return .ok
@@ -169,6 +172,15 @@ struct OverviewView: View {
     }
 
     private var modelState: String {
+        if model.settings.transcriptionBackend == .parakeet {
+            if model.parakeetStatus.isReady {
+                return L("Ready", locale: locale)
+            }
+            if model.parakeetStatus.isPreparing {
+                return L("Loading…", locale: locale)
+            }
+            return L("Not downloaded", locale: locale)
+        }
         let status = whisperStatus
         if status?.isDownloaded ?? false {
             return L("Ready", locale: locale)

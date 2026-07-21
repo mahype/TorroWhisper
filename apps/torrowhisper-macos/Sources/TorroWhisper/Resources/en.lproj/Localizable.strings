@@ -34,6 +34,36 @@
 "Without accessibility access, TorroWhisper cannot insert the transcribed text into other apps. Do you really want to continue?" = "Without accessibility access, TorroWhisper cannot insert the transcribed text into other apps. Do you really want to continue?";
 "Check again" = "Check again";
 "After granting a permission in System Settings, tap 'Check again' to refresh the status here." = "After granting a permission in System Settings, tap 'Check again' to refresh the status here.";
+"Complete a successful recording test to finish setup." = "Complete a successful recording test to finish setup.";
+"Connect or reload a microphone to continue." = "Connect or reload a microphone to continue.";
+"Grant accessibility access to continue." = "Grant accessibility access to continue.";
+"Grant microphone access to continue." = "Grant microphone access to continue.";
+"NVIDIA Parakeet supports 25 European languages and detects the spoken language automatically. TorroWhisper selects your first supported macOS language by default." = "NVIDIA Parakeet supports 25 European languages and detects the spoken language automatically. TorroWhisper selects your first supported macOS language by default.";
+"No microphone found" = "No microphone found";
+"Parakeet detects the spoken language automatically among its 25 supported languages. The selected default is also used by post-processing and Whisper alternatives." = "Parakeet detects the spoken language automatically among its 25 supported languages. The selected default is also used by post-processing and Whisper alternatives.";
+"Recording test failed." = "Recording test failed.";
+"Recording test not run yet." = "Recording test not run yet.";
+"Recording test passed." = "Recording test passed.";
+"Set a valid global hotkey to continue." = "Set a valid global hotkey to continue.";
+"Setup check" = "Setup check";
+"Speak now…" = "Speak now…";
+"Start test recording" = "Start test recording";
+"Stop test recording" = "Stop test recording";
+"Test recording" = "Test recording";
+"The setup is complete only after TorroWhisper successfully records and transcribes a short sentence." = "The setup is complete only after TorroWhisper successfully records and transcribes a short sentence.";
+"Transcribing test recording…" = "Transcribing test recording…";
+"Trigger & hotkey" = "Trigger & hotkey";
+"Use the configured hotkey or the button, say a short sentence, then stop the recording." = "Use the configured hotkey or the button, say a short sentence, then stop the recording.";
+"Wait until the transcription model is ready." = "Wait until the transcription model is ready.";
+"Click in the field, press the shortcut, dictate a short sentence, then press it again." = "Click in the field, press the shortcut, dictate a short sentence, then press it again.";
+"Click in the field, hold the shortcut while dictating a short sentence, then release it." = "Click in the field, hold the shortcut while dictating a short sentence, then release it.";
+"Complete this short test to finish setup." = "Complete this short test to finish setup.";
+"Everything is set up." = "Everything is set up.";
+"Get started" = "Get started";
+"It works — your dictation was inserted successfully." = "It works — your dictation was inserted successfully.";
+"Your dictated text will appear here." = "Your dictated text will appear here.";
+"Your shortcut" = "Your shortcut";
+"You're ready to dictate. Try your shortcut once before you get started." = "You're ready to dictate. Try your shortcut once before you get started.";
 "A post-processing model is installed." = "A post-processing model is installed.";
 "No post-processing model installed yet." = "No post-processing model installed yet.";
 "Choose a post-processing model" = "Choose a post-processing model";
@@ -309,6 +339,8 @@
 "Switch microphone automatically when unplugged" = "Switch microphone automatically when unplugged";
 "Show notification when microphone changes" = "Show notification when microphone changes";
 "Accessibility" = "Accessibility";
+"Check" = "Check";
+"Reset" = "Reset";
 "Microphone changed to '%@'." = "Microphone changed to '%@'.";
 
 /* Bridge status: launch at login */
@@ -407,3 +439,26 @@
 "Threads 0 = automatic. Single segment can be faster on very short dictations but may hurt punctuation on longer ones. Choose values based on the benchmark above." = "Threads 0 = automatic. Single segment can be faster on very short dictations but may hurt punctuation on longer ones. Choose values based on the benchmark above.";
 "Loading speech model…" = "Loading speech model…";
 "Dictation" = "Dictation";
+
+/* Automatic Apple-optimized model setup */
+"Default local model" = "Default local model";
+"Configured local model" = "Configured local model";
+"Engine" = "Engine";
+"Fast multilingual transcription through Core ML and Apple Neural Engine." = "Fast multilingual transcription through Core ML and Apple Neural Engine.";
+"Live text is available with Whisper. Parakeet uses the recording waveform and performs the optimized final transcription after you stop speaking." = "Live text is available with Whisper. Parakeet uses the recording waveform and performs the optimized final transcription after you stop speaking.";
+"No download" = "No download";
+"Optimized for Apple Silicon" = "Optimized for Apple Silicon";
+"Parakeet could not be prepared. Retry from Settings." = "Parakeet could not be prepared. Retry from Settings.";
+"Parakeet is ready." = "Parakeet is ready.";
+"Parakeet will be downloaded and prepared automatically." = "Parakeet will be downloaded and prepared automatically.";
+"Provided by macOS" = "Provided by macOS";
+"Required. The optimized local model is downloaded and prepared automatically. Additional models can be managed later in Settings." = "Required. The optimized local model is downloaded and prepared automatically. Additional models can be managed later in Settings.";
+"Required. NVIDIA Parakeet is downloaded and prepared automatically when this page opens. Other transcription and post-processing models can be configured later in Settings." = "Required. NVIDIA Parakeet is downloaded and prepared automatically when this page opens. Other transcription and post-processing models can be configured later in Settings.";
+"Downloading and preparing Parakeet for Apple Neural Engine…" = "Downloading and preparing Parakeet for Apple Neural Engine…";
+"Tray-first, private, and optimized for your Mac. TorroWhisper prepares its transcription model automatically." = "Tray-first, private, and optimized for your Mac. TorroWhisper prepares its transcription model automatically.";
+"Try again" = "Try again";
+"Use" = "Use";
+"Whisper alternatives" = "Whisper alternatives";
+"unavailable" = "unavailable";
+"Language detection" = "Language detection";
+"Parakeet detects the spoken language automatically." = "Parakeet detects the spoken language automatically.";

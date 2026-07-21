@@ -44,6 +44,14 @@ sysinfo = { version = "0.39", default-features = false, features = ["system", "d
 [target.'cfg(target_os = "macos")'.dependencies]
 whisper-rs = { version = "0.16.0", features = ["log_backend", "metal"] }
 
+# Apple Silicon: Parakeet TDT v3 runs through FluidAudio/Core ML on the ANE.
+# Keep this dependency arm64-only: Intel builds remain supported and use the
+# existing whisper.cpp backend instead. `default-features = false` avoids
+# pulling FluidAudio's unrelated VAD/diarization API into the bridge.
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+fluidaudio-rs = { version = "0.14.1", default-features = false, features = ["asr"] }
+foundation-models = { version = "0.11.3", features = ["macos_26_0"] }
+
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 whisper-rs = { version = "0.16.0", features = ["log_backend"] }
 

@@ -22,10 +22,21 @@ impl LlmStage {
     /// else the legacy `PostProcessingChoice` resolution.
     pub(crate) fn new(settings: &AppSettings, role_prompt: String) -> Self {
         let mode = settings.active_mode();
-        let model_ref = settings
-            .active_post_processing_model
-            .clone()
-            .unwrap_or_else(|| LlmModelRef::from(settings.effective_post_processing_choice(mode)));
+        // Apple is the zero-download default, but it must not silently override
+        // a legacy explicit Gemma/Ollama/LM-Studio or per-mode selection after
+        // an upgrade. Any non-Apple registry selection remains authoritative.
+        let legacy_is_explicit = mode.post_processing_choice.is_some()
+            || settings.active_post_processing_backend
+                != torrowhisper_core::PostProcessingBackend::Local
+            || !settings.active_custom_llm_id.trim().is_empty()
+            || settings.local_llm != torrowhisper_core::LlmPreset::default();
+        let model_ref = match &settings.active_post_processing_model {
+            Some(LlmModelRef::AppleSystem) if legacy_is_explicit => {
+                LlmModelRef::from(settings.effective_post_processing_choice(mode))
+            }
+            Some(selected) => selected.clone(),
+            None => LlmModelRef::from(settings.effective_post_processing_choice(mode)),
+        };
         Self {
             settings: settings.clone(),
             role_prompt,
