@@ -62,10 +62,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         // applicationWillTerminate — crash, abort in native code, or kill.
         bridgeClient.sessionStarted()
 
-        // Keep a stable identity so macOS and menu-bar managers can remember
-        // the user's visibility and position choice specifically for TorroWhisper.
+        // AppKit automatically gives this single item the stable `Item-0`
+        // identity. Do not replace it with an explicit autosave name: menu-bar
+        // managers would treat that as a new item and may hide it by default.
+        // This accessory app has no Dock icon from which a hidden status item
+        // could be restored, so always make it visible on launch.
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.autosaveName = "TorroWhisper.MainStatusItem"
+        statusItem.isVisible = true
         statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.toolTip = "TorroWhisper"
 
