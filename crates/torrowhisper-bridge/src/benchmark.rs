@@ -343,7 +343,9 @@ fn decode_reference_wav() -> Result<(Vec<f32>, u32), String> {
     let channels = channels.max(1) as usize;
 
     let interleaved: Vec<f32> = data
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| i16::from_le_bytes([pair[0], pair[1]]) as f32 / 32_768.0)
         .collect();
 
