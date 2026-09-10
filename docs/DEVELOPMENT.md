@@ -114,7 +114,21 @@ Deleting these resets the app to a fresh-install state — handy for testing onb
 ```bash
 cargo test --workspace
 swift test --package-path apps/torrowhisper-macos
+python3 scripts/tests/test_single_instance.py
 ```
+
+The single-instance tests compile the production startup guard with a headless
+probe and run separate processes against temporary lock paths. They cover
+simultaneous launches, app copies, normal shutdown, SIGKILL, lock errors, and
+helper-process inheritance without starting the GUI or touching user settings.
+They also run with Command Line Tools alone.
+
+The app acquires `~/Library/Application Support/torrowhisper/instance.lock`
+before constructing SwiftUI or the bridge. The file intentionally remains after
+exit; ownership is an OS file lock, not the file's presence. Do not delete it
+while the app is running. Installed and development builds share this identity.
+When switching from a version without this guard, quit the old version first:
+older binaries do not participate in the lock protocol.
 
 Swift tests require Xcode.app (not only CommandLineTools) because `XCTest` ships with the Xcode developer toolchain. CI switches to Xcode 16 via `maxim-lobanov/setup-xcode`.
 

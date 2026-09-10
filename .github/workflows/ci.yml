@@ -102,6 +102,9 @@ jobs:
       - name: Build Swift app (debug)
         run: swift build --package-path apps/torrowhisper-macos -Xlinker "$FLUIDAUDIO_BRIDGE"
 
+      - name: Single-instance process tests
+        run: python3 scripts/tests/test_single_instance.py
+
       # The macOS 15 runner cannot load the macOS 26 native bridge into the
       # test process. Run Swift unit tests without it in a fresh build tree;
       # Rust tests and the app build above still validate the real bridge.
