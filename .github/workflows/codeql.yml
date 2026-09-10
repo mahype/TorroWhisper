@@ -44,14 +44,29 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Discard artifacts built while CodeQL traced FluidAudio's nested
+          # Swift build: those can contain x86_64 objects in the arm64 bridge.
+          prefix-key: v1-codeql-untraced-bridge
+
+      # FluidAudio's build.rs invokes Swift without an explicit architecture.
+      # Build dependencies before enabling the CodeQL tracer so they use the
+      # runner's native arm64 target. The app itself is traced below.
+      - name: Build Rust bridge (required for Swift linker)
+        run: cargo build -p torrowhisper-bridge
+
+      - name: Verify FluidAudio architecture
+        run: |
+          for library in target/debug/build/fluidaudio-rs-*/out/swift-build/release/libFluidAudioBridge.a; do
+            test -f "$library"
+            lipo -info "$library"
+            lipo "$library" -verify_arch arm64
+          done
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-
-      - name: Build Rust bridge (required for Swift linker)
-        run: cargo build -p torrowhisper-bridge
 
       # Explicit --arch arm64: macos-15 is Apple Silicon and the Rust
       # bridge is built for arm64 only. Without this, CodeQL's Swift

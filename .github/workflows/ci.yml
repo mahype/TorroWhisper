@@ -75,5 +75,8 @@ jobs:
       - name: Build Swift app (debug)
         run: swift build --package-path apps/torrowhisper-macos
 
+      - name: Single-instance process tests
+        run: python3 scripts/tests/test_single_instance.py
+
       - name: Swift tests
         run: swift test --package-path apps/torrowhisper-macos
