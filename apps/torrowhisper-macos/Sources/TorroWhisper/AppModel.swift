@@ -1199,8 +1199,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    @discardableResult
-    func createMode() -> String {
+    /// Creates a new post-processing mode without adding it to the persisted
+    /// settings. The editor owns this draft until the user explicitly saves it.
+    func makeModeDraft() -> ProcessingMode {
         let existingNames = Set(settings.modes.map(\.name))
         let baseName = L("New post-processing", locale: settings.effectiveLocale)
         var suffix = 1
@@ -1210,14 +1211,32 @@ final class AppModel: ObservableObject {
             candidate = "\(baseName) \(suffix)"
         }
 
-        let mode = ProcessingMode(
+        return ProcessingMode(
             id: UUID().uuidString.lowercased(),
             name: candidate,
             prompt: ""
         )
-        settings.modes.append(mode)
-        flushAutoSave()
-        return mode.id
+    }
+
+    /// Persists a candidate before exposing it to the running app. A failure
+    /// leaves the productive settings intact and the editor open for retry.
+    func commitModeDraft(_ draft: ProcessingMode) throws {
+        var base = settings
+        base.hotkey = try prepareHotkeyForAssignment(
+            base.hotkey,
+            allowNoOpHotkeys: [persistedSettingsSnapshot.hotkey, runtime.hotkeyRegistered ? runtime.hotkeyText : nil]
+        )
+        let saved = try base.committingModeDraft(draft) { candidate in
+            _ = try bridge.saveSettings(candidate)
+        }
+        pendingAutoSaveTask?.cancel()
+        pendingAutoSaveTask = nil
+        settings = saved
+        persistedSettingsSnapshot = saved
+        editingModeID = draft.id
+        bridgeError = nil
+        hotkeyCaptureError = nil
+        onStateChanged?()
     }
 
     func deleteMode(_ modeID: String) {

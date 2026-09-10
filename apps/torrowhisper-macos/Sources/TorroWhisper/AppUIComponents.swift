@@ -68,6 +68,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
 struct ModeListTile: View {
     let mode: ProcessingMode
+    let summary: String
     let isActive: Bool
     let onActivate: () -> Void
     let onEdit: () -> Void
@@ -83,20 +84,21 @@ struct ModeListTile: View {
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(mode.name)
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(.primary)
-                        if mode.prompt.isEmpty {
-                            Text("No prompt set", bundle: .module)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        HStack {
+                            Text(mode.name)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.primary)
                                 .lineLimit(1)
-                        } else {
-                            Text(mode.prompt)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                            if isActive {
+                                Text("Active", bundle: .module)
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                         }
+                        Text(summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .help(summary)
                     }
 
                     Spacer(minLength: 8)
@@ -107,10 +109,9 @@ struct ModeListTile: View {
             .accessibilityAddTraits(isActive ? [.isSelected] : [])
 
             Button(action: onEdit) {
-                Image(systemName: "pencil")
-                    .foregroundStyle(.secondary)
+                Text("Edit", bundle: .module)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.bordered)
             .help(Text("Edit post-processing", bundle: .module))
             .accessibilityLabel(Text("Edit post-processing", bundle: .module))
 
@@ -204,173 +205,6 @@ struct ModelPresetTile: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-}
-
-struct ModeEditorSheet: View {
-    @ObservedObject var model: AppModel
-    let onDone: () -> Void
-    @Environment(\.locale) private var locale
-    @State private var stageCatalog: [StageCatalogEntry] = []
-
-    var body: some View {
-        TorroSheetFrame(
-            symbol: "square.text.square",
-            title: Text("Edit post-processing", bundle: .module)
-        ) {
-            Form {
-                Section {
-                    TextField(text: model.modeBinding(for: \.name)) {
-                        Text("Name", bundle: .module)
-                    }
-                }
-
-                Section {
-                    TextEditor(text: model.modeBinding(for: \.prompt))
-                        .font(.body)
-                        .frame(minHeight: 180)
-                        .scrollContentBackground(.hidden)
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(Color(nsColor: .textBackgroundColor))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                        )
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                } header: {
-                    Text("Prompt", bundle: .module)
-                }
-
-                Section {
-                    Picker(selection: model.modeChoiceBinding()) {
-                        Text("Default (global)", bundle: .module)
-                            .tag(Optional<PostProcessingChoice>.none)
-                        ForEach(model.availablePostProcessingChoices) { choice in
-                            Text(model.postProcessingChoicePickerLabel(choice))
-                                .tag(Optional(choice))
-                        }
-                    } label: {
-                        Text("Model", bundle: .module)
-                    }
-
-                    Text(modelHintText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("Language model", bundle: .module)
-                }
-
-                Section {
-                    Toggle(isOn: model.modeBinding(for: \.dictionaryEnabled)) {
-                        Text("Apply dictionary in this mode", bundle: .module)
-                    }
-                } footer: {
-                    Text("If enabled, global word replacements are applied to the transcript before this mode runs.", bundle: .module)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                pipelineSection
-            }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-            .onAppear {
-                stageCatalog = (try? BridgeClient().listPipelineStages()) ?? []
-            }
-        } footer: {
-            Button(action: onDone) {
-                Text("Done", bundle: .module)
-            }
-            .buttonStyle(.borderedProminent)
-            .keyboardShortcut(.defaultAction)
-        }
-        .frame(minWidth: 460, idealWidth: 520, minHeight: 380, idealHeight: 440)
-    }
-
-    private var modelHintText: String {
-        if let choice = model.modeChoiceBinding().wrappedValue {
-            return String(
-                format: L("This profile uses: %@.", locale: locale),
-                model.postProcessingChoiceLabel(choice)
-            )
-        }
-        let global = model.postProcessingChoiceBinding.wrappedValue
-        return String(
-            format: L("Uses global model: %@.", locale: locale),
-            model.postProcessingChoiceLabel(global)
-        )
-    }
-
-    @ViewBuilder
-    private var pipelineSection: some View {
-        let steps = model.modeBinding(for: \.pipeline)
-        Section {
-            if steps.wrappedValue.isEmpty {
-                Text("Automatic order: Dictionary → Auto-correct → LLM.", bundle: .module)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button {
-                    steps.wrappedValue = model.editingMode.synthesizedPipeline(
-                        postProcessingEnabled: model.settings.postProcessingEnabled
-                    )
-                } label: {
-                    Text("Customize pipeline…", bundle: .module)
-                }
-            } else {
-                ForEach(steps) { $step in
-                    HStack(spacing: 8) {
-                        Image(systemName: "line.3.horizontal")
-                            .foregroundStyle(.tertiary)
-                        Toggle(isOn: $step.enabled) {
-                            Text(stageDisplayName(step.stageId))
-                        }
-                        .toggleStyle(.checkbox)
-                        Spacer()
-                        if step.stageId == "auto_correct" {
-                            Picker("", selection: autoCorrectModeBinding($step)) {
-                                Text("Off", bundle: .module).tag("off")
-                                Text("LLM cleanup", bundle: .module).tag("llm")
-                            }
-                            .labelsHidden()
-                            .frame(width: 130)
-                        }
-                    }
-                }
-                .onMove { from, to in
-                    steps.wrappedValue.move(fromOffsets: from, toOffset: to)
-                }
-
-                Button(role: .destructive) {
-                    steps.wrappedValue = []
-                } label: {
-                    Text("Reset to automatic", bundle: .module)
-                }
-            }
-        } header: {
-            Text("Pipeline", bundle: .module)
-        } footer: {
-            Text("Steps run top to bottom. Drag to reorder, toggle to enable.", bundle: .module)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func stageDisplayName(_ stageId: String) -> String {
-        stageCatalog.first(where: { $0.stageId == stageId })?.displayName ?? stageId
-    }
-
-    private func autoCorrectModeBinding(_ step: Binding<PipelineStepConfig>) -> Binding<String> {
-        Binding(
-            get: { step.wrappedValue.config?["mode"] ?? "off" },
-            set: { newValue in
-                var config = step.wrappedValue.config ?? [:]
-                config["mode"] = newValue
-                step.wrappedValue.config = config
-            }
-        )
     }
 }
 
