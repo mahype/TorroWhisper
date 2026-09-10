@@ -6,6 +6,9 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Fixed
+- **Duplicate app instances** (#52) — a per-user process lock now gates startup before SwiftUI, hotkeys or the dictation runtime initialize. Additional launches exit without affecting the running app, preventing duplicate menu-bar icons and dictation. App copies and SPM builds share the lock; macOS releases it even after a crash.
+
 ## [0.8.0] — 2026-08-16
 
 ### Changed

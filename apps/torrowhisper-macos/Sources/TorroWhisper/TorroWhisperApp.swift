@@ -1,6 +1,5 @@
 import SwiftUI
 
-@main
 struct TorroWhisperApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
