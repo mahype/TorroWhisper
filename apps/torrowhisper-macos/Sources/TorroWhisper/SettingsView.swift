@@ -7,7 +7,7 @@ struct SettingsView: View {
     let updaterController: UpdaterController
     let onReopenOnboarding: () -> Void
     @State private var selectedSection: SettingsSection? = .overview
-    @State private var isEditingMode: Bool = false
+    @State private var editingMode: ProcessingMode?
     @State private var isManagingLanguageModels: Bool = false
     @State private var managerTab: LanguageModelsManagerTab = .transcription
     @State private var isManagingCloudModels: Bool = false
@@ -55,6 +55,26 @@ struct SettingsView: View {
             Group {
                 if detailSection == .overview {
                     OverviewView(model: model)
+                } else if detailSection == .modes {
+                    Form { modesContent }
+                        .formStyle(.grouped)
+                        .safeAreaInset(edge: .top, spacing: 0) {
+                            HStack(alignment: .center, spacing: 16) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Post-processing", bundle: .module).font(.title2.bold())
+                                    Text("Choose how your dictation is refined.", bundle: .module)
+                                        .font(.callout).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button {
+                                    editingMode = model.makeModeDraft()
+                                } label: {
+                                    Text("New post-processing", bundle: .module)
+                                }
+                            }
+                            .padding(20)
+                            .background(.background)
+                        }
                 } else {
                     Form {
                         detailContent(for: detailSection)
@@ -63,10 +83,16 @@ struct SettingsView: View {
                     .navigationTitle(detailSection.title(locale: locale))
                 }
             }
-            .sheet(isPresented: $isEditingMode) {
-                ModeEditorSheet(model: model) {
-                    isEditingMode = false
-                }
+            .sheet(item: $editingMode) { mode in
+                ModeEditorSheet(
+                    model: model,
+                    mode: mode,
+                    onCancel: { editingMode = nil },
+                    onSave: { draft in
+                        try model.commitModeDraft(draft)
+                        editingMode = nil
+                    }
+                )
             }
             .sheet(isPresented: $isManagingLanguageModels) {
                 LanguageModelsManagerSheet(
@@ -164,7 +190,7 @@ struct SettingsView: View {
         case .recording:
             recordingContent
         case .modes:
-            modesContent
+            EmptyView()
         case .dictionary:
             dictionaryContent
         case .history:
@@ -345,34 +371,31 @@ struct SettingsView: View {
                 onActivate: { model.disablePostProcessing() }
             )
             .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-
+        }
+        Section {
             ForEach(model.availableModes) { mode in
                 ModeListTile(
                     mode: mode,
+                    summary: modeSummary(mode),
                     isActive: model.settings.postProcessingEnabled && model.settings.activeModeId == mode.id,
                     onActivate: { model.activateMode(mode.id) },
-                    onEdit: {
-                        model.beginEditingMode(mode.id)
-                        isEditingMode = true
-                    },
+                    onEdit: { editingMode = mode },
                     onDelete: { modePendingDeletion = mode }
                 )
                 .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             }
 
-            HStack(spacing: 10) {
-                Button {
-                    let newID = model.createMode()
-                    model.beginEditingMode(newID)
-                    isEditingMode = true
-                } label: {
-                    Text("New post-processing", bundle: .module)
-                }
-                Spacer()
-            }
         } header: {
-            Text("Post-processing", bundle: .module)
+            Text("Your post-processing profiles", bundle: .module)
         }
+    }
+
+    private func modeSummary(_ mode: ProcessingMode) -> String {
+        let choice = mode.postProcessingChoice ?? model.postProcessingChoiceBinding.wrappedValue
+        let modelName = model.postProcessingChoiceLabel(choice)
+        let selection = mode.postProcessingChoice == nil
+            ? String(format: L("Global: %@", locale: locale), modelName) : modelName
+        return selection + " · " + L(mode.effectiveDictionaryEnabled ? "Dictionary on" : "Dictionary off", locale: locale)
     }
 
     @ViewBuilder

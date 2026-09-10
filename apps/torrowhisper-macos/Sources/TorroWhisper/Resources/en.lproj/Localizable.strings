@@ -465,3 +465,23 @@
 "Language detection" = "Language detection";
 "Parakeet detects the spoken language automatically." = "Parakeet detects the spoken language automatically.";
 "Applies app-wide — the same setting as under “Language models”." = "Applies app-wide — the same setting as under “Language models”.";
+"Move up" = "Move up";
+"Move down" = "Move down";
+"Steps run top to bottom. Use the arrows to reorder and the checkboxes to enable them." = "Steps run top to bottom. Use the arrows to reorder and the checkboxes to enable them.";
+
+"Changes are only applied when you save." = "Changes are only applied when you save.";
+"Enter a name." = "Enter a name.";
+"Apply dictionary" = "Apply dictionary";
+"Uses global word replacements for this post-processing." = "Uses global word replacements for this post-processing.";
+"Processing steps" = "Processing steps";
+"Customize steps…" = "Customize steps…";
+"Corrects spelling, grammar and punctuation." = "Corrects spelling, grammar and punctuation.";
+"Unsupported correction: %@. Toggle AI auto-correction to replace it." = "Unsupported correction: %@. Toggle AI auto-correction to replace it.";
+"AI auto-correction" = "AI auto-correction";
+"Steps run from top to bottom." = "Steps run from top to bottom.";
+"Choose how your dictation is refined." = "Choose how your dictation is refined.";
+"Your post-processing profiles" = "Your post-processing profiles";
+"Global: %@" = "Global: %@";
+"Dictionary on" = "Dictionary on";
+"Dictionary off" = "Dictionary off";
+"Edit" = "Edit";
