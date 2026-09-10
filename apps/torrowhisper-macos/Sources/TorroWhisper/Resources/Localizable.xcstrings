@@ -1,6 +1,23 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Changes are only applied when you save." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Changes are only applied when you save."}}, "de": {"stringUnit": {"state": "translated", "value": "Änderungen werden erst mit „Speichern“ übernommen."}}}},
+    "Enter a name." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Enter a name."}}, "de": {"stringUnit": {"state": "translated", "value": "Bitte einen Namen eingeben."}}}},
+    "Apply dictionary" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Apply dictionary"}}, "de": {"stringUnit": {"state": "translated", "value": "Wörterbuch anwenden"}}}},
+    "Uses global word replacements for this post-processing." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Uses global word replacements for this post-processing."}}, "de": {"stringUnit": {"state": "translated", "value": "Verwendet die globalen Wortersetzungen für diese Nachbearbeitung."}}}},
+    "Processing steps" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Processing steps"}}, "de": {"stringUnit": {"state": "translated", "value": "Verarbeitungsschritte"}}}},
+    "Customize steps…" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Customize steps…"}}, "de": {"stringUnit": {"state": "translated", "value": "Ablauf anpassen…"}}}},
+    "Corrects spelling, grammar and punctuation." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Corrects spelling, grammar and punctuation."}}, "de": {"stringUnit": {"state": "translated", "value": "Korrigiert Rechtschreibung, Grammatik und Zeichensetzung."}}}},
+    "Unsupported correction: %@. Toggle AI auto-correction to replace it." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Unsupported correction: %@. Toggle AI auto-correction to replace it."}}, "de": {"stringUnit": {"state": "translated", "value": "Nicht unterstützte Korrektur: %@. KI-Autokorrektur umschalten, um sie zu ersetzen."}}}},
+    "AI auto-correction" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "AI auto-correction"}}, "de": {"stringUnit": {"state": "translated", "value": "KI-Autokorrektur"}}}},
+    "Steps run from top to bottom." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Steps run from top to bottom."}}, "de": {"stringUnit": {"state": "translated", "value": "Schritte laufen von oben nach unten."}}}},
+    "Choose how your dictation is refined." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Choose how your dictation is refined."}}, "de": {"stringUnit": {"state": "translated", "value": "Wähle, wie dein Diktat aufbereitet wird."}}}},
+    "Your post-processing profiles" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Your post-processing profiles"}}, "de": {"stringUnit": {"state": "translated", "value": "Deine Nachbearbeitungen"}}}},
+    "Global: %@" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Global: %@"}}, "de": {"stringUnit": {"state": "translated", "value": "Global: %@"}}}},
+    "Dictionary on" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Dictionary on"}}, "de": {"stringUnit": {"state": "translated", "value": "Wörterbuch an"}}}},
+    "Dictionary off" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Dictionary off"}}, "de": {"stringUnit": {"state": "translated", "value": "Wörterbuch aus"}}}},
+    "Edit" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Edit"}}, "de": {"stringUnit": {"state": "translated", "value": "Bearbeiten"}}}},
+
     "Click in the field, hold the shortcut while dictating a short sentence, then release it." : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Klicke in das Feld, halte die Tastenkombination beim Diktieren eines kurzen Satzes gedrückt und lasse sie danach los." } }
@@ -1476,6 +1493,21 @@
     "Word replacements" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Wort-Ersetzungen" } }
+      }
+    },
+    "Move down" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nach unten" } }
+      }
+    },
+    "Move up" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nach oben" } }
+      }
+    },
+    "Steps run top to bottom. Use the arrows to reorder and the checkboxes to enable them." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Schritte laufen von oben nach unten. Mit den Pfeilen änderst du die Reihenfolge, mit den Auswahlfeldern aktivierst du sie." } }
       }
     },
     "You can restart the setup assistant anytime to reconfigure microphone, hotkey, and language models." : {
