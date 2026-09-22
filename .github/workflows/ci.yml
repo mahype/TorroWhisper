@@ -31,6 +31,16 @@ jobs:
         with:
           xcode-version: '26'
 
+      # Rust test binaries link the Swift bridge dynamically. GitHub's Xcode
+      # selection updates the compiler paths, but dyld does not automatically
+      # search the selected toolchain's Swift runtime directory.
+      - name: Configure Swift runtime path
+        run: |
+          swift_usr_dir="$(dirname "$(dirname "$(xcrun --find swiftc)")")"
+          swift_runtime_dir="$swift_usr_dir/lib/swift-5.5/macosx"
+          test -f "$swift_runtime_dir/libswift_Concurrency.dylib"
+          echo "DYLD_LIBRARY_PATH=$swift_runtime_dir" >> "$GITHUB_ENV"
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
