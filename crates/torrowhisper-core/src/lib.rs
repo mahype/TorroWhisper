@@ -30,8 +30,8 @@ impl StartupBehavior {
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
 pub enum TriggerMode {
-    PushToTalk,
     #[default]
+    PushToTalk,
     Toggle,
 }
 
@@ -1557,7 +1557,7 @@ mod tests {
         assert!(!settings.onboarding_completed);
         assert!(settings.insert_text_automatically);
         assert!(settings.restore_clipboard_after_insert);
-        assert_eq!(settings.trigger_mode, TriggerMode::Toggle);
+        assert_eq!(settings.trigger_mode, TriggerMode::PushToTalk);
         assert!(!settings.vad_enabled);
         assert!(!settings.post_processing_enabled);
         assert_eq!(settings.active_mode_name(), "Cleanup");
@@ -1573,6 +1573,16 @@ mod tests {
         assert!(!legacy.live_transcription_enabled);
         assert_eq!(legacy.transcription_backend, TranscriptionBackend::Parakeet);
         assert_eq!(legacy.active_post_processing_model, None);
+    }
+
+    #[test]
+    fn trigger_mode_defaults_to_push_to_talk_without_overwriting_a_saved_choice() {
+        let legacy: AppSettings = serde_json::from_str("{}").expect("legacy settings parse");
+        assert_eq!(legacy.trigger_mode, TriggerMode::PushToTalk);
+
+        let configured: AppSettings = serde_json::from_str(r#"{"trigger_mode":"toggle"}"#)
+            .expect("configured settings parse");
+        assert_eq!(configured.trigger_mode, TriggerMode::Toggle);
     }
 
     #[test]

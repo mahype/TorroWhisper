@@ -464,4 +464,8 @@
 "unavailable" = "unavailable";
 "Language detection" = "Language detection";
 "Parakeet detects the spoken language automatically." = "Parakeet detects the spoken language automatically.";
+"Hold to dictate" = "Hold to dictate";
+"Press to start or stop" = "Press to start or stop";
+"Hold the shortcut while speaking. Releasing it stops the recording." = "Hold the shortcut while speaking. Releasing it stops the recording.";
+"Press the shortcut once to start and again to stop." = "Press the shortcut once to start and again to stop.";
 "Applies app-wide — the same setting as under “Language models”." = "Applies app-wide — the same setting as under “Language models”.";

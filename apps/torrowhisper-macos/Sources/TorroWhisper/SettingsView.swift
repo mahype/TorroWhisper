@@ -241,6 +241,8 @@ struct SettingsView: View {
             .pickerStyle(.segmented)
         } header: {
             Text("Trigger", bundle: .module)
+        } footer: {
+            Text(model.settings.triggerMode.helpText(locale: locale))
         }
 
         Section {

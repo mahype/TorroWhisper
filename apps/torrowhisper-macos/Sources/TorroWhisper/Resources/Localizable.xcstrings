@@ -1,6 +1,10 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Hold to dictate" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Hold to dictate"}}, "de": {"stringUnit": {"state": "translated", "value": "Gedrückt halten"}}}},
+    "Press to start or stop" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Press to start or stop"}}, "de": {"stringUnit": {"state": "translated", "value": "Ein-/Ausschalten"}}}},
+    "Hold the shortcut while speaking. Releasing it stops the recording." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Hold the shortcut while speaking. Releasing it stops the recording."}}, "de": {"stringUnit": {"state": "translated", "value": "Halte die Tastenkombination beim Sprechen gedrückt. Beim Loslassen wird die Aufnahme beendet."}}}},
+    "Press the shortcut once to start and again to stop." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Press the shortcut once to start and again to stop."}}, "de": {"stringUnit": {"state": "translated", "value": "Drücke die Tastenkombination einmal zum Starten und erneut zum Beenden."}}}},
     "Click in the field, hold the shortcut while dictating a short sentence, then release it." : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Klicke in das Feld, halte die Tastenkombination beim Diktieren eines kurzen Satzes gedrückt und lasse sie danach los." } }

@@ -28,9 +28,18 @@ enum TriggerMode: String, Codable, CaseIterable, Identifiable {
     func label(locale: Locale) -> String {
         switch self {
         case .pushToTalk:
-            return "Push-to-talk"
+            return L("Hold to dictate", locale: locale)
         case .toggle:
-            return "Toggle"
+            return L("Press to start or stop", locale: locale)
+        }
+    }
+
+    func helpText(locale: Locale) -> String {
+        switch self {
+        case .pushToTalk:
+            return L("Hold the shortcut while speaking. Releasing it stops the recording.", locale: locale)
+        case .toggle:
+            return L("Press the shortcut once to start and again to stop.", locale: locale)
         }
     }
 }
@@ -1029,7 +1038,7 @@ struct AppSettings: Codable, Equatable {
         autoSwitchMicOnHotplug: true,
         showMicSwitchNotifications: true,
         hotkey: "Ctrl+Shift+Space",
-        triggerMode: .toggle,
+        triggerMode: .pushToTalk,
         transcriptionLanguage: "auto",
         insertTextAutomatically: true,
         insertDelayMs: 120,

@@ -95,6 +95,10 @@
 "unavailable" = "nicht verfügbar";
 "Language detection" = "Spracherkennung";
 "Parakeet detects the spoken language automatically." = "Parakeet erkennt die gesprochene Sprache automatisch.";
+"Hold to dictate" = "Gedrückt halten";
+"Press to start or stop" = "Ein-/Ausschalten";
+"Hold the shortcut while speaking. Releasing it stops the recording." = "Halte die Tastenkombination beim Sprechen gedrückt. Beim Loslassen wird die Aufnahme beendet.";
+"Press the shortcut once to start and again to stop." = "Drücke die Tastenkombination einmal zum Starten und erneut zum Beenden.";
 "Dictation finished." = "Diktat beendet.";
 "Recording not possible. The model is missing." = "Aufnahme nicht möglich. Das Modell fehlt.";
 "Step %d of %d: %@" = "Schritt %d von %d: %@";

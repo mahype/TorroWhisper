@@ -6,6 +6,11 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-09-22
+
+### Changed
+- **Hold to dictate is now the default trigger mode** — new and legacy configurations without an explicit choice start recording while the global shortcut is held and stop when it is released. Settings and onboarding expose both behaviors with clear localized labels and explanations, so users can switch back to pressing once to start and again to stop. Existing saved choices remain untouched.
+
 ## [0.8.0] — 2026-08-16
 
 ### Changed
