@@ -246,6 +246,35 @@ struct SettingsView: View {
         }
 
         Section {
+            LabeledContent {
+                HStack(spacing: 12) {
+                    Slider(
+                        value: recordingOutputVolumeBinding,
+                        in: 0 ... 100,
+                        step: 5
+                    )
+                    .frame(width: 220)
+                    .accessibilityLabel(Text("Output volume while recording", bundle: .module))
+                    .accessibilityValue(recordingOutputVolumeLabel)
+
+                    Text(recordingOutputVolumeLabel)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 92, alignment: .trailing)
+                }
+            } label: {
+                Text("Output volume while recording", bundle: .module)
+            }
+        } header: {
+            Text("Other audio", bundle: .module)
+        } footer: {
+            Text("During a recording, TorroWhisper sets the system output to this percentage of its previous volume and restores it afterwards. 0% mutes it. Some output devices do not support software volume control.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        Section {
             HotkeyRecorderField(
                 title: model.hotkeyFieldTitle,
                 currentHotkey: model.settings.hotkey,
@@ -336,6 +365,27 @@ struct SettingsView: View {
             }
         } header: {
             Text("Recording indicator", bundle: .module)
+        }
+    }
+
+    private var recordingOutputVolumeBinding: Binding<Double> {
+        Binding(
+            get: { Double(model.settings.recordingOutputVolumePercent) },
+            set: { newValue in
+                model.settings.recordingOutputVolumePercent = min(UInt32(newValue.rounded()), 100)
+                model.requestAutoSave()
+            }
+        )
+    }
+
+    private var recordingOutputVolumeLabel: String {
+        switch model.settings.recordingOutputVolumePercent {
+        case 0:
+            return L("Muted", locale: locale)
+        case 100:
+            return L("Unchanged", locale: locale)
+        case let percent:
+            return "\(percent) %"
         }
     }
 

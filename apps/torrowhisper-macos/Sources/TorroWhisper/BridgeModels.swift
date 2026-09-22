@@ -979,6 +979,9 @@ struct AppSettings: Codable, Equatable {
     var showMicSwitchNotifications: Bool
     var hotkey: String
     var triggerMode: TriggerMode
+    /// System output while recording, relative to its previous volume.
+    /// 100 leaves it unchanged; 0 mutes it.
+    var recordingOutputVolumePercent: UInt32
     var transcriptionLanguage: String
     var insertTextAutomatically: Bool
     var insertDelayMs: UInt32
@@ -1039,6 +1042,7 @@ struct AppSettings: Codable, Equatable {
         showMicSwitchNotifications: true,
         hotkey: "Ctrl+Shift+Space",
         triggerMode: .pushToTalk,
+        recordingOutputVolumePercent: 100,
         transcriptionLanguage: "auto",
         insertTextAutomatically: true,
         insertDelayMs: 120,

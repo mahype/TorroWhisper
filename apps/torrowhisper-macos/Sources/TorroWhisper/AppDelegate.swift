@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import Combine
 import SwiftUI
 
 @MainActor
@@ -28,6 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var lastAnnouncedPhaseKey: String?
     private var powerEventObservers: [NSObjectProtocol] = []
     private let audioDeviceMonitor = AudioDeviceMonitor()
+    private let recordingOutputVolumeController = RecordingOutputVolumeController()
+    private var recordingOutputSettingsCancellable: AnyCancellable?
     private let keyboardHardwareMonitor = KeyboardHardwareMonitor()
     private let recordingLevelFeed = RecordingLevelFeed()
     private let streamingTranscriptFeed = StreamingTranscriptFeed()
@@ -121,6 +124,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         model.onMicSwitched = { [weak self] notification in
             self?.showMicSwitchToast(notification)
         }
+        recordingOutputSettingsCancellable = model.$settings
+            .map(\.recordingOutputVolumePercent)
+            .removeDuplicates()
+            .sink { [weak self] percent in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.recordingOutputVolumeController.update(
+                        isRecording: self.model.runtime.isRecording,
+                        outputVolumePercent: percent
+                    )
+                }
+            }
+        recordingOutputVolumeController.startMonitoring()
         refreshMenuState()
 
         audioDeviceMonitor.onDevicesChanged = { [weak self] in
@@ -157,6 +173,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     func applicationWillTerminate(_ notification: Notification) {
         model.flushAutoSave()
+        recordingOutputSettingsCancellable?.cancel()
+        recordingOutputVolumeController.stopMonitoring()
+        recordingOutputVolumeController.restore()
         BridgeClient().sessionEndedCleanly()
     }
 
@@ -298,6 +317,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private func refreshMenuState() {
         let runtime = model.runtime
         let locale = currentLocale
+        recordingOutputVolumeController.update(
+            isRecording: runtime.isRecording,
+            outputVolumePercent: model.settings.recordingOutputVolumePercent
+        )
         let dictationLabel = runtime.isRecording
             ? L("Stop dictation", locale: locale)
             : L("Start dictation", locale: locale)

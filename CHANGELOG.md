@@ -8,6 +8,9 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [0.9.0] — 2026-09-22
 
+### Added
+- **Other audio can be lowered or muted while recording** — Settings → Recording now controls the system-output level used for the duration of a dictation, from unchanged (the safe default) down to fully muted. Intermediate percentages are relative to the volume active when recording starts. TorroWhisper snapshots that value and restores it after a normal stop, shortcut release, cancellation, error, output-device switch, or clean app quit; devices without software volume controls are left untouched.
+
 ### Changed
 - **Hold to dictate is now the default trigger mode** — new and legacy configurations without an explicit choice start recording while the global shortcut is held and stop when it is released. Settings and onboarding expose both behaviors with clear localized labels and explanations, so users can switch back to pressing once to start and again to stop. Existing saved choices remain untouched.
 
