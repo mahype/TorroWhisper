@@ -87,8 +87,14 @@ jobs:
       - name: Build Rust bridge (debug)
         run: cargo build -p torrowhisper-bridge
 
+      - name: Locate FluidAudio bridge
+        run: |
+          fluidaudio_bridge="$(find target/debug/build -path '*/fluidaudio-rs-*/out/swift-build/release/libFluidAudioBridge.a' -print -quit)"
+          test -f "$fluidaudio_bridge"
+          echo "FLUIDAUDIO_BRIDGE=$fluidaudio_bridge" >> "$GITHUB_ENV"
+
       - name: Build Swift app (debug)
-        run: swift build --package-path apps/torrowhisper-macos
+        run: swift build --package-path apps/torrowhisper-macos -Xlinker "$FLUIDAUDIO_BRIDGE"
 
       - name: Swift tests
-        run: swift test --package-path apps/torrowhisper-macos
+        run: swift test --package-path apps/torrowhisper-macos -Xlinker "$FLUIDAUDIO_BRIDGE"

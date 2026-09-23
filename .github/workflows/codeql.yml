@@ -53,12 +53,18 @@ jobs:
       - name: Build Rust bridge (required for Swift linker)
         run: cargo build -p torrowhisper-bridge
 
+      - name: Locate FluidAudio bridge
+        run: |
+          fluidaudio_bridge="$(find target/debug/build -path '*/fluidaudio-rs-*/out/swift-build/release/libFluidAudioBridge.a' -print -quit)"
+          test -f "$fluidaudio_bridge"
+          echo "FLUIDAUDIO_BRIDGE=$fluidaudio_bridge" >> "$GITHUB_ENV"
+
       # Explicit --arch arm64: macos-15 is Apple Silicon and the Rust
       # bridge is built for arm64 only. Without this, CodeQL's Swift
       # tracer has been observed to default to x86_64 on hosted runners,
       # which then fails to link against the arm64 static lib.
       - name: Build Swift app for analysis
-        run: swift build --package-path apps/torrowhisper-macos --arch arm64
+        run: swift build --package-path apps/torrowhisper-macos --arch arm64 -Xlinker "$FLUIDAUDIO_BRIDGE"
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
