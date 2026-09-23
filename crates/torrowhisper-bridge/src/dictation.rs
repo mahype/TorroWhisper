@@ -4,7 +4,8 @@ use std::{
     path::PathBuf,
     sync::{
         Arc, Mutex, Once,
-        mpsc::{self, Receiver, Sender, TryRecvError},
+        atomic::{AtomicBool, Ordering},
+        mpsc::{self, Receiver, Sender, SyncSender, TryRecvError},
     },
     thread,
     time::{Duration, Instant},
@@ -30,6 +31,7 @@ use whisper_rs::{
 
 const CUE_NOTE_GAP_MS: u32 = 18;
 const CUE_VOLUME: f32 = 0.12;
+const INPUT_READY_TIMEOUT: Duration = Duration::from_secs(2);
 const RECORDING_START_NOTES: [(f32, u32); 2] = [(523.25, 60), (659.25, 92)];
 const RECORDING_STOP_NOTES: [(f32, u32); 2] = [(659.25, 54), (523.25, 98)];
 const RECORDING_CANCEL_NOTES: [(f32, u32); 3] = [(523.25, 50), (392.00, 60), (329.63, 110)];
@@ -540,7 +542,13 @@ impl DictationController {
         {
             self.start_streaming_session(settings, model_path);
         }
-        play_recording_cue(RecordingCue::Start);
+        // The start cue is a readiness promise to the user: ActiveRecording
+        // has already waited for the first real input callback. Play it to
+        // completion before the Swift host can apply output attenuation, so a
+        // 0% recording volume cannot swallow the confirmation sound.
+        if let Err(err) = play_recording_cue_blocking(RecordingCue::Start) {
+            log::warn!(target: "dictation", "recording start cue failed: {err}");
+        }
         log::info!(
             target: "dictation",
             "recording started via '{used_name}' (vad: {})",
@@ -852,7 +860,6 @@ struct ActiveRecording {
     event_tx: Sender<RecordingEvent>,
     event_rx: Receiver<RecordingEvent>,
     shared: Arc<Mutex<RecordingBuffer>>,
-    started_at: Instant,
     sample_rate: u32,
     current_device_name: String,
 }
@@ -867,6 +874,7 @@ impl ActiveRecording {
         let sample_rate = config.sample_rate();
         let channels = config.channels() as usize;
         let (event_tx, event_rx) = mpsc::channel();
+        let (readiness, ready_rx) = input_readiness_channel();
         let shared = Arc::new(Mutex::new(RecordingBuffer::new(
             sample_rate,
             settings.vad_enabled,
@@ -874,11 +882,24 @@ impl ActiveRecording {
             settings.vad_silence_ms,
         )));
 
-        let stream =
-            build_input_stream(&device, &config, channels, shared.clone(), event_tx.clone())?;
+        let stream = build_input_stream(
+            &device,
+            &config,
+            channels,
+            shared.clone(),
+            event_tx.clone(),
+            readiness,
+        )?;
+        let input_start = Instant::now();
         stream
             .play()
             .map_err(|err| format!("Audio recording could not be started: {err}"))?;
+        wait_for_first_input(ready_rx, INPUT_READY_TIMEOUT)?;
+        log::info!(
+            target: "dictation",
+            "microphone input ready after {:.0}ms via '{used_name}'",
+            input_start.elapsed().as_secs_f64() * 1_000.0
+        );
 
         Ok((
             Self {
@@ -886,7 +907,6 @@ impl ActiveRecording {
                 event_tx,
                 event_rx,
                 shared,
-                started_at: Instant::now(),
                 sample_rate,
                 current_device_name: used_name.clone(),
             },
@@ -916,16 +936,19 @@ impl ActiveRecording {
         }
 
         let channels = config.channels() as usize;
+        let (readiness, ready_rx) = input_readiness_channel();
         let stream = build_input_stream(
             &device,
             &config,
             channels,
             self.shared.clone(),
             self.event_tx.clone(),
+            readiness,
         )?;
         stream
             .play()
             .map_err(|err| format!("Audio recording could not be restarted: {err}"))?;
+        wait_for_first_input(ready_rx, INPUT_READY_TIMEOUT)?;
 
         self.stream = Some(stream);
         self.current_device_name = used_name;
@@ -944,13 +967,52 @@ impl ActiveRecording {
     }
 
     fn finish(self) -> Result<RecordedAudio, String> {
-        let duration = self.started_at.elapsed();
         let mut guard = self
             .shared
             .lock()
             .map_err(|_| "Recording buffer could not be read.".to_owned())?;
-        Ok(guard.finish(duration))
+        Ok(guard.finish())
     }
+}
+
+struct InputReadinessSignal {
+    sent: AtomicBool,
+    tx: SyncSender<()>,
+}
+
+impl InputReadinessSignal {
+    fn notify(&self) {
+        if self
+            .sent
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            let _ = self.tx.try_send(());
+        }
+    }
+}
+
+fn input_readiness_channel() -> (Arc<InputReadinessSignal>, Receiver<()>) {
+    let (tx, rx) = mpsc::sync_channel(1);
+    (
+        Arc::new(InputReadinessSignal {
+            sent: AtomicBool::new(false),
+            tx,
+        }),
+        rx,
+    )
+}
+
+fn wait_for_first_input(ready_rx: Receiver<()>, timeout: Duration) -> Result<(), String> {
+    ready_rx.recv_timeout(timeout).map_err(|err| match err {
+        mpsc::RecvTimeoutError::Timeout => format!(
+            "Microphone did not deliver audio within {:.1} seconds.",
+            timeout.as_secs_f32()
+        ),
+        mpsc::RecvTimeoutError::Disconnected => {
+            "Microphone stopped before delivering audio.".to_owned()
+        }
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -1108,8 +1170,10 @@ impl RecordingBuffer {
         }
     }
 
-    fn finish(&mut self, duration: Duration) -> RecordedAudio {
+    fn finish(&mut self) -> RecordedAudio {
         let last_voiced_end = self.last_voiced_end;
+        let duration =
+            Duration::from_secs_f64(self.samples.len() as f64 / f64::from(self.sample_rate.max(1)));
         RecordedAudio {
             samples: std::mem::take(&mut self.samples),
             sample_rate: self.sample_rate,
@@ -1138,6 +1202,7 @@ fn build_input_stream(
     channels: usize,
     shared: Arc<Mutex<RecordingBuffer>>,
     event_tx: Sender<RecordingEvent>,
+    readiness: Arc<InputReadinessSignal>,
 ) -> Result<Stream, String> {
     let stream_config = config.config();
     let error_sender = event_tx.clone();
@@ -1151,7 +1216,9 @@ fn build_input_stream(
         SampleFormat::F32 => device
             .build_input_stream(
                 stream_config,
-                move |data: &[f32], _| handle_input_data_f32(data, channels, &shared, &event_tx),
+                move |data: &[f32], _| {
+                    handle_input_data_f32(data, channels, &shared, &event_tx, &readiness)
+                },
                 error_callback,
                 None,
             )
@@ -1165,6 +1232,7 @@ fn build_input_stream(
                         channels,
                         &shared,
                         &event_tx,
+                        &readiness,
                     )
                 },
                 error_callback,
@@ -1182,6 +1250,7 @@ fn build_input_stream(
                         channels,
                         &shared,
                         &event_tx,
+                        &readiness,
                     )
                 },
                 error_callback,
@@ -1199,6 +1268,7 @@ fn build_input_stream(
                         channels,
                         &shared,
                         &event_tx,
+                        &readiness,
                     )
                 },
                 error_callback,
@@ -1216,6 +1286,7 @@ fn build_input_stream(
                         channels,
                         &shared,
                         &event_tx,
+                        &readiness,
                     )
                 },
                 error_callback,
@@ -1233,6 +1304,7 @@ fn build_input_stream(
                         channels,
                         &shared,
                         &event_tx,
+                        &readiness,
                     )
                 },
                 error_callback,
@@ -1250,6 +1322,7 @@ fn build_input_stream(
                         channels,
                         &shared,
                         &event_tx,
+                        &readiness,
                     )
                 },
                 error_callback,
@@ -1267,6 +1340,7 @@ fn build_input_stream(
                         channels,
                         &shared,
                         &event_tx,
+                        &readiness,
                     )
                 },
                 error_callback,
@@ -1284,10 +1358,15 @@ fn handle_input_data_f32(
     channels: usize,
     shared: &Arc<Mutex<RecordingBuffer>>,
     event_tx: &Sender<RecordingEvent>,
+    readiness: &InputReadinessSignal,
 ) {
     let mono_chunk = interleaved_to_mono(data, channels);
+    if mono_chunk.is_empty() {
+        return;
+    }
     if let Ok(mut guard) = shared.lock() {
         guard.push_chunk(&mono_chunk, event_tx);
+        readiness.notify();
     }
 }
 
@@ -1296,9 +1375,10 @@ fn handle_input_data_iter(
     channels: usize,
     shared: &Arc<Mutex<RecordingBuffer>>,
     event_tx: &Sender<RecordingEvent>,
+    readiness: &InputReadinessSignal,
 ) {
     let collected: Vec<f32> = data.collect();
-    handle_input_data_f32(&collected, channels, shared, event_tx);
+    handle_input_data_f32(&collected, channels, shared, event_tx, readiness);
 }
 
 fn interleaved_to_mono(data: &[f32], channels: usize) -> Vec<f32> {
@@ -2153,9 +2233,20 @@ mod tests {
         assert_eq!(local, vec![0.1, 0.2, 0.3, 0.4, 0.5]);
 
         // Beyond-length reads (buffer emptied by finish()) are a no-op.
-        buffer.finish(Duration::from_secs(1));
+        buffer.finish();
         buffer.copy_new_samples(local.len(), &mut local);
         assert_eq!(local.len(), 5);
+    }
+
+    #[test]
+    fn recording_duration_comes_from_captured_samples() {
+        let (event_tx, _event_rx) = mpsc::channel();
+        let mut buffer = RecordingBuffer::new(16_000, false, 0.014, 900);
+        buffer.push_chunk(&vec![0.1; 8_000], &event_tx);
+
+        let audio = buffer.finish();
+
+        assert_eq!(audio.duration, Duration::from_millis(500));
     }
 
     #[test]
