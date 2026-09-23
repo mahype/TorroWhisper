@@ -45,11 +45,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: ${{ matrix.language }}
-
       - name: Build Rust bridge (required for Swift linker)
         run: cargo build -p torrowhisper-bridge
 
@@ -64,6 +59,15 @@ jobs:
           done < <(find target/debug/build -path '*/fluidaudio-rs-*/*' -name 'libFluidAudioBridge.a' -print)
           test -f "$fluidaudio_bridge"
           echo "FLUIDAUDIO_BRIDGE=$GITHUB_WORKSPACE/$fluidaudio_bridge" >> "$GITHUB_ENV"
+
+      # Initialize immediately before the first-party Swift build. The Rust
+      # bridge invokes Swift while compiling a third-party dependency, but it
+      # is not part of this Swift-only CodeQL database and is intentionally
+      # kept outside the tracer to preserve the job's time budget.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
 
       # Build for the runner's native architecture, matching the Rust and
       # FluidAudio archives selected above. CodeQL's macos-15 runners can be
