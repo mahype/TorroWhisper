@@ -31,6 +31,15 @@ jobs:
         with:
           xcode-version: '26'
 
+      # Rust test binaries link the Swift bridge dynamically. Keep the selected
+      # toolchain's runtime path available for embedding in those binaries.
+      - name: Configure Swift runtime path
+        run: |
+          swift_usr_dir="$(dirname "$(dirname "$(xcrun --find swiftc)")")"
+          swift_runtime_dir="$swift_usr_dir/lib/swift-5.5/macosx"
+          test -f "$swift_runtime_dir/libswift_Concurrency.dylib"
+          echo "SWIFT_RUNTIME_DIR=$swift_runtime_dir" >> "$GITHUB_ENV"
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -46,11 +55,17 @@ jobs:
 
       - name: cargo test
         run: cargo test --workspace
+        env:
+          RUSTFLAGS: -C link-arg=-Wl,-rpath,${{ env.SWIFT_RUNTIME_DIR }}
 
       - name: cargo audit
         uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # quick-xml is locked to ^0.39 by wayland-scanner through enigo's
+          # Linux-only backend. It is present in Cargo.lock but is not compiled
+          # or reachable in this macOS application.
+          ignore: RUSTSEC-2026-0194,RUSTSEC-2026-0195
 
       - name: Install cargo-deny
         uses: taiki-e/install-action@v2
@@ -72,8 +87,25 @@ jobs:
       - name: Build Rust bridge (debug)
         run: cargo build -p torrowhisper-bridge
 
-      - name: Build Swift app (debug)
-        run: swift build --package-path apps/torrowhisper-macos
+      - name: Locate FluidAudio bridge
+        run: |
+          runner_arch="$(uname -m)"
+          while IFS= read -r candidate; do
+            if lipo -archs "$candidate" | grep -qw "$runner_arch"; then
+              fluidaudio_bridge="$candidate"
+              break
+            fi
+          done < <(find target/debug/build -path '*/fluidaudio-rs-*/*' -name 'libFluidAudioBridge.a' -print)
+          test -f "$fluidaudio_bridge"
+          echo "FLUIDAUDIO_BRIDGE=$GITHUB_WORKSPACE/$fluidaudio_bridge" >> "$GITHUB_ENV"
 
+      - name: Build Swift app (debug)
+        run: swift build --package-path apps/torrowhisper-macos -Xlinker "$FLUIDAUDIO_BRIDGE"
+
+      # The macOS 15 runner cannot load the macOS 26 native bridge into the
+      # test process. Run Swift unit tests without it in a fresh build tree;
+      # Rust tests and the app build above still validate the real bridge.
       - name: Swift tests
-        run: swift test --package-path apps/torrowhisper-macos
+        run: swift test --package-path apps/torrowhisper-macos --scratch-path "$RUNNER_TEMP/torrowhisper-swift-tests" -Xlinker -undefined -Xlinker dynamic_lookup
+        env:
+          TORROWHISPER_SKIP_NATIVE_BRIDGE: '1'

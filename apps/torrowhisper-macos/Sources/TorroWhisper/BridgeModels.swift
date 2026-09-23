@@ -28,9 +28,18 @@ enum TriggerMode: String, Codable, CaseIterable, Identifiable {
     func label(locale: Locale) -> String {
         switch self {
         case .pushToTalk:
-            return "Push-to-talk"
+            return L("Hold to dictate", locale: locale)
         case .toggle:
-            return "Toggle"
+            return L("Press to start or stop", locale: locale)
+        }
+    }
+
+    func helpText(locale: Locale) -> String {
+        switch self {
+        case .pushToTalk:
+            return L("Hold the shortcut while speaking. Releasing it stops the recording.", locale: locale)
+        case .toggle:
+            return L("Press the shortcut once to start and again to stop.", locale: locale)
         }
     }
 }
@@ -970,6 +979,9 @@ struct AppSettings: Codable, Equatable {
     var showMicSwitchNotifications: Bool
     var hotkey: String
     var triggerMode: TriggerMode
+    /// System output while recording, relative to its previous volume.
+    /// 100 leaves it unchanged; 0 mutes it.
+    var recordingOutputVolumePercent: UInt32
     var transcriptionLanguage: String
     var insertTextAutomatically: Bool
     var insertDelayMs: UInt32
@@ -1029,7 +1041,8 @@ struct AppSettings: Codable, Equatable {
         autoSwitchMicOnHotplug: true,
         showMicSwitchNotifications: true,
         hotkey: "Ctrl+Shift+Space",
-        triggerMode: .toggle,
+        triggerMode: .pushToTalk,
+        recordingOutputVolumePercent: 100,
         transcriptionLanguage: "auto",
         insertTextAutomatically: true,
         insertDelayMs: 120,

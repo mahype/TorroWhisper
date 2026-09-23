@@ -95,6 +95,10 @@
 "unavailable" = "nicht verfügbar";
 "Language detection" = "Spracherkennung";
 "Parakeet detects the spoken language automatically." = "Parakeet erkennt die gesprochene Sprache automatisch.";
+"Hold to dictate" = "Gedrückt halten";
+"Press to start or stop" = "Ein-/Ausschalten";
+"Hold the shortcut while speaking. Releasing it stops the recording." = "Halte die Tastenkombination beim Sprechen gedrückt. Beim Loslassen wird die Aufnahme beendet.";
+"Press the shortcut once to start and again to stop." = "Drücke die Tastenkombination einmal zum Starten und erneut zum Beenden.";
 "Dictation finished." = "Diktat beendet.";
 "Recording not possible. The model is missing." = "Aufnahme nicht möglich. Das Modell fehlt.";
 "Step %d of %d: %@" = "Schritt %d von %d: %@";
@@ -487,3 +491,8 @@
 "Threads 0 = automatic. Single segment can be faster on very short dictations but may hurt punctuation on longer ones. Choose values based on the benchmark above." = "Threads 0 = automatisch. Einzelsegment kann bei sehr kurzen Diktaten schneller sein, verschlechtert aber bei längeren ggf. die Zeichensetzung. Werte anhand des Benchmarks oben wählen.";
 "Loading speech model…" = "Sprachmodell wird geladen …";
 "Applies app-wide — the same setting as under “Language models”." = "Gilt app-weit — dieselbe Einstellung wie unter „Sprachmodelle“.";
+"Other audio" = "Andere Töne";
+"Output volume while recording" = "Ausgabelautstärke während der Aufnahme";
+"Muted" = "Stumm";
+"Unchanged" = "Unverändert";
+"During a recording, TorroWhisper sets the system output to this percentage of its previous volume and restores it afterwards. 0% mutes it. Some output devices do not support software volume control." = "Während einer Aufnahme setzt TorroWhisper die Systemausgabe auf diesen Anteil der vorherigen Lautstärke und stellt sie danach wieder her. 0 % schaltet sie stumm. Manche Ausgabegeräte unterstützen keine softwaregesteuerte Lautstärke.";

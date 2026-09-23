@@ -1,5 +1,6 @@
-import XCTest
+import Foundation
 import TorroWhisperBridgeFFI
+import XCTest
 
 private struct Envelope: Decodable {
     let ok: Bool
@@ -8,6 +9,12 @@ private struct Envelope: Decodable {
 }
 
 final class BridgeIntegrationTests: XCTestCase {
+    override func setUpWithError() throws {
+        if ProcessInfo.processInfo.environment["TORROWHISPER_SKIP_NATIVE_BRIDGE"] == "1" {
+            throw XCTSkip("The macOS 15 CI runner cannot load the macOS 26 native bridge")
+        }
+    }
+
     func testValidateHotkeyAcceptsValidCombo() throws {
         let response = try callBridge(json: #"{"hotkey":"Cmd+Shift+R"}"#)
         XCTAssertTrue(response.ok, "expected ok=true, got error: \(response.error ?? "nil")")

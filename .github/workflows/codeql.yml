@@ -40,25 +40,19 @@ jobs:
         with:
           xcode-version: '26'
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
 
-      - name: Build Rust bridge (required for Swift linker)
-        run: cargo build -p torrowhisper-bridge
-
-      # Explicit --arch arm64: macos-15 is Apple Silicon and the Rust
-      # bridge is built for arm64 only. Without this, CodeQL's Swift
-      # tracer has been observed to default to x86_64 on hosted runners,
-      # which then fails to link against the arm64 static lib.
+      # CodeQL analyzes first-party Swift sources only. The regular CI job
+      # separately builds and tests the real Rust and FluidAudio bridge. Keep
+      # native symbols unresolved here so CodeQL's Swift tracer can select its
+      # preferred architecture independently of the hosted runner.
       - name: Build Swift app for analysis
-        run: swift build --package-path apps/torrowhisper-macos --arch arm64
+        run: swift build --package-path apps/torrowhisper-macos --scratch-path "$RUNNER_TEMP/torrowhisper-codeql" -Xlinker -undefined -Xlinker dynamic_lookup
+        env:
+          TORROWHISPER_SKIP_NATIVE_BRIDGE: '1'
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4

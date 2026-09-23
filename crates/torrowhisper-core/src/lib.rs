@@ -30,8 +30,8 @@ impl StartupBehavior {
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
 pub enum TriggerMode {
-    PushToTalk,
     #[default]
+    PushToTalk,
     Toggle,
 }
 
@@ -885,6 +885,9 @@ pub struct AppSettings {
     pub show_mic_switch_notifications: bool,
     pub hotkey: String,
     pub trigger_mode: TriggerMode,
+    /// System output volume while recording, relative to the volume that was
+    /// active when the recording started. `100` leaves it unchanged; `0` mutes.
+    pub recording_output_volume_percent: u32,
     pub transcription_language: String,
     pub insert_text_automatically: bool,
     pub insert_delay_ms: u32,
@@ -1050,6 +1053,7 @@ impl AppSettings {
         self.history_max_entries = self
             .history_max_entries
             .clamp(HISTORY_MAX_ENTRIES_MIN, HISTORY_MAX_ENTRIES_LIMIT);
+        self.recording_output_volume_percent = self.recording_output_volume_percent.min(100);
 
         self.seed_enabled_models_from_legacy();
     }
@@ -1241,6 +1245,7 @@ impl Default for AppSettings {
             show_mic_switch_notifications: true,
             hotkey: "Ctrl+Shift+Space".to_owned(),
             trigger_mode: TriggerMode::default(),
+            recording_output_volume_percent: 100,
             transcription_language: "auto".to_owned(),
             insert_text_automatically: true,
             insert_delay_ms: 120,
@@ -1557,7 +1562,8 @@ mod tests {
         assert!(!settings.onboarding_completed);
         assert!(settings.insert_text_automatically);
         assert!(settings.restore_clipboard_after_insert);
-        assert_eq!(settings.trigger_mode, TriggerMode::Toggle);
+        assert_eq!(settings.trigger_mode, TriggerMode::PushToTalk);
+        assert_eq!(settings.recording_output_volume_percent, 100);
         assert!(!settings.vad_enabled);
         assert!(!settings.post_processing_enabled);
         assert_eq!(settings.active_mode_name(), "Cleanup");
@@ -1573,6 +1579,28 @@ mod tests {
         assert!(!legacy.live_transcription_enabled);
         assert_eq!(legacy.transcription_backend, TranscriptionBackend::Parakeet);
         assert_eq!(legacy.active_post_processing_model, None);
+    }
+
+    #[test]
+    fn trigger_mode_defaults_to_push_to_talk_without_overwriting_a_saved_choice() {
+        let legacy: AppSettings = serde_json::from_str("{}").expect("legacy settings parse");
+        assert_eq!(legacy.trigger_mode, TriggerMode::PushToTalk);
+
+        let configured: AppSettings = serde_json::from_str(r#"{"trigger_mode":"toggle"}"#)
+            .expect("configured settings parse");
+        assert_eq!(configured.trigger_mode, TriggerMode::Toggle);
+    }
+
+    #[test]
+    fn recording_output_volume_defaults_to_unchanged_and_is_clamped() {
+        let legacy: AppSettings = serde_json::from_str("{}").expect("legacy settings parse");
+        assert_eq!(legacy.recording_output_volume_percent, 100);
+
+        let mut configured: AppSettings =
+            serde_json::from_str(r#"{"recording_output_volume_percent":250}"#)
+                .expect("configured settings parse");
+        configured.normalize();
+        assert_eq!(configured.recording_output_volume_percent, 100);
     }
 
     #[test]

@@ -204,6 +204,8 @@ struct OnboardingView: View {
                 )
             } header: {
                 Text("Trigger & hotkey", bundle: .module)
+            } footer: {
+                Text(model.settings.triggerMode.helpText(locale: locale))
             }
         }
     }
