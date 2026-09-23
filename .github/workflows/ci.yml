@@ -91,7 +91,7 @@ jobs:
         run: |
           fluidaudio_bridge="$(find target/debug/build -path '*/fluidaudio-rs-*/*' -name 'libFluidAudioBridge.a' -print -quit)"
           test -f "$fluidaudio_bridge"
-          echo "FLUIDAUDIO_BRIDGE=$fluidaudio_bridge" >> "$GITHUB_ENV"
+          echo "FLUIDAUDIO_BRIDGE=$GITHUB_WORKSPACE/$fluidaudio_bridge" >> "$GITHUB_ENV"
 
       - name: Build Swift app (debug)
         run: swift build --package-path apps/torrowhisper-macos -Xlinker "$FLUIDAUDIO_BRIDGE"
