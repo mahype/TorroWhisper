@@ -62,6 +62,10 @@ jobs:
         uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # quick-xml is locked to ^0.39 by wayland-scanner through enigo's
+          # Linux-only backend. It is present in Cargo.lock but is not compiled
+          # or reachable in this macOS application.
+          ignore: RUSTSEC-2026-0194,RUSTSEC-2026-0195
 
       - name: Install cargo-deny
         uses: taiki-e/install-action@v2
