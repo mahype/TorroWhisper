@@ -96,5 +96,8 @@ jobs:
       - name: Build Swift app (debug)
         run: swift build --package-path apps/torrowhisper-macos -Xlinker "$FLUIDAUDIO_BRIDGE"
 
+      # The macOS 15 runner cannot load FluidAudio's macOS 26 Swift bridge into
+      # the test process. These tests do not exercise FluidAudio; keep its
+      # symbols lazy while the app build above still validates the real link.
       - name: Swift tests
-        run: swift test --package-path apps/torrowhisper-macos -Xlinker "$FLUIDAUDIO_BRIDGE"
+        run: swift test --package-path apps/torrowhisper-macos -Xlinker -undefined -Xlinker dynamic_lookup
