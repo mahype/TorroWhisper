@@ -89,7 +89,13 @@ jobs:
 
       - name: Locate FluidAudio bridge
         run: |
-          fluidaudio_bridge="$(find target/debug/build -path '*/fluidaudio-rs-*/*' -name 'libFluidAudioBridge.a' -print -quit)"
+          runner_arch="$(uname -m)"
+          while IFS= read -r candidate; do
+            if lipo -archs "$candidate" | grep -qw "$runner_arch"; then
+              fluidaudio_bridge="$candidate"
+              break
+            fi
+          done < <(find target/debug/build -path '*/fluidaudio-rs-*/*' -name 'libFluidAudioBridge.a' -print)
           test -f "$fluidaudio_bridge"
           echo "FLUIDAUDIO_BRIDGE=$GITHUB_WORKSPACE/$fluidaudio_bridge" >> "$GITHUB_ENV"
 

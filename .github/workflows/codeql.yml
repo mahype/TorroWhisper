@@ -55,16 +55,21 @@ jobs:
 
       - name: Locate FluidAudio bridge
         run: |
-          fluidaudio_bridge="$(find target/debug/build -path '*/fluidaudio-rs-*/*' -name 'libFluidAudioBridge.a' -print -quit)"
+          runner_arch="$(uname -m)"
+          while IFS= read -r candidate; do
+            if lipo -archs "$candidate" | grep -qw "$runner_arch"; then
+              fluidaudio_bridge="$candidate"
+              break
+            fi
+          done < <(find target/debug/build -path '*/fluidaudio-rs-*/*' -name 'libFluidAudioBridge.a' -print)
           test -f "$fluidaudio_bridge"
           echo "FLUIDAUDIO_BRIDGE=$GITHUB_WORKSPACE/$fluidaudio_bridge" >> "$GITHUB_ENV"
 
-      # Explicit --arch arm64: macos-15 is Apple Silicon and the Rust
-      # bridge is built for arm64 only. Without this, CodeQL's Swift
-      # tracer has been observed to default to x86_64 on hosted runners,
-      # which then fails to link against the arm64 static lib.
+      # Build for the runner's native architecture, matching the Rust and
+      # FluidAudio archives selected above. CodeQL's macos-15 runners can be
+      # Intel or Apple Silicon depending on the available runner image.
       - name: Build Swift app for analysis
-        run: swift build --package-path apps/torrowhisper-macos --arch arm64 -Xlinker "$FLUIDAUDIO_BRIDGE"
+        run: swift build --package-path apps/torrowhisper-macos -Xlinker "$FLUIDAUDIO_BRIDGE"
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
