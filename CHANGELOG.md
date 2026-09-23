@@ -6,6 +6,11 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-09-23
+
+### Fixed
+- **The recording cue now means that the microphone is actually ready** — TorroWhisper waits for the first captured audio buffer before playing the start sound. A microphone that delivers no data now fails clearly instead of confirming an empty recording, and recorded duration is derived from the received samples rather than wall-clock time. The cue also finishes before recording-time output attenuation is applied, so muting other audio cannot swallow the readiness signal.
+
 ## [0.9.0] — 2026-09-22
 
 ### Added
@@ -238,7 +243,9 @@ First public release. Everything below has landed since the project was initiali
 - CI runner bumped to `macos-15` for a newer Metal.framework ([`47caf7d`](https://github.com/mahype/TorroWhisper/commit/47caf7d)); Xcode 16 pinned on `macos-14` for Swift 6 ([`a1a2b63`](https://github.com/mahype/TorroWhisper/commit/a1a2b63)).
 - Legacy egui desktop app removed ([`82a3f6d`](https://github.com/mahype/TorroWhisper/commit/82a3f6d)).
 
-[Unreleased]: https://github.com/mahype/TorroWhisper/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/mahype/TorroWhisper/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/mahype/TorroWhisper/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/mahype/TorroWhisper/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mahype/TorroWhisper/compare/v0.7.4...v0.8.0
 [0.7.4]: https://github.com/mahype/TorroWhisper/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/mahype/TorroWhisper/compare/v0.7.2...v0.7.3

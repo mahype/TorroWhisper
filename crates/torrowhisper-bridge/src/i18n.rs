@@ -165,6 +165,9 @@ fn static_de(en: &str) -> Option<&'static str> {
         "No audio data available for Whisper." => "Keine Audiodaten für Whisper verfügbar.",
         "No default input device available." => "Kein Standard-Eingabegerät verfügbar.",
         "No input device found." => "Kein Eingabegerät gefunden.",
+        "Microphone stopped before delivering audio." => {
+            "Das Mikrofon wurde beendet, bevor Audiodaten ankamen."
+        }
         "Transcription worker stopped unexpectedly." => {
             "Transkriptionsprozess wurde unerwartet beendet."
         }
@@ -338,6 +341,10 @@ const TEMPLATES_DE: &[(&str, &str)] = &[
     (
         "Mic switch failed: {0}. Recording stopped — please restart.",
         "Mikrofonwechsel fehlgeschlagen: {0}. Aufnahme gestoppt — bitte neu starten.",
+    ),
+    (
+        "Microphone did not deliver audio within {0} seconds.",
+        "Das Mikrofon hat innerhalb von {0} Sekunden keine Audiodaten geliefert.",
     ),
     // Downloads (model + language model share the phrasing)
     ("Download for {0} started.", "Download für {0} gestartet."),
@@ -592,6 +599,17 @@ mod tests {
                 "Recording started via 'MacBook Pro Microphone', silence stop active."
             ),
             "Aufnahme gestartet über 'MacBook Pro Microphone', Silence-Stopp aktiv."
+        );
+    }
+
+    #[test]
+    fn microphone_readiness_error_is_translated() {
+        assert_eq!(
+            translate(
+                Lang::De,
+                "Microphone did not deliver audio within 2.0 seconds."
+            ),
+            "Das Mikrofon hat innerhalb von 2.0 Sekunden keine Audiodaten geliefert."
         );
     }
 
