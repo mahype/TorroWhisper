@@ -1,17 +1,24 @@
 // swift-tools-version: 6.0
+import Foundation
 import PackageDescription
+
+let skipNativeBridge = ProcessInfo.processInfo.environment["TORROWHISPER_SKIP_NATIVE_BRIDGE"] == "1"
+let nativeBridgeLinkerSettings: [LinkerSetting] =
+    skipNativeBridge
+    ? []
+    : [.unsafeFlags(["-L", "../../target/debug", "-ltorrowhisper_bridge"])]
 
 let package = Package(
     name: "TorroWhisper",
     defaultLocalization: "en",
     platforms: [
-        .macOS(.v14),
+        .macOS(.v14)
     ],
     products: [
-        .executable(name: "TorroWhisper", targets: ["TorroWhisper"]),
+        .executable(name: "TorroWhisper", targets: ["TorroWhisper"])
     ],
     dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
     ],
     targets: [
         .systemLibrary(
@@ -40,8 +47,7 @@ let package = Package(
             // at the first localized-string lookup. We instead ship the .lproj
             // files inside Contents/Resources and resolve them through
             // Bundle.main (see Bundle+module.swift and scripts/build-macos-app.sh).
-            linkerSettings: [
-                .unsafeFlags(["-L", "../../target/debug", "-ltorrowhisper_bridge"]),
+            linkerSettings: nativeBridgeLinkerSettings + [
                 .linkedLibrary("c++"),
                 .linkedFramework("Accelerate"),
                 .linkedFramework("AppKit"),
@@ -61,8 +67,7 @@ let package = Package(
             name: "TorroWhisperTests",
             dependencies: ["TorroWhisper", "TorroWhisperBridgeFFI"],
             path: "Tests/TorroWhisperTests",
-            linkerSettings: [
-                .unsafeFlags(["-L", "../../target/debug", "-ltorrowhisper_bridge"]),
+            linkerSettings: nativeBridgeLinkerSettings + [
                 .linkedLibrary("c++"),
                 .linkedFramework("Accelerate"),
                 .linkedFramework("AppKit"),
