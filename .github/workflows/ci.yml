@@ -89,7 +89,7 @@ jobs:
 
       - name: Locate FluidAudio bridge
         run: |
-          fluidaudio_bridge="$(find target/debug/build -path '*/fluidaudio-rs-*/out/swift-build/release/libFluidAudioBridge.a' -print -quit)"
+          fluidaudio_bridge="$(find target/debug/build -path '*/fluidaudio-rs-*/*' -name 'libFluidAudioBridge.a' -print -quit)"
           test -f "$fluidaudio_bridge"
           echo "FLUIDAUDIO_BRIDGE=$fluidaudio_bridge" >> "$GITHUB_ENV"
 
