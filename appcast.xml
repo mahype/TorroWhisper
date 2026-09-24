@@ -6,6 +6,20 @@
     <description>Official update feed for Open Whisper.</description>
     <language>en</language>
     <item>
+      <title>Version 0.9.1</title>
+      <pubDate>Thu, 24 Sep 2026 07:39:57 +0000</pubDate>
+      <sparkle:shortVersionString>0.9.1</sparkle:shortVersionString>
+      <sparkle:version>0.9.1</sparkle:version>
+      <description>&lt;h3&gt;What's Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Aufnahmesteuerung und Audio-Absenkung für 0.9.0 by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/56"&gt;https://github.com/mahype/TorroWhisper/pull/56&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Aufnahmestart synchronisieren und 0.9.1 vorbereiten by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/57"&gt;https://github.com/mahype/TorroWhisper/pull/57&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a href="https://github.com/mahype/TorroWhisper/compare/v0.8.0...v0.9.1"&gt;https://github.com/mahype/TorroWhisper/compare/v0.8.0...v0.9.1&lt;/a&gt;&lt;/p&gt;</description>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/mahype/TorroWhisper/releases/download/v0.9.1/TorroWhisper-0.9.1.dmg" sparkle:edSignature="XcBlR5XPayQZn2YmuHHClhcWaVZADGBlyzWaxf7HhL8CC5jmKbMatzQQq1zoIikZCvxJ5vcgl9jlysaeEF9SAg==" length="28658080" type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 0.8.0</title>
       <pubDate>Sun, 16 Aug 2026 03:27:00 +0000</pubDate>
       <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
