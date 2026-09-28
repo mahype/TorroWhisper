@@ -17,7 +17,7 @@ concurrency:
 jobs:
   analyze:
     name: Analyze ${{ matrix.language }}
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 45
     env:
       # See ci.yml for rationale — disables whisper.cpp's -mcpu=native.
@@ -37,10 +37,12 @@ jobs:
 
       # Xcode must be selected BEFORE codeql init so the tracer wraps the
       # right Swift toolchain.
-      - name: Select Xcode 26 (FoundationModels SDK)
+      # Xcode 26.5 ships the macOS 26.4+ SDK that foundation-models 0.12
+      # needs (SystemLanguageModel.contextSize). macos-15 tops out at 26.3.
+      - name: Select Xcode 26.5 (FoundationModels SDK)
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '26'
+          xcode-version: '26.5'
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4

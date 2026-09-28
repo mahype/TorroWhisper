@@ -15,7 +15,7 @@ Everything except Release and Dependabot is blocking for merges — a red CI or 
 
 ## CI workflow (`ci.yml`)
 
-Runs on `macos-15` with a 30-minute timeout. Concurrency is grouped by branch; pushing a new commit cancels an in-flight run on the same ref.
+Runs on `macos-26` (Xcode 26.5) with a 30-minute timeout. Concurrency is grouped by branch; pushing a new commit cancels an in-flight run on the same ref.
 
 Steps, in order:
 
@@ -27,7 +27,7 @@ Steps, in order:
 6. **`cargo clippy --workspace --all-targets -- -D warnings`** — clippy with warnings as errors.
 7. **`cargo test --workspace`** — runs Rust unit tests in both crates.
 8. **`cargo audit`** — `rustsec/audit-check@v2`. Fails on any unpatched advisory in the dependency graph.
-9. **`cargo deny`** — `cargo-deny` is installed via `taiki-e/install-action@v2` (the official `EmbarkStudios/cargo-deny-action` is a container action and therefore Linux-only, which does not fit our `macos-15` runner). Runs `check bans licenses sources` against [`deny.toml`](../deny.toml). Fails on license violations, banned crates, or unknown registries.
+9. **`cargo deny`** — `cargo-deny` is installed via `taiki-e/install-action@v2` (the official `EmbarkStudios/cargo-deny-action` is a container action and therefore Linux-only, which does not fit our macOS runner). Runs `check bans licenses sources` against [`deny.toml`](../deny.toml). Fails on license violations, banned crates, or unknown registries.
 10. **SwiftLint** — installed via `brew install swiftlint`, runs against `apps/torrowhisper-macos/Sources`. Configured in [`.swiftlint.yml`](../.swiftlint.yml). Currently **non-strict** — warnings do not fail the build. See [Strictness roadmap](#strictness-roadmap) below.
 11. **`swift format lint --recursive`** — Apple's swift-format (bundled with Xcode 16), configured in [`.swift-format`](../.swift-format). Also non-strict for now.
 12. **`cargo build -p torrowhisper-bridge`** — produces the static lib that the Swift package links against.
@@ -63,7 +63,7 @@ In CI, `maxim-lobanov/setup-xcode@v1` handles this automatically.
 
 ## CodeQL workflow (`codeql.yml`)
 
-Static analysis for Swift, run against `macos-15`. Building the Swift target requires the Rust bridge, so the workflow builds `cargo build -p torrowhisper-bridge` before `swift build`.
+Static analysis for Swift, run against `macos-26`. Building the Swift target requires the Rust bridge, so the workflow builds `cargo build -p torrowhisper-bridge` before `swift build`.
 
 Findings appear under **Security → Code scanning** in the GitHub UI. A scheduled run happens every Monday at 04:00 UTC so advisories that appear after the last commit still surface.
 
