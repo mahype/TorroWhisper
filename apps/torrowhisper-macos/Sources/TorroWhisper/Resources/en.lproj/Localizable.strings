@@ -144,7 +144,6 @@
 "Language model" = "Language model";
 "Language models" = "Language models";
 "Large" = "Large";
-"Large language model (Gemma 4 26B A4B, Mixture-of-Experts) with best quality — needs 32 GB of RAM or more." = "Large language model (Gemma 4 26B A4B, Mixture-of-Experts) with best quality — needs 32 GB of RAM or more.";
 "Larger model with higher accuracy and more CPU/RAM demand." = "Larger model with higher accuracy and more CPU/RAM demand.";
 "Last checked:" = "Last checked:";
 "Launch at login" = "Launch at login";
@@ -161,7 +160,6 @@
 "Maximum accuracy. Large download and high RAM demand." = "Maximum accuracy. Large download and high RAM demand.";
 "Medium" = "Medium";
 "Microphone" = "Microphone";
-"Mid-size language model (Gemma 4 E4B) — solid default for 16 GB of RAM or more." = "Mid-size language model (Gemma 4 E4B) — solid default for 16 GB of RAM or more.";
 "Mode" = "Mode";
 "Model" = "Model";
 "Model %@ is missing. Please download it in Settings." = "Model %@ is missing. Please download it in Settings.";
@@ -233,7 +231,6 @@
 "Listening…" = "Listening…";
 "Silence stop" = "Silence stop";
 "Small" = "Small";
-"Small language model (Gemma 4 E2B). Fast and lean, runs on 8 GB of RAM." = "Small language model (Gemma 4 E2B). Fast and lean, runs on 8 GB of RAM.";
 "Small local model for quick response on weaker machines." = "Small local model for quick response on weaker machines.";
 "Solid default for daily use and accuracy." = "Solid default for daily use and accuracy.";
 "Start & behavior" = "Start & behavior";
@@ -521,3 +518,9 @@
 "Same speed, same 25 languages" = "Same speed, same 25 languages";
 "Keep dictating while it downloads" = "Keep dictating while it downloads";
 "Download about %@ · the old model is removed afterwards" = "Download about %@ · the old model is removed afterwards";
+"Small language model (Gemma 4 E2B, Google QAT). Fast and lean, runs on 8 GB of RAM." = "Small language model (Gemma 4 E2B, Google QAT). Fast and lean, runs on 8 GB of RAM.";
+"Mid-size language model (Gemma 4 E4B, Google QAT) — solid default for 16 GB of RAM or more." = "Mid-size language model (Gemma 4 E4B, Google QAT) — solid default for 16 GB of RAM or more.";
+"Large language model (Gemma 4 12B, Google QAT) with the best quality among the downloads — 16 GB of RAM or more." = "Large language model (Gemma 4 12B, Google QAT) with the best quality among the downloads — 16 GB of RAM or more.";
+"Previous Gemma 4 file. Keeps working; the Google QAT version is smaller and faster." = "Previous Gemma 4 file. Keeps working; the Google QAT version is smaller and faster.";
+"Gemma 4 26B A4B (Mixture-of-Experts), needs 32 GB of RAM. Gemma 4 12B comes close at 40 % of the size." = "Gemma 4 26B A4B (Mixture-of-Experts), needs 32 GB of RAM. Gemma 4 12B comes close at 40 % of the size.";
+"Successor: %@" = "Successor: %@";

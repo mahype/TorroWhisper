@@ -32,20 +32,20 @@ pub enum LlmModelIntegrity {
 /// with the GGUF magic header. The size is only known for bundled presets;
 /// custom models pass `None` and are checked by magic only — the same split the
 /// whisper integrity check uses for preset vs. custom paths.
-pub fn gguf_file_integrity(path: &Path, expected_size: Option<u64>) -> LlmModelIntegrity {
+pub fn gguf_file_integrity(path: &Path, accepted_sizes: &[u64]) -> LlmModelIntegrity {
     let metadata = match fs::metadata(path) {
         Ok(metadata) => metadata,
         Err(_) => return LlmModelIntegrity::Missing,
     };
 
-    if let Some(expected) = expected_size
-        && metadata.len() != expected
+    if let Some(&expected) = accepted_sizes.first()
+        && !accepted_sizes.contains(&metadata.len())
     {
         return LlmModelIntegrity::Corrupt {
             reason: format!(
-                "file size is {} but {} was expected",
-                human_readable_size(metadata.len()),
-                human_readable_size(expected)
+                "file size is {} bytes but {} bytes were expected",
+                metadata.len(),
+                expected
             ),
         };
     }
@@ -107,7 +107,7 @@ impl LlmModelDownloadManager {
         }
 
         let target_path = default_llm_model_path(preset)?;
-        match gguf_file_integrity(&target_path, Some(preset.download_size_bytes())) {
+        match gguf_file_integrity(&target_path, preset.accepted_sizes()) {
             LlmModelIntegrity::Valid => {
                 self.state = LlmDownloadState::Ready {
                     path: target_path.clone(),
@@ -160,7 +160,7 @@ impl LlmModelDownloadManager {
         }
 
         let target_path = default_custom_llm_path(id)?;
-        match gguf_file_integrity(&target_path, None) {
+        match gguf_file_integrity(&target_path, &[]) {
             LlmModelIntegrity::Valid => {
                 self.state = LlmDownloadState::Ready {
                     path: target_path.clone(),
@@ -610,7 +610,7 @@ fn download_model_file(
     // a truncated/HTML-error response never gets renamed into place and later
     // crashes the llama helper. Size was already checked against Content-Length
     // above, so a magic-only check is enough here.
-    if let LlmModelIntegrity::Corrupt { reason } = gguf_file_integrity(temp_path, None) {
+    if let LlmModelIntegrity::Corrupt { reason } = gguf_file_integrity(temp_path, &[]) {
         let _ = fs::remove_file(temp_path);
         return Err(format!(
             "Downloaded language model failed verification ({reason}). Please try again."
@@ -646,7 +646,7 @@ pub fn log_llm_inventory(settings: &AppSettings) {
             continue;
         };
         match fs::metadata(&path) {
-            Ok(metadata) if metadata.len() == preset.download_size_bytes() => {
+            Ok(metadata) if preset.accepted_sizes().contains(&metadata.len()) => {
                 log::info!(
                     target: "models",
                     "llm inventory: {filename} — OK ({})",
@@ -655,9 +655,9 @@ pub fn log_llm_inventory(settings: &AppSettings) {
             }
             Ok(metadata) => log::warn!(
                 target: "models",
-                "llm inventory: {filename} — size {} but {} expected",
-                human_readable_size(metadata.len()),
-                human_readable_size(preset.download_size_bytes())
+                "llm inventory: {filename} — size {} bytes but {:?} bytes expected",
+                metadata.len(),
+                preset.accepted_sizes()
             ),
             Err(_) => {
                 log::info!(target: "models", "llm inventory: {filename} — not downloaded");
@@ -799,17 +799,17 @@ mod tests {
 
     #[test]
     fn default_llm_path_is_under_llm_models_dir() {
-        let path = default_llm_model_path(LlmPreset::Medium).unwrap();
+        let path = default_llm_model_path(LlmPreset::MediumQat).unwrap();
         let as_str = path.to_string_lossy();
         assert!(as_str.contains("llm-models"));
-        assert!(as_str.ends_with("google_gemma-4-E4B-it-Q4_K_M.gguf"));
+        assert!(as_str.ends_with("gemma-4-E4B_q4_0-it.gguf"));
     }
 
     #[test]
     fn progress_basis_points_scales_to_ten_thousand() {
         let mut manager = LlmModelDownloadManager::new();
         manager.state = LlmDownloadState::Downloading {
-            target: LlmDownloadTarget::Preset(LlmPreset::Medium),
+            target: LlmDownloadTarget::Preset(LlmPreset::MediumQat),
             downloaded_bytes: 500,
             total_bytes: Some(1_000),
             started_at: Instant::now(),
@@ -822,7 +822,7 @@ mod tests {
         let path =
             std::env::temp_dir().join(format!("ow-gguf-missing-{}.gguf", std::process::id()));
         let _ = fs::remove_file(&path);
-        assert_eq!(gguf_file_integrity(&path, None), LlmModelIntegrity::Missing);
+        assert_eq!(gguf_file_integrity(&path, &[]), LlmModelIntegrity::Missing);
     }
 
     #[test]
@@ -830,7 +830,7 @@ mod tests {
         let path = std::env::temp_dir().join(format!("ow-gguf-valid-{}.gguf", std::process::id()));
         // "GGUF" magic followed by arbitrary padding.
         fs::write(&path, [0x47, 0x47, 0x55, 0x46, 0x00, 0x01, 0x02, 0x03]).unwrap();
-        assert_eq!(gguf_file_integrity(&path, None), LlmModelIntegrity::Valid);
+        assert_eq!(gguf_file_integrity(&path, &[]), LlmModelIntegrity::Valid);
         let _ = fs::remove_file(&path);
     }
 
@@ -840,7 +840,7 @@ mod tests {
         // An HTML error page, not a GGUF file.
         fs::write(&path, b"<html>error</html>").unwrap();
         assert!(matches!(
-            gguf_file_integrity(&path, None),
+            gguf_file_integrity(&path, &[]),
             LlmModelIntegrity::Corrupt { .. }
         ));
         let _ = fs::remove_file(&path);
@@ -851,7 +851,7 @@ mod tests {
         let path = std::env::temp_dir().join(format!("ow-gguf-size-{}.gguf", std::process::id()));
         fs::write(&path, [0x47, 0x47, 0x55, 0x46, 0x00]).unwrap();
         assert!(matches!(
-            gguf_file_integrity(&path, Some(999_999)),
+            gguf_file_integrity(&path, &[999_999]),
             LlmModelIntegrity::Corrupt { .. }
         ));
         let _ = fs::remove_file(&path);

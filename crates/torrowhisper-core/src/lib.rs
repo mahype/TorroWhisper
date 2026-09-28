@@ -399,17 +399,41 @@ impl ModelPreset {
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
 pub enum LlmPreset {
-    Small,
+    /// Gemma 4 E2B as Google's official quantization-aware-trained Q4_0 file.
+    SmallQat,
+    /// Gemma 4 E4B, QAT Q4_0 — the recommended downloadable model.
     #[default]
+    MediumQat,
+    /// Gemma 4 12B, QAT Q4_0 — best quality among the downloads.
+    LargeQat,
+    /// Gemma 4 E2B as bartowski's Q4_K_M, used up to 0.10. Deprecated (#62);
+    /// the serde names of these three stay unchanged so existing settings
+    /// keep pointing at the files their users already downloaded.
+    Small,
+    /// Gemma 4 E4B as bartowski's Q4_K_M, used up to 0.10. Deprecated.
     Medium,
+    /// Gemma 4 26B-A4B as bartowski's Q4_K_M, used up to 0.10. Deprecated:
+    /// the 12B comes close in quality at 40 % of the size.
     Large,
 }
 
 impl LlmPreset {
-    pub const ALL: [Self; 3] = [Self::Small, Self::Medium, Self::Large];
+    pub const ALL: [Self; 6] = [
+        Self::SmallQat,
+        Self::MediumQat,
+        Self::LargeQat,
+        Self::Small,
+        Self::Medium,
+        Self::Large,
+    ];
 
+    /// Also the token in registry ids (`local_preset:<label>`); must stay
+    /// stable and match `LlmPreset.stableToken` in Swift.
     pub fn label(self) -> &'static str {
         match self {
+            Self::SmallQat => "SmallQat",
+            Self::MediumQat => "MediumQat",
+            Self::LargeQat => "LargeQat",
             Self::Small => "Small",
             Self::Medium => "Medium",
             Self::Large => "Large",
@@ -418,14 +442,20 @@ impl LlmPreset {
 
     pub fn display_label(self) -> &'static str {
         match self {
-            Self::Small => "Gemma 4 E2B (3.5 GB)",
-            Self::Medium => "Gemma 4 E4B (5.4 GB)",
+            Self::SmallQat => "Gemma 4 E2B (3.3 GB)",
+            Self::MediumQat => "Gemma 4 E4B (5.2 GB)",
+            Self::LargeQat => "Gemma 4 12B (7.0 GB)",
+            Self::Small => "Gemma 4 E2B Q4_K_M (3.5 GB)",
+            Self::Medium => "Gemma 4 E4B Q4_K_M (5.4 GB)",
             Self::Large => "Gemma 4 26B (17 GB)",
         }
     }
 
     pub fn default_filename(self) -> &'static str {
         match self {
+            Self::SmallQat => "gemma-4-E2B_q4_0-it.gguf",
+            Self::MediumQat => "gemma-4-E4B_q4_0-it.gguf",
+            Self::LargeQat => "gemma-4-12b-it-qat-q4_0.gguf",
             Self::Small => "google_gemma-4-E2B-it-Q4_K_M.gguf",
             Self::Medium => "google_gemma-4-E4B-it-Q4_K_M.gguf",
             Self::Large => "google_gemma-4-26B-A4B-it-Q4_K_M.gguf",
@@ -434,20 +464,28 @@ impl LlmPreset {
 
     pub fn description(self) -> &'static str {
         match self {
-            Self::Small => {
-                "Small language model (Gemma 4 E2B). Fast and lean, runs on 8 GB of RAM."
+            Self::SmallQat => {
+                "Small language model (Gemma 4 E2B, Google QAT). Fast and lean, runs on 8 GB of RAM."
             }
-            Self::Medium => {
-                "Mid-size language model (Gemma 4 E4B) — solid default for 16 GB of RAM or more."
+            Self::MediumQat => {
+                "Mid-size language model (Gemma 4 E4B, Google QAT) — solid default for 16 GB of RAM or more."
             }
+            Self::LargeQat => {
+                "Large language model (Gemma 4 12B, Google QAT) with the best quality among the downloads — 16 GB of RAM or more."
+            }
+            Self::Small => "Previous Gemma 4 E2B file. Replaced by the Google QAT version.",
+            Self::Medium => "Previous Gemma 4 E4B file. Replaced by the Google QAT version.",
             Self::Large => {
-                "Large language model (Gemma 4 26B A4B, Mixture-of-Experts) with best quality — needs 32 GB of RAM or more."
+                "Gemma 4 26B A4B (Mixture-of-Experts), needs 32 GB of RAM. Replaced by Gemma 4 12B."
             }
         }
     }
 
     pub fn approx_size_label(self) -> &'static str {
         match self {
+            Self::SmallQat => "approx. 3.3 GB",
+            Self::MediumQat => "approx. 5.2 GB",
+            Self::LargeQat => "approx. 7.0 GB",
             Self::Small => "approx. 3.5 GB",
             Self::Medium => "approx. 5.4 GB",
             Self::Large => "approx. 17 GB",
@@ -456,44 +494,83 @@ impl LlmPreset {
 
     pub fn approx_ram_mb(self) -> u64 {
         match self {
-            Self::Small => 4_096,
-            Self::Medium => 8_192,
+            Self::SmallQat | Self::Small => 4_096,
+            Self::MediumQat | Self::Medium => 8_192,
+            Self::LargeQat => 12_288,
             Self::Large => 20_480,
         }
     }
 
-    /// All Gemma presets are stable until the switch to Google's QAT files
-    /// (#62) marks the bartowski Q4_K_M files and 26B-A4B as deprecated.
+    /// E4B QAT is the recommended download; the bartowski files and the 26B
+    /// are deprecated in favour of Google's QAT files (#62, #67).
     pub fn tier(self, _parakeet_supported: bool) -> ModelTier {
-        ModelTier::Stable
+        match self {
+            Self::MediumQat => ModelTier::Recommended,
+            Self::SmallQat | Self::LargeQat => ModelTier::Stable,
+            Self::Small | Self::Medium | Self::Large => ModelTier::Deprecated,
+        }
+    }
+
+    /// The model that replaces a deprecated one.
+    pub fn successor(self) -> Option<Self> {
+        match self {
+            Self::Small => Some(Self::SmallQat),
+            Self::Medium => Some(Self::MediumQat),
+            Self::Large => Some(Self::LargeQat),
+            Self::SmallQat | Self::MediumQat | Self::LargeQat => None,
+        }
     }
 
     pub fn context_size(self) -> u32 {
         match self {
-            Self::Small | Self::Medium => 2_048,
-            Self::Large => 4_096,
+            Self::SmallQat | Self::MediumQat | Self::Small | Self::Medium => 2_048,
+            Self::LargeQat | Self::Large => 4_096,
         }
     }
 
+    /// Download URLs are pinned to a repository commit, so the file (and with
+    /// it the expected size below) cannot change underneath us — bartowski
+    /// re-uploaded the Q4_K_M files once, which made every later download fail
+    /// the size check.
     pub fn download_url(self) -> &'static str {
         match self {
+            Self::SmallQat => {
+                "https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf/resolve/675cff42a74c774d6cb76f76d8eacb49b48c9b93/gemma-4-E2B_q4_0-it.gguf"
+            }
+            Self::MediumQat => {
+                "https://huggingface.co/google/gemma-4-E4B-it-qat-q4_0-gguf/resolve/4b4a2c1d584be7264f87aac328a1bc739ce81b6c/gemma-4-E4B_q4_0-it.gguf"
+            }
+            Self::LargeQat => {
+                "https://huggingface.co/google/gemma-4-12B-it-qat-q4_0-gguf/resolve/29d097773436b69ff9feafd636ab4cf873786537/gemma-4-12b-it-qat-q4_0.gguf"
+            }
             Self::Small => {
-                "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
+                "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/81012ba3538e061d5ee003f11f25335b17f82e2d/google_gemma-4-E2B-it-Q4_K_M.gguf"
             }
             Self::Medium => {
-                "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q4_K_M.gguf"
+                "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/029e94146666900b08caf49a3b47b413dfa8ec66/google_gemma-4-E4B-it-Q4_K_M.gguf"
             }
             Self::Large => {
-                "https://huggingface.co/bartowski/google_gemma-4-26B-A4B-it-GGUF/resolve/main/google_gemma-4-26B-A4B-it-Q4_K_M.gguf"
+                "https://huggingface.co/bartowski/google_gemma-4-26B-A4B-it-GGUF/resolve/10f3b41bcf8d3047f4e136e7197ffc2dd1654c9d/google_gemma-4-26B-A4B-it-Q4_K_M.gguf"
             }
         }
     }
 
+    /// Exact size of the file at the pinned `download_url`.
     pub fn download_size_bytes(self) -> u64 {
+        self.accepted_sizes()[0]
+    }
+
+    /// Sizes a file on disk may have and still be intact: the pinned download
+    /// first, then earlier uploads of the same file that users downloaded
+    /// before the URLs were pinned.
+    pub fn accepted_sizes(self) -> &'static [u64] {
         match self {
-            Self::Small => 3_462_677_760,
-            Self::Medium => 5_405_167_904,
-            Self::Large => 17_035_037_632,
+            Self::SmallQat => &[3_349_516_256],
+            Self::MediumQat => &[5_154_941_280],
+            Self::LargeQat => &[6_975_879_296],
+            Self::Small => &[3_462_680_032, 3_462_678_272, 3_462_677_760],
+            Self::Medium => &[5_405_170_144, 5_405_167_904],
+            Self::Large => &[17_035_039_872, 17_035_037_632],
         }
     }
 }
@@ -1513,6 +1590,9 @@ pub struct LlmModelStatusDto {
     /// Grouping in the model lists (#67).
     #[serde(default)]
     pub tier: ModelTier,
+    /// Display label of the model that replaces a deprecated one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub successor_label: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -2011,8 +2091,38 @@ mod tests {
     }
 
     #[test]
-    fn llm_preset_medium_is_default() {
-        assert_eq!(LlmPreset::default(), LlmPreset::Medium);
+    fn llm_preset_medium_qat_is_default() {
+        assert_eq!(LlmPreset::default(), LlmPreset::MediumQat);
+    }
+
+    #[test]
+    fn existing_settings_keep_their_previous_gemma_file() {
+        // Up to 0.10 the presets serialized as small/medium/large; those names
+        // must still resolve to the files users already downloaded.
+        let legacy: AppSettings =
+            serde_json::from_str(r#"{"local_llm":"medium"}"#).expect("legacy settings parse");
+        assert_eq!(legacy.local_llm, LlmPreset::Medium);
+        assert_eq!(
+            legacy.local_llm.default_filename(),
+            "google_gemma-4-E4B-it-Q4_K_M.gguf"
+        );
+        assert_eq!(legacy.local_llm.tier(true), ModelTier::Deprecated);
+        assert_eq!(legacy.local_llm.successor(), Some(LlmPreset::MediumQat));
+        let fresh = AppSettings::default();
+        assert_eq!(fresh.local_llm, LlmPreset::MediumQat);
+    }
+
+    #[test]
+    fn gemma_downloads_are_pinned_and_sizes_accept_earlier_uploads() {
+        for preset in LlmPreset::ALL {
+            let url = preset.download_url();
+            assert!(!url.contains("/resolve/main/"), "{url} must be pinned");
+            assert!(url.ends_with(preset.default_filename()));
+            assert_eq!(preset.download_size_bytes(), preset.accepted_sizes()[0]);
+        }
+        // The E4B file bartowski served before the re-upload stays valid.
+        assert!(LlmPreset::Medium.accepted_sizes().contains(&5_405_167_904));
+        assert!(LlmPreset::Medium.accepted_sizes().contains(&5_405_170_144));
     }
 
     #[test]

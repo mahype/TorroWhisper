@@ -1,6 +1,12 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Small language model (Gemma 4 E2B, Google QAT). Fast and lean, runs on 8 GB of RAM." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Small language model (Gemma 4 E2B, Google QAT). Fast and lean, runs on 8 GB of RAM."}}, "de": {"stringUnit": {"state": "translated", "value": "Kleines Sprachmodell (Gemma 4 E2B, Google QAT). Schnell und schlank, läuft mit 8 GB RAM."}}}},
+    "Mid-size language model (Gemma 4 E4B, Google QAT) — solid default for 16 GB of RAM or more." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Mid-size language model (Gemma 4 E4B, Google QAT) — solid default for 16 GB of RAM or more."}}, "de": {"stringUnit": {"state": "translated", "value": "Mittelgroßes Sprachmodell (Gemma 4 E4B, Google QAT) – solider Standard ab 16 GB RAM."}}}},
+    "Large language model (Gemma 4 12B, Google QAT) with the best quality among the downloads — 16 GB of RAM or more." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Large language model (Gemma 4 12B, Google QAT) with the best quality among the downloads — 16 GB of RAM or more."}}, "de": {"stringUnit": {"state": "translated", "value": "Großes Sprachmodell (Gemma 4 12B, Google QAT) mit der besten Qualität unter den Downloads – ab 16 GB RAM."}}}},
+    "Previous Gemma 4 file. Keeps working; the Google QAT version is smaller and faster." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Previous Gemma 4 file. Keeps working; the Google QAT version is smaller and faster."}}, "de": {"stringUnit": {"state": "translated", "value": "Bisherige Gemma-4-Datei. Funktioniert weiter; die Google-QAT-Version ist kleiner und schneller."}}}},
+    "Gemma 4 26B A4B (Mixture-of-Experts), needs 32 GB of RAM. Gemma 4 12B comes close at 40 % of the size." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Gemma 4 26B A4B (Mixture-of-Experts), needs 32 GB of RAM. Gemma 4 12B comes close at 40 % of the size."}}, "de": {"stringUnit": {"state": "translated", "value": "Gemma 4 26B A4B (Mixture-of-Experts), braucht 32 GB RAM. Gemma 4 12B kommt nah heran, bei 40 % der Größe."}}}},
+    "Successor: %@" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Successor: %@"}}, "de": {"stringUnit": {"state": "translated", "value": "Nachfolger: %@"}}}},
     "Your current transcription model %@ is deprecated." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Your current transcription model %@ is deprecated."}}, "de": {"stringUnit": {"state": "translated", "value": "Dein aktuelles Transkriptionsmodell %@ ist veraltet."}}}},
     "Fewer recognition errors in German and English" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Fewer recognition errors in German and English"}}, "de": {"stringUnit": {"state": "translated", "value": "Weniger Erkennungsfehler auf Deutsch und Englisch"}}}},
     "Same speed, same 25 languages" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Same speed, same 25 languages"}}, "de": {"stringUnit": {"state": "translated", "value": "Gleiche Geschwindigkeit, dieselben 25 Sprachen"}}}},
@@ -796,11 +802,6 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Groß" } }
       }
     },
-    "Large language model (Gemma 4 26B A4B, Mixture-of-Experts) with best quality — needs 32 GB of RAM or more." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Großes Sprachmodell (Gemma 4 26B A4B, Mixture-of-Experts) mit bester Qualität, braucht 32 GB RAM oder mehr." } }
-      }
-    },
     "Larger model with higher accuracy and more CPU/RAM demand." : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Größeres Modell mit höherer Genauigkeit und mehr CPU-/RAM-Bedarf." } }
@@ -904,11 +905,6 @@
     "Microphone" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Mikrofon" } }
-      }
-    },
-    "Mid-size language model (Gemma 4 E4B) — solid default for 16 GB of RAM or more." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mittleres Sprachmodell (Gemma 4 E4B) als guter Standard für 16 GB RAM und mehr." } }
       }
     },
     "Mode" : {
@@ -1274,11 +1270,6 @@
     "Small" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Klein" } }
-      }
-    },
-    "Small language model (Gemma 4 E2B). Fast and lean, runs on 8 GB of RAM." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Kleines Sprachmodell (Gemma 4 E2B). Schnell und sparsam, läuft auch auf 8 GB RAM." } }
       }
     },
     "Small local model for quick response on weaker machines." : {

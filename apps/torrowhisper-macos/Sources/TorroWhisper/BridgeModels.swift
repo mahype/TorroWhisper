@@ -265,6 +265,12 @@ enum TranscriptionBackend: String, Codable, CaseIterable, Identifiable {
 }
 
 enum LlmPreset: String, Codable, CaseIterable, Identifiable {
+    // Google's quantization-aware-trained Gemma 4 files (#62).
+    case smallQat = "small_qat"
+    case mediumQat = "medium_qat"
+    case largeQat = "large_qat"
+    // The files up to 0.10, deprecated but kept usable; raw values unchanged
+    // so existing settings keep resolving to them.
     case small
     case medium
     case large
@@ -273,9 +279,9 @@ enum LlmPreset: String, Codable, CaseIterable, Identifiable {
 
     func label(locale: Locale) -> String {
         switch self {
-        case .small: return L("Small", locale: locale)
-        case .medium: return L("Medium", locale: locale)
-        case .large: return L("Large", locale: locale)
+        case .smallQat, .small: return L("Small", locale: locale)
+        case .mediumQat, .medium: return L("Medium", locale: locale)
+        case .largeQat, .large: return L("Large", locale: locale)
         }
     }
 
@@ -283,6 +289,9 @@ enum LlmPreset: String, Codable, CaseIterable, Identifiable {
     /// it from `LlmPreset::label()`, which is capitalized — MUST match exactly.
     var stableToken: String {
         switch self {
+        case .smallQat: return "SmallQat"
+        case .mediumQat: return "MediumQat"
+        case .largeQat: return "LargeQat"
         case .small: return "Small"
         case .medium: return "Medium"
         case .large: return "Large"
@@ -291,25 +300,35 @@ enum LlmPreset: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .small: return "Gemma 4 E2B (3.5 GB)"
-        case .medium: return "Gemma 4 E4B (5.4 GB)"
+        case .smallQat: return "Gemma 4 E2B (3.3 GB)"
+        case .mediumQat: return "Gemma 4 E4B (5.2 GB)"
+        case .largeQat: return "Gemma 4 12B (7.0 GB)"
+        case .small: return "Gemma 4 E2B Q4_K_M (3.5 GB)"
+        case .medium: return "Gemma 4 E4B Q4_K_M (5.4 GB)"
         case .large: return "Gemma 4 26B (17 GB)"
         }
     }
 
     func description(locale: Locale) -> String {
         switch self {
-        case .small:
-            return L("Small language model (Gemma 4 E2B). Fast and lean, runs on 8 GB of RAM.", locale: locale)
-        case .medium:
-            return L("Mid-size language model (Gemma 4 E4B) — solid default for 16 GB of RAM or more.", locale: locale)
+        case .smallQat:
+            return L("Small language model (Gemma 4 E2B, Google QAT). Fast and lean, runs on 8 GB of RAM.", locale: locale)
+        case .mediumQat:
+            return L("Mid-size language model (Gemma 4 E4B, Google QAT) — solid default for 16 GB of RAM or more.", locale: locale)
+        case .largeQat:
+            return L("Large language model (Gemma 4 12B, Google QAT) with the best quality among the downloads — 16 GB of RAM or more.", locale: locale)
+        case .small, .medium:
+            return L("Previous Gemma 4 file. Keeps working; the Google QAT version is smaller and faster.", locale: locale)
         case .large:
-            return L("Large language model (Gemma 4 26B A4B, Mixture-of-Experts) with best quality — needs 32 GB of RAM or more.", locale: locale)
+            return L("Gemma 4 26B A4B (Mixture-of-Experts), needs 32 GB of RAM. Gemma 4 12B comes close at 40 % of the size.", locale: locale)
         }
     }
 
     var approxSizeLabel: String {
         switch self {
+        case .smallQat: return "ca. 3.3 GB"
+        case .mediumQat: return "ca. 5.2 GB"
+        case .largeQat: return "ca. 7.0 GB"
         case .small: return "ca. 3.5 GB"
         case .medium: return "ca. 5.4 GB"
         case .large: return "ca. 17 GB"
@@ -318,9 +337,12 @@ enum LlmPreset: String, Codable, CaseIterable, Identifiable {
 
     var downloadSizeBytes: UInt64 {
         switch self {
-        case .small: return 3_462_677_760
-        case .medium: return 5_405_167_904
-        case .large: return 17_035_037_632
+        case .smallQat: return 3_349_516_256
+        case .mediumQat: return 5_154_941_280
+        case .largeQat: return 6_975_879_296
+        case .small: return 3_462_680_032
+        case .medium: return 5_405_170_144
+        case .large: return 17_035_039_872
         }
     }
 }
@@ -1067,7 +1089,7 @@ struct AppSettings: Codable, Equatable {
         parakeetUpgradeOfferDismissed: false,
         localModel: .standard,
         localModelPath: "",
-        localLlm: .medium,
+        localLlm: .mediumQat,
         localLlmPath: "",
         localLlmAutoUnloadSecs: 180,
         activeProvider: .localWhisper,
@@ -1263,6 +1285,7 @@ struct LlmModelStatusDTO: Codable, Identifiable, Equatable {
     var progressBasisPoints: UInt16?
     var expectedSizeBytes: UInt64
     var tier: ModelTier?
+    var successorLabel: String?
 
     var id: String { presetLabel }
 }

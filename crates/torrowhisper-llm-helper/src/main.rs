@@ -269,7 +269,7 @@ fn generate(
 
     let cleaned = match task {
         HelperTask::Chat => sanitize_chat_output(&output),
-        HelperTask::PostProcessing => output.trim().to_owned(),
+        HelperTask::PostProcessing => strip_leading_channels(&output).trim().to_owned(),
     };
     if cleaned.is_empty() {
         return Err("The language model returned no text.".to_owned());
@@ -310,6 +310,20 @@ fn build_gemma_conversation_prompt(system_prompt: &str, user_text: &str) -> Stri
         format!("{system}\n\n{user}")
     };
     format!("<bos><|turn>user\n{turn}<turn|>\n<|turn>model\n")
+}
+
+/// Gemma 4 12B opens every answer with an (empty) thought channel,
+/// `<|channel>thought\n<channel|>`, even with thinking off. For post-processing
+/// only that leading channel framing is removed — the dictated text itself may
+/// contain angle brackets, so no general control-token stripping happens here.
+fn strip_leading_channels(text: &str) -> &str {
+    if !text.trim_start().starts_with("<|channel>") {
+        return text;
+    }
+    match text.rfind("<channel|>") {
+        Some(idx) => &text[idx + "<channel|>".len()..],
+        None => text,
+    }
 }
 
 /// Strips chat-template control tokens that "thinking"/channel models leak into
@@ -366,6 +380,20 @@ fn strip_control_tokens(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn post_processing_drops_the_empty_thought_channel_of_gemma_12b() {
+        assert_eq!(
+            strip_leading_channels("<|channel>thought\n<channel|>Hallo Thomas, wie geht's?"),
+            "Hallo Thomas, wie geht's?"
+        );
+        // Ordinary answers and angle brackets in the text stay untouched.
+        assert_eq!(strip_leading_channels("Hallo Welt."), "Hallo Welt.");
+        assert_eq!(
+            strip_leading_channels("Nutze <div> und a <b> c."),
+            "Nutze <div> und a <b> c."
+        );
+    }
 
     #[test]
     fn gemma_prompt_labels_instruction_and_text() {
