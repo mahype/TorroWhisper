@@ -9,6 +9,13 @@
 
 mod anthropic;
 mod apple_foundation;
+// Only Apple's on-device model needs chunking so far; other targets compile
+// it for the unit tests alone.
+#[cfg_attr(
+    not(all(target_os = "macos", target_arch = "aarch64")),
+    allow(dead_code)
+)]
+mod context_budget;
 mod gemini;
 pub(crate) mod keychain;
 mod lm_studio;

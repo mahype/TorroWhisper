@@ -6,6 +6,9 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Fixed
+- **Long dictations no longer fail with Apple Foundation Models** (#63) — Apple's on-device model has a small context window (4096 tokens on current macOS), and a long dictation plus the mode prompt and the answer could exceed it, so post-processing failed outright. TorroWhisper now counts tokens before the request and, when needed, splits the transcript at sentence boundaries into parts that fit, edits each part in its own session, and joins them with the original spacing and paragraphs. A single sentence too long for the window is kept unedited. On macOS versions that do not report a context size, the previous behavior applies. Updates `foundation-models` to 0.12.
+
 ## [0.10.0] — 2026-09-28
 
 ### Changed
