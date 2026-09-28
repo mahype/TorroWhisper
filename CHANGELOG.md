@@ -6,6 +6,15 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-09-28
+
+### Changed
+- **A compact recording indicator at the bottom of the screen** — the floating bubble at the top (a material tile with the waveform, the active mode, the model and a stop button) is replaced by a minimal indicator centered at the bottom: a red Torro circle with the horns next to a slim black bar that carries the waveform in your chosen style. Everything around it is transparent. Clicking the red circle stops the dictation; Escape still cancels. After recording, the bar shows pulsing dots while transcription and post-processing run, a check mark when done, and a short message for errors or a model that is still loading. The large and high-contrast indicator settings apply as before. Live transcription keeps the larger bubble at the top, since it needs room to read.
+- **The post-processing editor now shows the whole mode at once** (#49) — the small scrolling form nested its own scrollbar around the prompt editor and hid model, dictionary, and pipeline settings below the fold. The editor is now a larger two-column sheet with the prompt on the left and all supporting settings visible on the right; only an actually overlong prompt scrolls. Edits stay in a local draft until *Save*, while *Cancel* or Escape discard every change, including a newly started mode that previously left an unwanted saved entry behind.
+
+### Added
+- **The installed version under the sidebar wordmark** — the settings sidebar now shows "Version x.y.z" beneath the TorroWhisper wordmark, exactly like TorroMail.
+
 ### Fixed
 - **Duplicate app instances** (#52) — a per-user process lock now gates startup before SwiftUI, hotkeys or the dictation runtime initialize. Additional launches exit without affecting the running app, preventing duplicate menu-bar icons and dictation. App copies and SPM builds share the lock; macOS releases it even after a crash.
 

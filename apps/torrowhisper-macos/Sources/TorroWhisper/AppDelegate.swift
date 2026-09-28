@@ -471,7 +471,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard let screenFrame = NSScreen.main?.visibleFrame else { return }
         let margin: CGFloat = 16
         let size = window.frame.size
-        let topPadding: CGFloat = recordingIndicatorWindow?.isVisible == true ? 120 : 0
+        let indicatorAtTop = recordingIndicatorWindow?.isVisible == true && isLiveTranscriptIndicator
+        let topPadding: CGFloat = indicatorAtTop ? 120 : 0
         let origin = NSPoint(
             x: screenFrame.midX - size.width / 2,
             y: screenFrame.maxY - size.height - margin - topPadding
@@ -484,6 +485,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         settingsWindow?.title = L("TorroWhisper Settings", locale: locale)
         onboardingWindow?.title = L("TorroWhisper Setup", locale: locale)
         feedbackWindow?.title = L("Send feedback", locale: locale)
+    }
+
+    /// Live transcription (#41) shows the larger bubble at the top; otherwise
+    /// the compact indicator sits at the bottom.
+    private var isLiveTranscriptIndicator: Bool {
+        model.settings.liveTranscriptionEnabled && model.settings.transcriptionBackend == .whisper
     }
 
     private func updateRecordingIndicatorVisibility() {
@@ -532,8 +539,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
         installEscapeMonitor()
 
-        let liveTranscriptEnabled = model.settings.liveTranscriptionEnabled
-            && model.settings.transcriptionBackend == .whisper
+        let liveTranscriptEnabled = isLiveTranscriptIndicator
 
         // The 30 Hz level feed only drives the waveform mode; in live-text
         // mode nothing renders it, so don't poll for it.
@@ -662,7 +668,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         panel.level = .floating
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = true
+        // The compact layout draws its own soft shadows around the circle and
+        // the bar; a window shadow would outline the transparent panel.
+        panel.hasShadow = showsLiveTranscript
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
@@ -711,9 +719,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let screenFrame = screen.visibleFrame
         let margin: CGFloat = 16
         let size = window.frame.size
+        // The compact indicator sits at the bottom of the screen; the
+        // live-transcript bubble keeps its place at the top.
+        let atBottom = !isLiveTranscriptIndicator
         let origin = NSPoint(
             x: screenFrame.midX - size.width / 2,
-            y: screenFrame.maxY - size.height - margin
+            y: atBottom ? screenFrame.minY + margin : screenFrame.maxY - size.height - margin
         )
         window.setFrameOrigin(origin)
     }
