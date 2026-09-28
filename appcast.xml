@@ -6,6 +6,24 @@
     <description>Official update feed for Open Whisper.</description>
     <language>en</language>
     <item>
+      <title>Version 0.10.0</title>
+      <pubDate>Mon, 28 Sep 2026 13:26:28 +0000</pubDate>
+      <sparkle:shortVersionString>0.10.0</sparkle:shortVersionString>
+      <sparkle:version>0.10.0</sparkle:version>
+      <description>&lt;h3&gt;What's Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;fix(macos): Mehrfachstarts und doppelte Diktate verhindern by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/53"&gt;https://github.com/mahype/TorroWhisper/pull/53&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;fix(macos): Nachbearbeitungseditor mit echtem Abbruch überarbeiten by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/54"&gt;https://github.com/mahype/TorroWhisper/pull/54&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;build(deps): bump the rust-deps group across 1 directory with 9 updates by @dependabot[bot] in &lt;a href="https://github.com/mahype/TorroWhisper/pull/55"&gt;https://github.com/mahype/TorroWhisper/pull/55&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;ci(codeql): CodeQL nicht mehr bei jedem Pull Request ausführen by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/58"&gt;https://github.com/mahype/TorroWhisper/pull/58&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;docs(readme): Status-Badges und Screenshots der App by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/59"&gt;https://github.com/mahype/TorroWhisper/pull/59&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;feat: kompakte Aufnahmeanzeige, Versionsnummer in der Seitenleiste – Release 0.10.0 by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/60"&gt;https://github.com/mahype/TorroWhisper/pull/60&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a href="https://github.com/mahype/TorroWhisper/compare/v0.9.1...v0.10.0"&gt;https://github.com/mahype/TorroWhisper/compare/v0.9.1...v0.10.0&lt;/a&gt;&lt;/p&gt;</description>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/mahype/TorroWhisper/releases/download/v0.10.0/TorroWhisper-0.10.0.dmg" sparkle:edSignature="X0sb9Dct+nF34ax9MuhLMFkOu4uMGvmoaVaCyfytTbasQIVM6KYFBJ4GxkgaSfdQLLewiyDJM6Oni/NoQaQECQ==" length="29929632" type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 0.9.1</title>
       <pubDate>Thu, 24 Sep 2026 07:39:57 +0000</pubDate>
       <sparkle:shortVersionString>0.9.1</sparkle:shortVersionString>
