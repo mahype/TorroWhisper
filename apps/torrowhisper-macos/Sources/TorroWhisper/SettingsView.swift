@@ -33,11 +33,18 @@ struct SettingsView: View {
                 // theme-aware, without its own ground, centered with equal margins
                 // left and right and a touch larger than a footnote: the quiet
                 // signature. The red is reserved for the hero. Same recipe and
-                // measurements as TorroMail's `SidebarBrandFooter`; no opacity of
-                // its own — the `.still` style already carries the quiet tone.
-                TorroWordmark(product: "WHISPER", capHeight: 11, style: .still)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                // measurements as TorroMail's `SidebarBrandFooter`, including the
+                // installed version underneath; no opacity of its own — the
+                // `.still` style already carries the quiet tone.
+                VStack(spacing: 4) {
+                    TorroWordmark(product: "WHISPER", capHeight: 11, style: .still)
+                    Text(verbatim: "\(L("Version", locale: locale)) \(appVersionString)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
             }
             // The sidebar is an opaque surface, not translucent material
             // (design guide §Fenster): the sidebar material blends against what
