@@ -539,6 +539,23 @@ final class AppModel: ObservableObject {
 
     func transcriptionModelPickerLabel(_ preset: ModelPreset) -> String {
         "\(TranscriptionBackend.whisper.displayName) – \(whisperPresetPickerLabel(preset))"
+            + (isRecommendedTranscriptionPreset(preset) ? recommendedSuffix : "")
+    }
+
+    /// Parakeet Ultra is the recommended transcription model wherever it runs
+    /// (Apple Silicon); elsewhere (Intel) Whisper Large v3 Turbo Q5_0 is — the
+    /// best balance of accuracy, size and speed among the Whisper presets.
+    func isRecommendedTranscriptionPreset(_ preset: ModelPreset) -> Bool {
+        !parakeetStatus.isSupported && preset == .largeV3TurboQ5_0
+    }
+
+    /// Parakeet's name, marked as recommended where it can run.
+    var parakeetPickerLabel: String {
+        parakeetStatus.displayLabel + (parakeetStatus.isSupported ? recommendedSuffix : "")
+    }
+
+    private var recommendedSuffix: String {
+        " (\(L("recommended", locale: settings.effectiveLocale)))"
     }
 
     var postProcessingChoiceBinding: Binding<PostProcessingChoice> {

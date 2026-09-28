@@ -1,6 +1,7 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "recommended" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "recommended"}}, "de": {"stringUnit": {"state": "translated", "value": "empfohlen"}}}},
     "Hold to dictate" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Hold to dictate"}}, "de": {"stringUnit": {"state": "translated", "value": "Gedrückt halten"}}}},
     "Press to start or stop" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Press to start or stop"}}, "de": {"stringUnit": {"state": "translated", "value": "Ein-/Ausschalten"}}}},
     "Hold the shortcut while speaking. Releasing it stops the recording." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Hold the shortcut while speaking. Releasing it stops the recording."}}, "de": {"stringUnit": {"state": "translated", "value": "Halte die Tastenkombination beim Sprechen gedrückt. Beim Loslassen wird die Aufnahme beendet."}}}},

@@ -600,7 +600,7 @@ struct SettingsView: View {
             Picker(selection: model.transcriptionModelBinding()) {
                 if model.parakeetStatus.isSupported
                     || model.settings.transcriptionBackend == .parakeet {
-                    Text(model.parakeetStatus.displayLabel)
+                    Text(model.parakeetPickerLabel)
                         .tag("parakeet")
                 }
                 ForEach(model.availableModelPresets) { preset in

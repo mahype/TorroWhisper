@@ -280,7 +280,7 @@ struct LanguageModelsManagerSheet: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(model.parakeetStatus.displayLabel)
+                        Text(model.parakeetPickerLabel)
                             .font(.body.weight(.medium))
                         if model.settings.transcriptionBackend == .parakeet {
                             TorroStatusChip(text: L("Active", locale: locale), color: .green)
@@ -466,12 +466,17 @@ struct LanguageModelsManagerSheet: View {
         .accessibilityLabel(L("Available everywhere", locale: locale))
     }
 
+    private func whisperTileTitle(_ preset: ModelPreset) -> String {
+        guard model.isRecommendedTranscriptionPreset(preset) else { return preset.displayName }
+        return "\(preset.displayName) (\(L("recommended", locale: locale)))"
+    }
+
     @ViewBuilder
     private func whisperTile(preset: ModelPreset, status: ModelStatusDTO?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(preset.displayName)
+                    Text(whisperTileTitle(preset))
                         .font(.body.weight(.medium))
                     Text(preset.description(locale: locale))
                         .font(.caption)
