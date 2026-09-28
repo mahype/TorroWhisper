@@ -1,6 +1,20 @@
 # TorroWhisper
 
+[![CI](https://img.shields.io/github/actions/workflow/status/mahype/TorroWhisper/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white)](https://github.com/mahype/TorroWhisper/actions/workflows/ci.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/mahype/TorroWhisper/codeql.yml?branch=main&label=CodeQL&logo=github)](https://github.com/mahype/TorroWhisper/actions/workflows/codeql.yml)
+[![Release build](https://img.shields.io/github/actions/workflow/status/mahype/TorroWhisper/release.yml?label=release%20build&logo=githubactions&logoColor=white)](https://github.com/mahype/TorroWhisper/actions/workflows/release.yml)
+[![Release](https://img.shields.io/github/v/release/mahype/TorroWhisper?sort=semver&color=D50C0C)](https://github.com/mahype/TorroWhisper/releases/latest)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%2014%2B%20%7C%20Apple%20Silicon%20%26%20Intel-lightgrey?logo=apple)](#install-users)
+[![Privacy](https://img.shields.io/badge/privacy-100%25%20local-2E7D32)](#privacy)
+[![Rust](https://img.shields.io/badge/Rust-1.88%2B-000000?logo=rust)](Cargo.toml)
+[![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)](apps/torrowhisper-macos/Package.swift)
+
 **Dictate anywhere on your Mac — 100% local.**
+
+<p align="center">
+  <img src="docs/screenshots/overview.png" alt="TorroWhisper settings overview: the red Torro header, the dictation status with a Start dictation button, and at-a-glance cards for microphone, accessibility, the NVIDIA Parakeet TDT v3 model, and the global hotkey" width="820">
+</p>
 
 Press a hotkey, speak, and your words land in whatever app has focus: mail, chat, your editor, the browser. On Apple Silicon, transcription uses NVIDIA Parakeet TDT v3 through Core ML and the Apple Neural Engine; Intel Macs use [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Nothing leaves your Mac unless you deliberately configure a remote provider.
 
@@ -79,6 +93,29 @@ Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md
 ### Privacy
 
 - Everything runs **locally by default** — transcription, post-processing, and settings all stay on-device. Remote providers are strictly opt-in.
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/recording.png" alt="Recording settings: microphone with automatic fallback, default language, Hold to dictate or Press to start or stop, output volume while recording, and the global hotkey"></td>
+    <td width="50%"><img src="docs/screenshots/language-models.png" alt="Language model settings: NVIDIA Parakeet TDT v3 for transcription with the default language, Apple Foundation Models for post-processing, and cloud API keys"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Recording</b> — microphone, trigger mode, and hotkey</td>
+    <td align="center"><b>Language models</b> — transcription and post-processing, split by task</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/post-processing.png" alt="Post-processing settings: turn post-processing off or pick one of your profiles, here the active Cleanup profile with Edit and Delete buttons"></td>
+    <td width="50%"><img src="docs/screenshots/mode-editor.png" alt="Post-processing editor: name and prompt on the left; language model, dictionary, and processing steps on the right; Cancel and Save at the bottom"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Post-processing</b> — your cleanup profiles</td>
+    <td align="center"><b>Profile editor</b> — prompt, model, dictionary, and steps at a glance</td>
+  </tr>
+</table>
 
 ---
 
