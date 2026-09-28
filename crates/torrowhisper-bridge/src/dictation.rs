@@ -545,10 +545,9 @@ impl DictationController {
         // The start cue is a readiness promise to the user: ActiveRecording
         // has already waited for the first real input callback. Play it to
         // completion before the Swift host can apply output attenuation, so a
-        // 0% recording volume cannot swallow the confirmation sound.
-        if let Err(err) = play_recording_cue_blocking(RecordingCue::Start) {
-            log::warn!(target: "dictation", "recording start cue failed: {err}");
-        }
+        // 0% recording volume cannot swallow the confirmation sound — but never
+        // let a stuck output device hold the recording (and the indicator) back.
+        play_start_cue_bounded();
         log::info!(
             target: "dictation",
             "recording started via '{used_name}' (vad: {})",
@@ -1956,6 +1955,32 @@ fn now_unix_secs() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// How much longer than the start cue itself recording start waits for it.
+const START_CUE_GRACE: Duration = Duration::from_millis(400);
+
+/// Plays the start cue and waits for it, but at most for the cue's length
+/// plus [`START_CUE_GRACE`]. When the output device does not respond, macOS
+/// blocks the start of the output unit for about five seconds before it
+/// fails; waiting for that delayed every recording start and its indicator by
+/// the same five seconds. The cue then finishes (or fails) in the background.
+fn play_start_cue_bounded() {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        if let Err(err) = play_recording_cue_blocking(RecordingCue::Start) {
+            log::warn!(target: "dictation", "recording start cue failed: {err}");
+        }
+        let _ = tx.send(());
+    });
+    let limit = cue_playback_duration(RecordingCue::Start) + START_CUE_GRACE;
+    if rx.recv_timeout(limit).is_err() {
+        log::warn!(
+            target: "dictation",
+            "recording start cue did not finish within {} ms — audio output is not responding; starting without it",
+            limit.as_millis()
+        );
+    }
 }
 
 fn play_recording_cue(cue: RecordingCue) {
