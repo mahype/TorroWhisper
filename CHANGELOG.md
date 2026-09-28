@@ -6,7 +6,10 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-09-28
+
 ### Changed
+- **Google's official Gemma 4 QAT models for post-processing** (#62) — the downloadable language models are now Google's quantization-aware-trained Q4_0 files: *Gemma 4 E2B* (3.3 GB), *Gemma 4 E4B* (5.2 GB, recommended) and the new *Gemma 4 12B* (7.0 GB) as the large model, replacing the 26B (17 GB) that needed 32 GB of RAM. In a comparison on 20 German and English dictations, E2B QAT punctuated reliably where the previous file sometimes left whole sentences unpunctuated or changed their wording; 12B gives the best results, e.g. formatting a letter with paragraphs and a separate closing. The previous files stay usable, listed as deprecated with their successor, so nobody has to download gigabytes again.
 - **Parakeet Ultra is the recommended transcription model on Apple Silicon** (#61, #67) — moondream's post-training of NVIDIA's Parakeet TDT v3 keeps the same 25 languages, architecture and speed but makes fewer recognition errors (FLEURS word error rate: German 4.13 % → 3.61 %, English 4.25 % → 3.55 %). New installations use it right away (~630 MB). Existing installations keep dictating with v3, now marked as deprecated, without any forced download: after the update TorroWhisper offers the switch once, and Settings keeps offering it. Switching prepares Ultra in the background while dictation continues with v3; once Ultra is ready it takes over and v3 (~460 MB) is deleted. This comes with FluidAudio 0.17.4 (was 0.14.1), which also fixes words lost at chunk seams and at the end of a recording, used through our fork of `fluidaudio-rs` until upstream publishes a release with these changes.
 
 ### Added
@@ -14,6 +17,9 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 - **Experimental Parakeet models** (#67) — *Parakeet Redux* (2-bit, ~220 MB, macOS 15 or later) and *Parakeet TDT v2* (English only) can be tried from the model manager.
 
 ### Fixed
+- **Downloads of the previous Gemma files no longer fail verification** — the expected file sizes were fixed to a first upload the model host later replaced, so new downloads (and some existing files) were rejected as damaged. Downloads are now pinned to a specific repository revision, and files from earlier uploads are accepted.
+- **Gemma 4 12B output no longer starts with control markers** — the model opens each answer with an empty "thought" channel, which is now removed before the text is inserted.
+- **A stuck audio output no longer delays recording by five seconds** (#72) — when the output device does not respond, macOS takes about five seconds to give up starting the start cue; recording and its indicator now wait at most for the cue's own length.
 - **Long dictations no longer fail with Apple Foundation Models** (#63) — Apple's on-device model has a small context window (4096 tokens on current macOS), and a long dictation plus the mode prompt and the answer could exceed it, so post-processing failed outright. TorroWhisper now counts tokens before the request and, when needed, splits the transcript at sentence boundaries into parts that fit, edits each part in its own session, and joins them with the original spacing and paragraphs. A single sentence too long for the window is kept unedited. On macOS versions that do not report a context size, the previous behavior applies. Updates `foundation-models` to 0.12.
 
 ## [0.10.0] — 2026-09-28
