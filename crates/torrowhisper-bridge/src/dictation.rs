@@ -305,12 +305,14 @@ impl DictationController {
         self.model_cache = None;
     }
 
-    pub fn prepare_parakeet(&self) {
-        self.parakeet.prepare();
+    pub fn prepare_parakeet(&self, settings: &AppSettings) {
+        self.parakeet
+            .prepare(crate::parakeet::effective_model(settings));
     }
 
-    pub fn parakeet_status(&self) -> ParakeetModelStatusDto {
-        self.parakeet.status()
+    pub fn parakeet_status(&self, settings: &AppSettings) -> ParakeetModelStatusDto {
+        self.parakeet
+            .status(crate::parakeet::effective_model(settings))
     }
 
     /// True while a background model preload is in flight (#43).
@@ -511,7 +513,7 @@ impl DictationController {
         let model_path = match settings.transcription_backend {
             TranscriptionBackend::Parakeet => {
                 if !self.parakeet.is_ready() {
-                    self.parakeet.prepare();
+                    self.prepare_parakeet(settings);
                     self.mark_blocked_now();
                     return Err(
                         "Recording blocked: Parakeet is still being prepared. Check Settings for its status."

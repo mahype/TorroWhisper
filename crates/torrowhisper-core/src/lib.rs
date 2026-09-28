@@ -160,6 +160,104 @@ impl TranscriptionBackend {
     }
 }
 
+/// How strongly a model is recommended. Settings and the model manager group
+/// their lists by tier, in this order (#67).
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Default,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelTier {
+    /// Our default for this platform.
+    Recommended,
+    /// Released, tested by us, supported long term.
+    #[default]
+    Stable,
+    /// Upstream beta or barely tested by us; may change or go away.
+    Experimental,
+    /// Superseded by a better model; still usable and downloadable.
+    Deprecated,
+}
+
+/// Parakeet models FluidAudio runs on Apple Silicon through Core ML.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ParakeetModel {
+    /// moondream's post-training of v3: same languages and speed, fewer errors.
+    #[default]
+    Ultra,
+    /// 2-bit re-training of v3, about 220 MB; needs macOS 15.
+    Redux,
+    /// English-only predecessor of v3.
+    V2,
+    /// NVIDIA Parakeet TDT v3, the model up to TorroWhisper 0.10.
+    V3,
+}
+
+impl ParakeetModel {
+    pub const ALL: [Self; 4] = [Self::Ultra, Self::Redux, Self::V2, Self::V3];
+
+    pub fn display_label(self) -> &'static str {
+        match self {
+            Self::Ultra => "Parakeet Ultra",
+            Self::Redux => "Parakeet Redux",
+            Self::V2 => "Parakeet TDT v2",
+            Self::V3 => "Parakeet TDT v3",
+        }
+    }
+
+    pub fn tier(self) -> ModelTier {
+        match self {
+            Self::Ultra => ModelTier::Recommended,
+            Self::Redux | Self::V2 => ModelTier::Experimental,
+            Self::V3 => ModelTier::Deprecated,
+        }
+    }
+
+    /// The model that replaces a deprecated one.
+    pub fn successor(self) -> Option<Self> {
+        match self {
+            Self::V3 => Some(Self::Ultra),
+            Self::Ultra | Self::Redux | Self::V2 => None,
+        }
+    }
+
+    /// Directory FluidAudio caches the model in, below
+    /// `~/Library/Application Support/FluidAudio/Models/`.
+    pub fn cache_dir_name(self) -> &'static str {
+        match self {
+            Self::Ultra => "parakeet-ultra",
+            Self::Redux => "parakeet-redux",
+            Self::V2 => "parakeet-tdt-0.6b-v2",
+            Self::V3 => "parakeet-tdt-0.6b-v3",
+        }
+    }
+
+    /// Approximate size on disk, for the UI.
+    pub fn approx_size_bytes(self) -> u64 {
+        match self {
+            Self::Ultra => 630_000_000,
+            Self::Redux => 220_000_000,
+            Self::V2 | Self::V3 => 460_000_000,
+        }
+    }
+
+    /// Oldest macOS major version the model runs on.
+    pub fn min_macos_major(self) -> u32 {
+        match self {
+            Self::Redux => 15,
+            Self::Ultra | Self::V2 | Self::V3 => 14,
+        }
+    }
+
+    /// Which Parakeet model to use when the settings name none. Installations
+    /// from before the choice existed ran v3: they keep it, deprecated but
+    /// working, and are offered the upgrade instead of being forced into a
+    /// download. Everyone else gets the recommended model.
+    pub fn effective(chosen: Option<Self>, v3_installed: bool) -> Self {
+        chosen.unwrap_or(if v3_installed { Self::V3 } else { Self::Ultra })
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
@@ -184,6 +282,17 @@ impl ModelPreset {
         Self::LargeV3Turbo,
         Self::LargeV3,
     ];
+
+    /// Whisper Large v3 Turbo Q5_0 is the recommendation where Parakeet cannot
+    /// run (Intel); on Apple Silicon every Whisper preset is a stable
+    /// alternative to Parakeet.
+    pub fn tier(self, parakeet_supported: bool) -> ModelTier {
+        if !parakeet_supported && self == Self::LargeV3TurboQ5_0 {
+            ModelTier::Recommended
+        } else {
+            ModelTier::Stable
+        }
+    }
 
     pub fn label(self) -> &'static str {
         match self {
@@ -351,6 +460,12 @@ impl LlmPreset {
             Self::Medium => 8_192,
             Self::Large => 20_480,
         }
+    }
+
+    /// All Gemma presets are stable until the switch to Google's QAT files
+    /// (#62) marks the bartowski Q4_K_M files and 26B-A4B as deprecated.
+    pub fn tier(self, _parakeet_supported: bool) -> ModelTier {
+        ModelTier::Stable
     }
 
     pub fn context_size(self) -> u32 {
@@ -922,6 +1037,13 @@ pub struct AppSettings {
     /// Speech-to-text engine. Parakeet is the Apple-Silicon default; Whisper
     /// remains available as the portable fallback and for additional languages.
     pub transcription_backend: TranscriptionBackend,
+    /// Parakeet model chosen by the user. `None` on installations from before
+    /// the choice existed; see [`ParakeetModel::effective`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parakeet_model: Option<ParakeetModel>,
+    /// The one-time offer to upgrade from a deprecated transcription model
+    /// was answered with "Later".
+    pub parakeet_upgrade_offer_dismissed: bool,
     pub local_model: ModelPreset,
     pub local_model_path: String,
     pub local_llm: LlmPreset,
@@ -1263,6 +1385,8 @@ impl Default for AppSettings {
             save_transcripts: false,
             save_directory: String::new(),
             transcription_backend: TranscriptionBackend::default(),
+            parakeet_model: None,
+            parakeet_upgrade_offer_dismissed: false,
             local_model: ModelPreset::default(),
             local_model_path: String::new(),
             local_llm: LlmPreset::default(),
@@ -1313,6 +1437,22 @@ pub struct ModelStatusDto {
     pub is_corrupt: bool,
     pub progress_basis_points: Option<u16>,
     pub expected_size_bytes: u64,
+    /// Grouping in the model lists (#67).
+    #[serde(default)]
+    pub tier: ModelTier,
+}
+
+/// One Parakeet model as the model lists show it (#67).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ParakeetModelInfoDto {
+    pub model: ParakeetModel,
+    pub display_label: String,
+    pub tier: ModelTier,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub successor: Option<ParakeetModel>,
+    pub approx_size_bytes: u64,
+    pub min_macos_major: u32,
+    pub is_installed: bool,
 }
 
 /// Runtime/download state for the system-default Parakeet/Core ML engine.
@@ -1320,7 +1460,23 @@ pub struct ModelStatusDto {
 /// file path and no exact byte-progress value to expose.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ParakeetModelStatusDto {
+    /// Label of the loaded model, or of the one being prepared.
     pub display_label: String,
+    /// The model currently used for transcription, once one is loaded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_model: Option<ParakeetModel>,
+    /// A model being downloaded and prepared; transcription keeps using
+    /// `active_model` until it is ready.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preparing_model: Option<ParakeetModel>,
+    /// The model the settings resolve to ([`ParakeetModel::effective`]).
+    pub selected_model: ParakeetModel,
+    /// Models whose files are in FluidAudio's cache.
+    #[serde(default)]
+    pub installed_models: Vec<ParakeetModel>,
+    /// Every Parakeet model with its tier and metadata, for the model lists.
+    #[serde(default)]
+    pub models: Vec<ParakeetModelInfoDto>,
     pub summary: String,
     pub is_supported: bool,
     pub is_ready: bool,
@@ -1354,6 +1510,9 @@ pub struct LlmModelStatusDto {
     pub is_loaded: bool,
     pub progress_basis_points: Option<u16>,
     pub expected_size_bytes: u64,
+    /// Grouping in the model lists (#67).
+    #[serde(default)]
+    pub tier: ModelTier,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -1601,6 +1760,48 @@ mod tests {
                 .expect("configured settings parse");
         configured.normalize();
         assert_eq!(configured.recording_output_volume_percent, 100);
+    }
+
+    #[test]
+    fn parakeet_keeps_v3_for_old_installations_and_recommends_ultra_otherwise() {
+        // Installed before the choice existed, v3 on disk: keep working with v3.
+        assert_eq!(ParakeetModel::effective(None, true), ParakeetModel::V3);
+        // Fresh installation: the recommended model.
+        assert_eq!(ParakeetModel::effective(None, false), ParakeetModel::Ultra);
+        // An explicit choice always wins, even with v3 still on disk.
+        assert_eq!(
+            ParakeetModel::effective(Some(ParakeetModel::Ultra), true),
+            ParakeetModel::Ultra
+        );
+        assert_eq!(
+            ParakeetModel::effective(Some(ParakeetModel::V3), false),
+            ParakeetModel::V3
+        );
+    }
+
+    #[test]
+    fn model_tiers_match_the_agreed_classification() {
+        assert_eq!(ParakeetModel::Ultra.tier(), ModelTier::Recommended);
+        assert_eq!(ParakeetModel::Redux.tier(), ModelTier::Experimental);
+        assert_eq!(ParakeetModel::V2.tier(), ModelTier::Experimental);
+        assert_eq!(ParakeetModel::V3.tier(), ModelTier::Deprecated);
+        assert_eq!(ParakeetModel::V3.successor(), Some(ParakeetModel::Ultra));
+        assert_eq!(
+            ModelPreset::LargeV3TurboQ5_0.tier(false),
+            ModelTier::Recommended
+        );
+        assert_eq!(ModelPreset::LargeV3TurboQ5_0.tier(true), ModelTier::Stable);
+        assert!(ModelTier::Recommended < ModelTier::Deprecated);
+    }
+
+    #[test]
+    fn legacy_settings_have_no_parakeet_choice() {
+        let legacy: AppSettings = serde_json::from_str("{}").expect("legacy settings parse");
+        assert_eq!(legacy.parakeet_model, None);
+        assert!(!legacy.parakeet_upgrade_offer_dismissed);
+        let chosen: AppSettings = serde_json::from_str(r#"{"parakeet_model":"ultra"}"#)
+            .expect("configured settings parse");
+        assert_eq!(chosen.parakeet_model, Some(ParakeetModel::Ultra));
     }
 
     #[test]
