@@ -74,12 +74,24 @@ impl ParakeetRuntime {
             if state.active_model() == Some(target) || state.preparing == Some(target) {
                 return;
             }
+            // Nothing loaded yet and the target still has to be downloaded,
+            // while the previous v3 is on disk (e.g. the app quit during an
+            // upgrade): serve dictation from v3 until the target is ready.
+            let installed = installed_models();
+            let bridge = (state.active.is_none()
+                && target != ParakeetModel::V3
+                && !installed.contains(&target)
+                && installed.contains(&ParakeetModel::V3))
+            .then_some(ParakeetModel::V3);
             state.preparing = Some(target);
             state.error = None;
             drop(state);
 
             let shared = self.state.clone();
             std::thread::spawn(move || {
+                if let Some(bridge) = bridge {
+                    load_bridge_model(&shared, bridge, target);
+                }
                 log::info!(
                     target: "models",
                     "preparing {} (download on first run)",
@@ -219,6 +231,33 @@ impl ParakeetRuntime {
             let _ = samples_16khz;
             Err("Parakeet requires an Apple-Silicon Mac.".to_owned())
         }
+    }
+}
+
+/// Loads an installed model to transcribe with while `target` downloads.
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+fn load_bridge_model(shared: &Arc<Mutex<State>>, bridge: ParakeetModel, target: ParakeetModel) {
+    let loaded = Engine::new()
+        .ok()
+        .filter(|engine| engine.init_asr_with_version(fluid_version(bridge)).is_ok());
+    let mut state = shared.lock().unwrap_or_else(|p| p.into_inner());
+    match loaded {
+        Some(engine) if state.preparing == Some(target) && state.active.is_none() => {
+            log::info!(
+                target: "models",
+                "using {} while {} is prepared",
+                bridge.display_label(),
+                target.display_label()
+            );
+            state.active = Some((bridge, Arc::new(engine)));
+        }
+        Some(_) => {}
+        None => log::warn!(
+            target: "models",
+            "could not load {} while {} is prepared",
+            bridge.display_label(),
+            target.display_label()
+        ),
     }
 }
 

@@ -1001,6 +1001,9 @@ struct AppSettings: Codable, Equatable {
     var saveTranscripts: Bool
     var saveDirectory: String
     var transcriptionBackend: TranscriptionBackend
+    /// Nil on installations from before the choice existed (#67).
+    var parakeetModel: ParakeetModel?
+    var parakeetUpgradeOfferDismissed: Bool
     var localModel: ModelPreset
     var localModelPath: String
     var localLlm: LlmPreset
@@ -1060,6 +1063,8 @@ struct AppSettings: Codable, Equatable {
         saveTranscripts: false,
         saveDirectory: "",
         transcriptionBackend: .parakeet,
+        parakeetModel: nil,
+        parakeetUpgradeOfferDismissed: false,
         localModel: .standard,
         localModelPath: "",
         localLlm: .medium,
@@ -1126,6 +1131,58 @@ struct DeviceDTO: Codable, Identifiable {
     var id: String { name }
 }
 
+/// How strongly a model is recommended; the model lists group by it (#67).
+/// The classification itself comes from the bridge.
+enum ModelTier: String, Codable, CaseIterable, Identifiable, Comparable {
+    case recommended
+    case stable
+    case experimental
+    case deprecated
+
+    var id: String { rawValue }
+
+    func title(locale: Locale) -> String {
+        switch self {
+        case .recommended: return L("Recommended", locale: locale)
+        case .stable: return L("Stable", locale: locale)
+        case .experimental: return L("Experimental", locale: locale)
+        case .deprecated: return L("Deprecated", locale: locale)
+        }
+    }
+
+    static func < (lhs: ModelTier, rhs: ModelTier) -> Bool {
+        allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)!
+    }
+}
+
+/// Parakeet models FluidAudio runs on Apple Silicon.
+enum ParakeetModel: String, Codable, CaseIterable, Identifiable {
+    case ultra
+    case redux
+    case v2
+    case v3
+
+    var id: String { rawValue }
+}
+
+/// One Parakeet model as the model lists show it.
+struct ParakeetModelInfoDTO: Codable, Identifiable, Equatable {
+    var model: ParakeetModel
+    var displayLabel: String
+    var tier: ModelTier
+    var successor: ParakeetModel?
+    var approxSizeBytes: UInt64
+    var minMacosMajor: UInt32
+    var isInstalled: Bool
+
+    var id: String { model.rawValue }
+
+    /// False where the running macOS is too old for the model.
+    var isSupportedOnThisMac: Bool {
+        ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= Int(minMacosMajor)
+    }
+}
+
 struct ModelStatusDTO: Codable, Identifiable, Equatable {
     var presetLabel: String
     var backendModelName: String
@@ -1136,6 +1193,7 @@ struct ModelStatusDTO: Codable, Identifiable, Equatable {
     var isCorrupt: Bool
     var progressBasisPoints: UInt16?
     var expectedSizeBytes: UInt64
+    var tier: ModelTier?
 
     var id: String { backendModelName }
 
@@ -1154,6 +1212,11 @@ struct ModelStatusDTO: Codable, Identifiable, Equatable {
 
 struct ParakeetModelStatusDTO: Codable, Equatable {
     var displayLabel: String
+    var activeModel: ParakeetModel?
+    var preparingModel: ParakeetModel?
+    var selectedModel: ParakeetModel?
+    var installedModels: [ParakeetModel]?
+    var models: [ParakeetModelInfoDTO]?
     var summary: String
     var isSupported: Bool
     var isReady: Bool
@@ -1163,6 +1226,11 @@ struct ParakeetModelStatusDTO: Codable, Equatable {
 
     static let empty = ParakeetModelStatusDTO(
         displayLabel: "Parakeet Ultra",
+        activeModel: nil,
+        preparingModel: nil,
+        selectedModel: nil,
+        installedModels: nil,
+        models: nil,
         summary: "Preparing model status…",
         isSupported: true,
         isReady: false,
@@ -1194,6 +1262,7 @@ struct LlmModelStatusDTO: Codable, Identifiable, Equatable {
     var isLoaded: Bool
     var progressBasisPoints: UInt16?
     var expectedSizeBytes: UInt64
+    var tier: ModelTier?
 
     var id: String { presetLabel }
 }
