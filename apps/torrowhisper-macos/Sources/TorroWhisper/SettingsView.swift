@@ -597,18 +597,52 @@ struct SettingsView: View {
     @ViewBuilder
     private var languageModelsContent: some View {
         Section {
+            // Grouped by tier (#67): a header per tier, the models indented
+            // below it. Menus render section headers but no indentation of
+            // their own, hence the em-space prefix.
             Picker(selection: model.transcriptionModelBinding()) {
-                if model.parakeetStatus.isSupported
-                    || model.settings.transcriptionBackend == .parakeet {
-                    Text(model.parakeetStatus.displayLabel)
-                        .tag("parakeet")
-                }
-                ForEach(model.availableModelPresets) { preset in
-                    Text(model.transcriptionModelPickerLabel(preset))
-                        .tag("whisper:\(preset.rawValue)")
+                ForEach(model.transcriptionModelGroups, id: \.tier) { group in
+                    Section(group.tier.title(locale: locale)) {
+                        ForEach(group.options) { option in
+                            Text("\u{2003}\(option.label)")
+                                .tag(option.tag)
+                                .disabled(!option.isEnabled)
+                        }
+                    }
                 }
             } label: {
                 Text("Transcription model", bundle: .module)
+            }
+
+            if let preparing = model.parakeetStatus.preparingModel,
+               model.parakeetStatus.isReady,
+               let info = model.parakeetInfo(preparing) {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(
+                        String(
+                            format: L("Preparing %@ … you can keep dictating in the meantime.", locale: locale),
+                            info.displayLabel
+                        )
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
+            } else if let target = model.parakeetUpgradeTarget {
+                LabeledContent {
+                    Button {
+                        model.upgradeParakeet()
+                    } label: {
+                        Text(String(format: L("Switch to %@", locale: locale), target.displayLabel))
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(format: L("%@ is available", locale: locale), target.displayLabel))
+                        Text("Fewer recognition errors at the same speed. The deprecated model is removed afterwards.", bundle: .module)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             // The default language sits with the transcription model, not in a

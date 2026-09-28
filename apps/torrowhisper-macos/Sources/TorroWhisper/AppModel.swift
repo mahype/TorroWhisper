@@ -179,7 +179,7 @@ final class AppModel: ObservableObject {
 
     var selectedTranscriptionSummaryText: String {
         if settings.transcriptionBackend == .parakeet {
-            return "\(L(parakeetStatus.summary, locale: settings.effectiveLocale)) – ca. 600 MB"
+            return "\(L(parakeetStatus.summary, locale: settings.effectiveLocale)) – ca. 630 MB"
         }
         let preset = settings.localModel
         let locale = settings.effectiveLocale
@@ -515,13 +515,22 @@ final class AppModel: ObservableObject {
             get: {
                 switch self.settings.transcriptionBackend {
                 case .parakeet:
-                    return "parakeet"
+                    return "parakeet:\(self.effectiveParakeetModel.rawValue)"
                 case .whisper:
                     return "whisper:\(self.settings.localModel.rawValue)"
                 }
             },
             set: { selection in
-                if selection == "parakeet" {
+                if selection.hasPrefix("parakeet:"),
+                   let parakeet = ParakeetModel(rawValue: String(selection.dropFirst("parakeet:".count))) {
+                    // Menus do not always honour `.disabled`; never select a
+                    // model this macOS cannot run.
+                    if self.parakeetInfo(parakeet)?.isSupportedOnThisMac == false {
+                        return
+                    }
+                    self.settings.transcriptionBackend = .parakeet
+                    self.settings.parakeetModel = parakeet
+                } else if selection == "parakeet" {
                     self.settings.transcriptionBackend = .parakeet
                 } else if selection.hasPrefix("whisper:"),
                           let preset = ModelPreset(
@@ -539,6 +548,133 @@ final class AppModel: ObservableObject {
 
     func transcriptionModelPickerLabel(_ preset: ModelPreset) -> String {
         "\(TranscriptionBackend.whisper.displayName) – \(whisperPresetPickerLabel(preset))"
+            + (isRecommendedTranscriptionPreset(preset) ? recommendedSuffix : "")
+    }
+
+    /// Parakeet Ultra is the recommended transcription model wherever it runs
+    /// (Apple Silicon); elsewhere (Intel) Whisper Large v3 Turbo Q5_0 is — the
+    /// best balance of accuracy, size and speed among the Whisper presets.
+    func isRecommendedTranscriptionPreset(_ preset: ModelPreset) -> Bool {
+        !parakeetStatus.isSupported && preset == .largeV3TurboQ5_0
+    }
+
+    /// Name of the loaded (or preparing) Parakeet model, marked by its tier.
+    var parakeetPickerLabel: String {
+        guard let info = parakeetInfo(parakeetStatus.preparingModel ?? parakeetStatus.activeModel ?? effectiveParakeetModel) else {
+            return parakeetStatus.displayLabel
+        }
+        return parakeetLabel(info)
+    }
+
+    private var recommendedSuffix: String {
+        " (\(L("recommended", locale: settings.effectiveLocale)))"
+    }
+
+    // MARK: Transcription models by tier (#67)
+
+    /// One entry of the transcription model picker.
+    struct TranscriptionModelOption: Identifiable {
+        let tag: String
+        let label: String
+        let tier: ModelTier
+        let isEnabled: Bool
+        var id: String { tag }
+    }
+
+    /// The Parakeet model the settings resolve to, as the bridge decided it.
+    var effectiveParakeetModel: ParakeetModel {
+        settings.parakeetModel ?? parakeetStatus.selectedModel ?? .ultra
+    }
+
+    var parakeetModels: [ParakeetModelInfoDTO] {
+        parakeetStatus.isSupported ? (parakeetStatus.models ?? []) : []
+    }
+
+    func parakeetInfo(_ model: ParakeetModel) -> ParakeetModelInfoDTO? {
+        parakeetStatus.models?.first { $0.model == model }
+    }
+
+    /// "Parakeet Ultra (recommended)", "Parakeet TDT v3 (deprecated)", ...
+    func parakeetLabel(_ info: ParakeetModelInfoDTO) -> String {
+        let locale = settings.effectiveLocale
+        var label = info.displayLabel
+        if info.model == .v2 {
+            label += " – \(L("English only", locale: locale))"
+        }
+        switch info.tier {
+        case .recommended: label += recommendedSuffix
+        case .deprecated: label += " (\(L("deprecated", locale: locale)))"
+        case .stable, .experimental: break
+        }
+        if !info.isSupportedOnThisMac {
+            label += " – \(String(format: L("requires macOS %d", locale: locale), Int(info.minMacosMajor)))"
+        }
+        return label
+    }
+
+    func whisperTier(_ preset: ModelPreset) -> ModelTier {
+        modelStatusList.first { $0.backendModelName == preset.whisperModel }?.tier
+            ?? (isRecommendedTranscriptionPreset(preset) ? .recommended : .stable)
+    }
+
+    var transcriptionModelOptions: [TranscriptionModelOption] {
+        let parakeet = parakeetModels.map {
+            TranscriptionModelOption(
+                tag: "parakeet:\($0.model.rawValue)",
+                label: parakeetLabel($0),
+                tier: $0.tier,
+                isEnabled: $0.isSupportedOnThisMac
+            )
+        }
+        let whisper = availableModelPresets.map {
+            TranscriptionModelOption(
+                tag: "whisper:\($0.rawValue)",
+                label: transcriptionModelPickerLabel($0),
+                tier: whisperTier($0),
+                isEnabled: true
+            )
+        }
+        return parakeet + whisper
+    }
+
+    /// Options grouped by tier in display order; empty tiers are left out.
+    var transcriptionModelGroups: [(tier: ModelTier, options: [TranscriptionModelOption])] {
+        let options = transcriptionModelOptions
+        return ModelTier.allCases.compactMap { tier in
+            let members = options.filter { $0.tier == tier }
+            return members.isEmpty ? nil : (tier, members)
+        }
+    }
+
+    /// The recommended successor while a deprecated Parakeet model is in use.
+    var parakeetUpgradeTarget: ParakeetModelInfoDTO? {
+        guard settings.transcriptionBackend == .parakeet,
+              let current = parakeetInfo(effectiveParakeetModel),
+              current.tier == .deprecated,
+              let successor = current.successor
+        else { return nil }
+        return parakeetInfo(successor)
+    }
+
+    /// Offer the upgrade once after the update, until answered.
+    var shouldOfferParakeetUpgrade: Bool {
+        settings.onboardingCompleted
+            && !settings.parakeetUpgradeOfferDismissed
+            && parakeetUpgradeTarget != nil
+    }
+
+    /// Switches to the successor. The bridge prepares it in the background
+    /// while the current model keeps transcribing, and removes v3 afterwards.
+    func upgradeParakeet() {
+        guard let target = parakeetUpgradeTarget else { return }
+        settings.parakeetModel = target.model
+        settings.parakeetUpgradeOfferDismissed = true
+        requestAutoSave()
+    }
+
+    func dismissParakeetUpgradeOffer() {
+        settings.parakeetUpgradeOfferDismissed = true
+        requestAutoSave()
     }
 
     var postProcessingChoiceBinding: Binding<PostProcessingChoice> {
@@ -1181,6 +1317,21 @@ final class AppModel: ObservableObject {
             freshSettings.transcriptionBackend = .whisper
             freshSettings.localModel = preset
             clearPinnedDefaultModelPath(&freshSettings.localModelPath)
+            _ = try bridge.saveSettings(freshSettings)
+            reloadAll()
+        } catch {
+            publish(error)
+        }
+    }
+
+    /// Makes `parakeet` the transcription model. The bridge prepares it in the
+    /// background while the current model keeps transcribing.
+    func useParakeetModel(_ parakeet: ParakeetModel) {
+        guard parakeetInfo(parakeet)?.isSupportedOnThisMac != false else { return }
+        do {
+            var freshSettings = try bridge.loadSettings()
+            freshSettings.transcriptionBackend = .parakeet
+            freshSettings.parakeetModel = parakeet
             _ = try bridge.saveSettings(freshSettings)
             reloadAll()
         } catch {

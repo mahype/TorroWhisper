@@ -57,6 +57,9 @@ use torrowhisper_core::{
     RuntimeStatusDto, StageTimingDto, StreamingTranscriptDto, TranscriptionBackend,
 };
 
+/// Parakeet runs only on Apple Silicon; elsewhere Whisper is recommended.
+const PARAKEET_SUPPORTED: bool = cfg!(all(target_os = "macos", target_arch = "aarch64"));
+
 thread_local! {
     static RUNTIME: RefCell<BridgeRuntime> = RefCell::new(BridgeRuntime::new());
 }
@@ -138,7 +141,7 @@ impl BridgeRuntime {
         if settings.onboarding_completed
             && settings.transcription_backend == TranscriptionBackend::Parakeet
         {
-            dictation.prepare_parakeet();
+            dictation.prepare_parakeet(&settings);
         }
 
         // Older versions pinned the absolute default path of the then-active
@@ -701,6 +704,7 @@ impl BridgeRuntime {
         let previous_path = self.settings.local_model_path.clone();
         let previous_model = self.settings.local_model;
         let previous_transcription_backend = self.settings.transcription_backend;
+        let previous_parakeet_model = self.settings.parakeet_model;
         let previous_input_device_name = self.settings.input_device_name.clone();
         next_settings.normalize();
 
@@ -744,10 +748,11 @@ impl BridgeRuntime {
         if previous_path != self.settings.local_model_path
             || previous_model != self.settings.local_model
             || previous_transcription_backend != self.settings.transcription_backend
+            || previous_parakeet_model != self.settings.parakeet_model
         {
             self.dictation.invalidate_model_cache();
             match self.settings.transcription_backend {
-                TranscriptionBackend::Parakeet => self.dictation.prepare_parakeet(),
+                TranscriptionBackend::Parakeet => self.dictation.prepare_parakeet(&self.settings),
                 TranscriptionBackend::Whisper => {
                     // Warm the newly selected model in the background so the
                     // next dictation doesn't pay the load cost inline (#43).
@@ -837,15 +842,16 @@ impl BridgeRuntime {
             is_corrupt,
             progress_basis_points,
             expected_size_bytes: self.settings.local_model.download_size_bytes(),
+            tier: self.settings.local_model.tier(PARAKEET_SUPPORTED),
         }
     }
 
     fn parakeet_status(&mut self) -> ParakeetModelStatusDto {
-        self.dictation.parakeet_status()
+        self.dictation.parakeet_status(&self.settings)
     }
 
     fn prepare_parakeet(&mut self) -> String {
-        self.dictation.prepare_parakeet();
+        self.dictation.prepare_parakeet(&self.settings);
         "Parakeet preparation started.".to_owned()
     }
 
@@ -917,6 +923,7 @@ impl BridgeRuntime {
                     is_corrupt,
                     progress_basis_points,
                     expected_size_bytes: preset.download_size_bytes(),
+                    tier: preset.tier(PARAKEET_SUPPORTED),
                 }
             })
             .collect()
@@ -968,6 +975,7 @@ impl BridgeRuntime {
                     is_loaded: loaded_preset == Some(preset),
                     progress_basis_points,
                     expected_size_bytes: preset.download_size_bytes(),
+                    tier: preset.tier(PARAKEET_SUPPORTED),
                 }
             })
             .collect()

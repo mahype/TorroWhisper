@@ -16,7 +16,7 @@
   <img src="docs/screenshots/overview.png" alt="TorroWhisper settings overview: the red Torro header, the dictation status with a Start dictation button, and at-a-glance cards for microphone, accessibility, the NVIDIA Parakeet TDT v3 model, and the global hotkey" width="820">
 </p>
 
-Press a hotkey, speak, and your words land in whatever app has focus: mail, chat, your editor, the browser. On Apple Silicon, transcription uses NVIDIA Parakeet TDT v3 through Core ML and the Apple Neural Engine; Intel Macs use [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Nothing leaves your Mac unless you deliberately configure a remote provider.
+Press a hotkey, speak, and your words land in whatever app has focus: mail, chat, your editor, the browser. On Apple Silicon, transcription uses Parakeet Ultra (a post-trained NVIDIA Parakeet TDT v3) through Core ML and the Apple Neural Engine; Intel Macs use [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Nothing leaves your Mac unless you deliberately configure a remote provider.
 
 > **Status:** macOS 14+ is stable. Windows and Linux UI shells are on the roadmap — the Rust core and bridge already compile cross-platform.
 
@@ -55,7 +55,7 @@ Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md
 
 ### Dictation
 
-- **Fully local transcription** with NVIDIA Parakeet TDT v3 on Apple Silicon and [whisper.cpp](https://github.com/ggerganov/whisper.cpp) on Intel — your voice never leaves the machine.
+- **Fully local transcription** with Parakeet Ultra on Apple Silicon and [whisper.cpp](https://github.com/ggerganov/whisper.cpp) on Intel — your voice never leaves the machine.
 - **Global hotkey** with push-to-talk or toggle mode, plus a built-in recorder that warns about risky single-key bindings.
 - **Menu-bar-only** UI — no Dock icon, no window clutter.
 - **Guided zero-choice model setup**: the required transcription model is downloaded automatically; alternative models stay in Settings.
@@ -63,7 +63,7 @@ Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md
 
 ### Transcription models
 
-- **NVIDIA Parakeet TDT v3 (~600 MB)** is the Apple-Silicon default, running through FluidAudio, Core ML, and the Apple Neural Engine.
+- **Parakeet Ultra (~630 MB)** is the Apple-Silicon default, running through FluidAudio, Core ML, and the Apple Neural Engine. It is moondream's post-training of NVIDIA Parakeet TDT v3 — same 25 languages and speed, fewer recognition errors (FLEURS WER German 4.13 % → 3.61 %, English 4.25 % → 3.55 %).
 - Seven optional Whisper presets range from **Tiny (78 MB)** to **Large v3 (3.1 GB)**, including **Large v3 Turbo** and a quantized **Large v3 Turbo Q5_0**.
 - Built-in **Language Models** sheet to download, list, and delete models on demand.
 - Per-session language override or fully automatic language detection.
@@ -194,6 +194,6 @@ later version. See [LICENSE](LICENSE) for the full text.
 It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
 without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. The MP3 export uses LAME via `mp3lame-encoder` (LGPL-3.0). Parakeet
-TDT v3 is an NVIDIA model distributed under CC BY 4.0 and is downloaded at
-runtime; the Core ML integration uses FluidAudio (Apache-2.0). Other software
+Ultra (moondream, based on NVIDIA Parakeet TDT v3) is distributed under
+CC BY 4.0 and is downloaded at runtime; the Core ML integration uses FluidAudio (Apache-2.0). Other software
 dependencies are permissively licensed and GPL-compatible.

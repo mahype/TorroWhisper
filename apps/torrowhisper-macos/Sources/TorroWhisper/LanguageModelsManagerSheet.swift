@@ -112,21 +112,69 @@ struct LanguageModelsManagerSheet: View {
         .frame(width: 520, height: 420)
     }
 
+    /// One row of the transcription list.
+    private enum TranscriptionEntry: Identifiable {
+        case parakeet(ParakeetModelInfoDTO)
+        case whisper(ModelPreset)
+
+        var id: String {
+            switch self {
+            case .parakeet(let info): return "parakeet:\(info.model.rawValue)"
+            case .whisper(let preset): return "whisper:\(preset.rawValue)"
+            }
+        }
+    }
+
+    /// Parakeet and Whisper models grouped by tier (#67), empty tiers left out.
+    private var transcriptionGroups: [(tier: ModelTier, entries: [TranscriptionEntry])] {
+        let entries: [(ModelTier, TranscriptionEntry)] =
+            model.parakeetModels.map { ($0.tier, .parakeet($0)) }
+            + ModelPreset.allCases.map { (model.whisperTier($0), .whisper($0)) }
+        return ModelTier.allCases.compactMap { tier in
+            let members = entries.filter { $0.0 == tier }.map(\.1)
+            return members.isEmpty ? nil : (tier, members)
+        }
+    }
+
     @ViewBuilder
     private var transcriptionContent: some View {
-        Section {
-            parakeetTile
-        } header: {
-            Text("Optimized for Apple Silicon", bundle: .module)
+        if let error = model.parakeetStatus.error {
+            Section {
+                HStack(spacing: 10) {
+                    Text(L(model.parakeetStatus.summary, locale: locale))
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .help(error)
+                    Spacer()
+                    Button {
+                        model.prepareParakeet()
+                    } label: {
+                        Text("Try again", bundle: .module)
+                    }
+                }
+            }
         }
 
-        Section {
-            ForEach(ModelPreset.allCases) { preset in
-                let status = model.modelStatusList.first(where: { $0.backendModelName == preset.whisperModel })
-                whisperTile(preset: preset, status: status)
+        ForEach(transcriptionGroups, id: \.tier) { group in
+            Section {
+                ForEach(group.entries) { entry in
+                    Group {
+                        switch entry {
+                        case .parakeet(let info):
+                            parakeetTile(info)
+                        case .whisper(let preset):
+                            let status = model.modelStatusList.first(where: {
+                                $0.backendModelName == preset.whisperModel
+                            })
+                            whisperTile(preset: preset, status: status)
+                        }
+                    }
+                    // Indented below the tier heading, as agreed in #67.
+                    .padding(.leading, 16)
+                }
+            } header: {
+                Text(group.tier.title(locale: locale))
             }
-        } header: {
-            Text("Whisper alternatives", bundle: .module)
         }
     }
 
@@ -274,54 +322,82 @@ struct LanguageModelsManagerSheet: View {
         }
     }
 
+    private func parakeetDescription(_ info: ParakeetModelInfoDTO) -> String {
+        switch info.model {
+        case .ultra:
+            return L("Most accurate Parakeet: 25 languages through Core ML and Apple Neural Engine.", locale: locale)
+        case .redux:
+            return L("Compact 2-bit Parakeet. Slightly less accurate in English.", locale: locale)
+        case .v2:
+            return L("English-only predecessor of Parakeet v3.", locale: locale)
+        case .v3:
+            let successor = info.successor.flatMap { model.parakeetInfo($0)?.displayLabel } ?? ""
+            return String(format: L("Replaced by %@. Keeps working until you switch.", locale: locale), successor)
+        }
+    }
+
     @ViewBuilder
-    private var parakeetTile: some View {
+    private func parakeetTile(_ info: ParakeetModelInfoDTO) -> some View {
+        let isActive = model.settings.transcriptionBackend == .parakeet
+            && model.parakeetStatus.activeModel == info.model
+        let isSelected = model.settings.transcriptionBackend == .parakeet
+            && model.effectiveParakeetModel == info.model
+        let isPreparing = model.parakeetStatus.preparingModel == info.model
+
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(model.parakeetStatus.displayLabel)
+                        Text(model.parakeetLabel(info))
                             .font(.body.weight(.medium))
-                        if model.settings.transcriptionBackend == .parakeet {
+                        if isActive {
                             TorroStatusChip(text: L("Active", locale: locale), color: .green)
                         }
                     }
-                    Text("Fast multilingual transcription through Core ML and Apple Neural Engine.", bundle: .module)
+                    Text(parakeetDescription(info))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 8)
-                Text("ca. 600 MB")
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(
+                        ByteCountFormatter.string(
+                            fromByteCount: Int64(info.approxSizeBytes),
+                            countStyle: .file
+                        )
+                    )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-            }
-
-            if model.parakeetStatus.isPreparing {
-                ProgressView()
-                    .controlSize(.small)
-            }
-
-            HStack(spacing: 10) {
-                Text(L(model.parakeetStatus.summary, locale: locale))
-                    .font(.caption)
-                    .foregroundStyle(model.parakeetStatus.error == nil
-                        ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
-                Spacer()
-                if model.parakeetStatus.error != nil {
-                    Button {
-                        model.prepareParakeet()
-                    } label: {
-                        Text("Try again", bundle: .module)
+                    if info.isInstalled {
+                        Text("Installed", bundle: .module)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                if model.parakeetStatus.isReady,
-                   model.settings.transcriptionBackend != .parakeet {
+            }
+
+            if isPreparing {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(String(format: L("Preparing %@ …", locale: locale), info.displayLabel))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if !isSelected {
+                HStack {
+                    Spacer()
                     Button {
-                        model.persistTranscriptionBackendImmediately(.parakeet)
+                        model.useParakeetModel(info.model)
                     } label: {
-                        Text("Use", bundle: .module)
+                        if info.isInstalled {
+                            Text("Use", bundle: .module)
+                        } else {
+                            Text("Download and use", bundle: .module)
+                        }
                     }
+                    .disabled(!info.isSupportedOnThisMac)
                 }
             }
         }
@@ -466,12 +542,17 @@ struct LanguageModelsManagerSheet: View {
         .accessibilityLabel(L("Available everywhere", locale: locale))
     }
 
+    private func whisperTileTitle(_ preset: ModelPreset) -> String {
+        guard model.isRecommendedTranscriptionPreset(preset) else { return preset.displayName }
+        return "\(preset.displayName) (\(L("recommended", locale: locale)))"
+    }
+
     @ViewBuilder
     private func whisperTile(preset: ModelPreset, status: ModelStatusDTO?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(preset.displayName)
+                    Text(whisperTileTitle(preset))
                         .font(.body.weight(.medium))
                     Text(preset.description(locale: locale))
                         .font(.caption)

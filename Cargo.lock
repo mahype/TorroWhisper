@@ -652,9 +652,8 @@ dependencies = [
 
 [[package]]
 name = "fluidaudio-rs"
-version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6181071acbec602782db378d0677cccfa48c60bc8d759524c4bfe57188a234dc"
+version = "0.17.4"
+source = "git+https://github.com/mahype/fluidaudio-rs?rev=c1569ab731f61c2543dd81879e3c4b457f9a98de#c1569ab731f61c2543dd81879e3c4b457f9a98de"
 dependencies = [
  "thiserror 1.0.69",
 ]

@@ -23,6 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var settingsWindow: NSWindow?
     private var onboardingWindow: NSWindow?
     private var feedbackWindow: NSWindow?
+    private var parakeetUpgradeWindow: NSWindow?
+    private var parakeetUpgradeOfferedThisSession = false
+    private var parakeetUpgradeCancellable: AnyCancellable?
     private var recordingIndicatorWindow: NSWindow?
     private var micSwitchToastWindow: NSPanel?
     private var micSwitchToastDismissTask: Task<Void, Never>?
@@ -137,6 +140,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 }
             }
         recordingOutputVolumeController.startMonitoring()
+        // The bridge reports which Parakeet model is in use only after launch,
+        // so watch for the moment the one-time upgrade offer applies (#67).
+        parakeetUpgradeCancellable = model.$parakeetStatus
+            .combineLatest(model.$settings)
+            .sink { [weak self] _, _ in
+                Task { @MainActor [weak self] in
+                    self?.offerParakeetUpgradeIfNeeded()
+                }
+            }
         refreshMenuState()
 
         audioDeviceMonitor.onDevicesChanged = { [weak self] in
@@ -174,6 +186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     func applicationWillTerminate(_ notification: Notification) {
         model.flushAutoSave()
         recordingOutputSettingsCancellable?.cancel()
+        parakeetUpgradeCancellable?.cancel()
         recordingOutputVolumeController.stopMonitoring()
         recordingOutputVolumeController.restore()
         BridgeClient().sessionEndedCleanly()
@@ -275,6 +288,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
         )
         onboardingWindow = window
+        show(window)
+    }
+
+    private func offerParakeetUpgradeIfNeeded() {
+        guard !parakeetUpgradeOfferedThisSession, model.shouldOfferParakeetUpgrade else {
+            return
+        }
+        parakeetUpgradeOfferedThisSession = true
+        let window = makeWindow(
+            title: L("Transcription model", locale: currentLocale),
+            size: NSSize(width: 460, height: 330),
+            rootView: ParakeetUpgradeOfferView(model: model) { [weak self] in
+                self?.parakeetUpgradeWindow?.orderOut(nil)
+                self?.parakeetUpgradeWindow = nil
+            }
+        )
+        parakeetUpgradeWindow = window
         show(window)
     }
 
