@@ -976,6 +976,9 @@ impl BridgeRuntime {
                     progress_basis_points,
                     expected_size_bytes: preset.download_size_bytes(),
                     tier: preset.tier(PARAKEET_SUPPORTED),
+                    successor_label: preset
+                        .successor()
+                        .map(|next| next.display_label().to_owned()),
                 }
             })
             .collect()

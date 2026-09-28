@@ -72,7 +72,7 @@ Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md
 
 - **Modes** are prompt templates applied to the raw transcript. Create, edit, and delete them in-app; a default *Cleanup* Mode ships out of the box.
 - **System model by default**: Apple Foundation Models provides on-device post-processing on supported Apple-Silicon Macs with Apple Intelligence; macOS manages it, so TorroWhisper does not present a separate download.
-- Optional quantized **Gemma 4** models (Small / Medium / Large) run on-device via [llama-cpp-2](https://crates.io/crates/llama-cpp-2) with Metal acceleration and are downloaded only from Settings.
+- Optional **Gemma 4** models in Google's official quantization-aware-trained (QAT) Q4_0 builds — **E2B** (3.3 GB), **E4B** (5.2 GB, recommended) and **12B** (7.0 GB) — run on-device via [llama-cpp-2](https://crates.io/crates/llama-cpp-2) with Metal acceleration and are downloaded only from Settings.
 - **Custom GGUF models** — bring your own model from a local path or a download URL.
 - **Remote providers** — optional Ollama or LM Studio endpoints; per-Mode override lets a single Mode use a different backend than the global default.
 

@@ -69,7 +69,7 @@ fn build_inner(
                 (
                     integrity_to_availability(llm_model_manager::gguf_file_integrity(
                         &path,
-                        Some(preset.download_size_bytes()),
+                        preset.accepted_sizes(),
                     )),
                     None,
                 )
@@ -101,7 +101,7 @@ fn build_inner(
                     }
                 };
                 (
-                    integrity_to_availability(llm_model_manager::gguf_file_integrity(&path, None)),
+                    integrity_to_availability(llm_model_manager::gguf_file_integrity(&path, &[])),
                     None,
                 )
             }

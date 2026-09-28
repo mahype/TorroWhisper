@@ -212,9 +212,15 @@ struct LanguageModelsManagerSheet: View {
         }
 
         Section {
-            ForEach(LlmPreset.allCases) { preset in
-                let status = model.llmStatusList.first(where: { $0.displayLabel == preset.displayName })
-                llmTile(preset: preset, status: status)
+            // Grouped by tier (#67): a sub-heading per tier, entries indented.
+            ForEach(llmTierGroups, id: \.tier) { group in
+                Text(group.tier.title(locale: locale))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                ForEach(group.presets) { preset in
+                    llmTile(preset: preset, status: llmStatus(preset))
+                        .padding(.leading, 16)
+                }
             }
         } header: {
             Text("Local language models", bundle: .module)
@@ -614,13 +620,36 @@ struct LanguageModelsManagerSheet: View {
         .padding(.vertical, 4)
     }
 
+    private func llmTileTitle(_ preset: LlmPreset, status: LlmModelStatusDTO?) -> String {
+        switch status?.tier {
+        case .recommended?:
+            return "\(preset.displayName) (\(L("recommended", locale: locale)))"
+        case .deprecated?:
+            return "\(preset.displayName) (\(L("deprecated", locale: locale)))"
+        default:
+            return preset.displayName
+        }
+    }
+
+    private func llmStatus(_ preset: LlmPreset) -> LlmModelStatusDTO? {
+        model.llmStatusList.first { $0.displayLabel == preset.displayName }
+    }
+
+    /// Local presets grouped by the tier the bridge reports, empty tiers left out.
+    private var llmTierGroups: [(tier: ModelTier, presets: [LlmPreset])] {
+        ModelTier.allCases.compactMap { tier in
+            let members = LlmPreset.allCases.filter { (llmStatus($0)?.tier ?? .stable) == tier }
+            return members.isEmpty ? nil : (tier, members)
+        }
+    }
+
     @ViewBuilder
     private func llmTile(preset: LlmPreset, status: LlmModelStatusDTO?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(preset.displayName)
+                        Text(llmTileTitle(preset, status: status))
                             .font(.body.weight(.medium))
                         if status?.isLoaded == true {
                             // "Loaded" is a state, and brand red is never a status
@@ -635,6 +664,11 @@ struct LanguageModelsManagerSheet: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+                    if let successor = status?.successorLabel {
+                        Text(String(format: L("Successor: %@", locale: locale), successor))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer(minLength: 8)
