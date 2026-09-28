@@ -156,19 +156,31 @@ struct RecordingIndicatorView: View {
     @ObservedObject var transcriptFeed: StreamingTranscriptFeed
     @Environment(\.locale) private var locale
 
-    /// Base bubble size at 1x. The window is sized to `baseSize * scale`.
-    static let baseSize = CGSize(width: 260, height: 98)
-    /// Wider, taller bubble hosting the live transcript (#41) — sized for
+    /// Bubble hosting the live transcript (#41) — sized for
     /// comfortable reading (~5 lines at 13 pt).
     static let liveBaseSize = CGSize(width: 420, height: 180)
     /// Scale factor applied when the large (low-vision) view is enabled.
     static let largeScale: CGFloat = 1.7
 
+    /// Compact indicator metrics at 1x: a red Torro signet circle next to a
+    /// slim black waveform bar, on a fully transparent panel at the bottom of
+    /// the screen. Circle and bar share one height; the panel adds a small
+    /// inset so the drop shadows are not clipped. The live transcript keeps
+    /// the larger bubble at the top — it needs room to read.
+    static let minimalHeight: CGFloat = 36
+    static let minimalBarWidth: CGFloat = 170
+    static let minimalGap: CGFloat = 8
+    static let minimalInset: CGFloat = 4
+    static let minimalBaseSize = CGSize(
+        width: minimalHeight + minimalGap + minimalBarWidth + 2 * minimalInset,
+        height: minimalHeight + 2 * minimalInset
+    )
+
     /// Single source of truth for the bubble/panel size. AppDelegate derives
     /// the window frame only from this — never from content or phase — so the
     /// panel size changes exclusively when the user flips a setting.
     static func windowSize(isLarge: Bool, live: Bool) -> CGSize {
-        let base = live ? liveBaseSize : baseSize
+        let base = live ? liveBaseSize : minimalBaseSize
         let scale = isLarge ? largeScale : 1.0
         return CGSize(width: base.width * scale, height: base.height * scale)
     }
@@ -198,6 +210,14 @@ struct RecordingIndicatorView: View {
     }
 
     var body: some View {
+        if showsLiveTranscript {
+            bubbleBody
+        } else {
+            minimalBody
+        }
+    }
+
+    private var bubbleBody: some View {
         let size = Self.windowSize(isLarge: isLarge, live: showsLiveTranscript)
         return content
             .padding(10 * scale)
@@ -224,21 +244,166 @@ struct RecordingIndicatorView: View {
             // (flat while not recording) and the status line stays put — only the
             // leading dot color and the title/hint text swap out.
             VStack(spacing: 8 * scale) {
-                if showsLiveTranscript {
-                    liveTranscriptBox
-                } else {
-                    waveform
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(
-                            Color.black.opacity(highContrast ? 1.0 : 0.85),
-                            in: RoundedRectangle(cornerRadius: 8 * scale, style: .continuous)
-                        )
-                }
+                liveTranscriptBox
                 infoRow
             }
         case let .modelNotReady(label, progress, isDownloading):
             modelNotReadyRow(label: label, progress: progress, isDownloading: isDownloading)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    // MARK: Compact layout
+
+    private var minimalBody: some View {
+        let height = Self.minimalHeight * scale
+        return HStack(spacing: Self.minimalGap * scale) {
+            signetCircle(diameter: height)
+            minimalBar
+                .frame(width: Self.minimalBarWidth * scale, height: height)
+                .background(
+                    Color.black.opacity(highContrast ? 1.0 : 0.88),
+                    in: Capsule(style: .continuous)
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .strokeBorder(
+                            Color.white.opacity(highContrast ? 0.45 : 0.1),
+                            lineWidth: (highContrast ? 1.5 : 1) * scale
+                        )
+                )
+                .shadow(color: .black.opacity(0.3), radius: 3 * scale, y: 1 * scale)
+        }
+        .padding(Self.minimalInset * scale)
+        .frame(
+            width: Self.minimalBaseSize.width * scale,
+            height: Self.minimalBaseSize.height * scale
+        )
+    }
+
+    /// Red circle with the white horns. While recording it doubles as the
+    /// stop button — the minimal layout has no room for a separate one.
+    @ViewBuilder
+    private func signetCircle(diameter: CGFloat) -> some View {
+        let circle = Circle()
+            .fill(
+                LinearGradient(
+                    colors: [.torroRed, .torroRedDeep],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .overlay {
+                TorroHorns()
+                    .fill(.white)
+                    .frame(width: diameter * 0.62, height: diameter * 0.62 / TorroHorns.aspectRatio)
+            }
+            .frame(width: diameter, height: diameter)
+            .shadow(color: .black.opacity(0.3), radius: 3 * scale, y: 1 * scale)
+        if phase == .recording, let onStop {
+            Button(action: onStop) { circle }
+                .buttonStyle(.plain)
+                .help(L("Stop dictation", locale: locale))
+                .accessibilityLabel(L("Stop dictation", locale: locale))
+        } else {
+            circle.accessibilityHidden(true)
+        }
+    }
+
+    /// The black bar's content per phase: the live waveform while recording,
+    /// pulsing dots while work is still running, a check when done, and a
+    /// short message for errors or a missing model.
+    @ViewBuilder
+    private var minimalBar: some View {
+        switch phase {
+        case .recording:
+            minimalWaveform
+                .padding(.horizontal, 14 * scale)
+                .padding(.vertical, 8 * scale)
+        case .transcribing, .postProcessing:
+            workingDots(color: isCancelling ? .orange : .white)
+                .help(statusDotLabel)
+        case .done:
+            Image(systemName: "checkmark")
+                .font(.system(size: 14 * scale, weight: .bold))
+                .foregroundStyle(.green)
+                .help(statusDotLabel)
+        case .error(let message):
+            minimalMessage(symbol: "exclamationmark.triangle.fill", color: .red, text: message)
+        case .modelNotReady(let label, let progress, let isDownloading):
+            let text: String = {
+                if isDownloading, let progress {
+                    let percent = Int((progress * 100.0).rounded())
+                    return String(format: L("Model loading: %@ (%d%%)", locale: locale), label, percent)
+                }
+                if isDownloading {
+                    return String(format: L("Model loading: %@", locale: locale), label)
+                }
+                return L("Recording not possible", locale: locale)
+            }()
+            minimalMessage(symbol: "arrow.down.circle.fill", color: .orange, text: text)
+        }
+    }
+
+    private func minimalMessage(symbol: String, color: Color, text: String) -> some View {
+        HStack(spacing: 6 * scale) {
+            Image(systemName: symbol)
+                .font(.system(size: 11 * scale, weight: .semibold))
+                .foregroundStyle(color)
+            Text(text)
+                .font(scaledFont(10, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.9))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .padding(.horizontal, 12 * scale)
+        .help(text)
+    }
+
+    /// The user's waveform style, sized for the compact bar.
+    @ViewBuilder
+    private var minimalWaveform: some View {
+        switch style {
+        case .centeredBars:
+            minimalBars
+        case .line:
+            lineWave
+        case .envelope:
+            envelopeWave
+        }
+    }
+
+    /// Slimmer bars than the bubble's, so all levels fit the compact bar.
+    private var minimalBars: some View {
+        GeometryReader { geo in
+            let count = CGFloat(feed.bars.count)
+            let spacing = 2 * scale
+            let barWidth = max(1.5 * scale, (geo.size.width - spacing * (count - 1)) / count)
+            HStack(spacing: spacing) {
+                ForEach(Array(feed.bars.enumerated()), id: \.offset) { _, level in
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: barWidth, height: barHeight(for: level, available: geo.size.height))
+                        .animation(.linear(duration: RecordingLevelFeed.pollingInterval), value: level)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+    }
+
+    /// Three dots pulsing in sequence — "still working" without any text.
+    private func workingDots(color: Color) -> some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 6 * scale) {
+                ForEach(0..<3, id: \.self) { index in
+                    let wave = sin((t * 2 * .pi / 1.2) - Double(index) * 0.9)
+                    Circle()
+                        .fill(color)
+                        .frame(width: 6 * scale, height: 6 * scale)
+                        .opacity(0.35 + 0.65 * max(0, wave))
+                }
+            }
         }
     }
 
@@ -550,39 +715,7 @@ struct RecordingIndicatorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    @ViewBuilder
-    private var waveform: some View {
-        switch style {
-        case .centeredBars:
-            centeredBars
-        case .line:
-            lineWave
-        case .envelope:
-            envelopeWave
-        }
-    }
-
     private var tint: Color { color.swiftUIColor }
-
-    private var centeredBars: some View {
-        // Size the bars from the space the layout actually grants (like the
-        // line/envelope styles do via GeometryReader). A fixed maximum bar
-        // height can exceed the waveform slot — `.frame(maxHeight: .infinity)`
-        // never shrinks below its child, so loud bars used to push the dark
-        // box (and with it the whole bubble layout) taller in sync with the
-        // audio level.
-        GeometryReader { geo in
-            HStack(spacing: 3 * scale) {
-                ForEach(Array(feed.bars.enumerated()), id: \.offset) { _, level in
-                    Capsule()
-                        .fill(tint)
-                        .frame(width: 4 * scale, height: barHeight(for: level, available: geo.size.height))
-                        .animation(.linear(duration: RecordingLevelFeed.pollingInterval), value: level)
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
-    }
 
     private var lineWave: some View {
         GeometryReader { geo in
