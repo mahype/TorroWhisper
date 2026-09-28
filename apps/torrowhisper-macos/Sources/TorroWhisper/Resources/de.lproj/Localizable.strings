@@ -496,3 +496,23 @@
 "Muted" = "Stumm";
 "Unchanged" = "Unverändert";
 "During a recording, TorroWhisper sets the system output to this percentage of its previous volume and restores it afterwards. 0% mutes it. Some output devices do not support software volume control." = "Während einer Aufnahme setzt TorroWhisper die Systemausgabe auf diesen Anteil der vorherigen Lautstärke und stellt sie danach wieder her. 0 % schaltet sie stumm. Manche Ausgabegeräte unterstützen keine softwaregesteuerte Lautstärke.";
+"Move up" = "Nach oben";
+"Move down" = "Nach unten";
+"Steps run top to bottom. Use the arrows to reorder and the checkboxes to enable them." = "Die Schritte laufen von oben nach unten. Mit den Pfeilen änderst du die Reihenfolge, mit den Auswahlfeldern aktivierst du sie.";
+
+"Changes are only applied when you save." = "Änderungen werden erst mit „Speichern“ übernommen.";
+"Enter a name." = "Bitte einen Namen eingeben.";
+"Apply dictionary" = "Wörterbuch anwenden";
+"Uses global word replacements for this post-processing." = "Verwendet die globalen Wortersetzungen für diese Nachbearbeitung.";
+"Processing steps" = "Verarbeitungsschritte";
+"Customize steps…" = "Ablauf anpassen…";
+"Corrects spelling, grammar and punctuation." = "Korrigiert Rechtschreibung, Grammatik und Zeichensetzung.";
+"Unsupported correction: %@. Toggle AI auto-correction to replace it." = "Nicht unterstützte Korrektur: %@. KI-Autokorrektur umschalten, um sie zu ersetzen.";
+"AI auto-correction" = "KI-Autokorrektur";
+"Steps run from top to bottom." = "Schritte laufen von oben nach unten.";
+"Choose how your dictation is refined." = "Wähle, wie dein Diktat aufbereitet wird.";
+"Your post-processing profiles" = "Deine Nachbearbeitungen";
+"Global: %@" = "Global: %@";
+"Dictionary on" = "Wörterbuch an";
+"Dictionary off" = "Wörterbuch aus";
+"Edit" = "Bearbeiten";
