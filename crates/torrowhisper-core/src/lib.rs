@@ -154,7 +154,7 @@ pub enum TranscriptionBackend {
 impl TranscriptionBackend {
     pub fn label(self) -> &'static str {
         match self {
-            Self::Parakeet => "NVIDIA Parakeet TDT v3",
+            Self::Parakeet => "Parakeet Ultra",
             Self::Whisper => "OpenAI Whisper",
         }
     }

@@ -258,7 +258,7 @@ enum TranscriptionBackend: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .parakeet: return "NVIDIA Parakeet TDT v3"
+        case .parakeet: return "Parakeet Ultra"
         case .whisper: return "OpenAI Whisper"
         }
     }
@@ -1162,7 +1162,7 @@ struct ParakeetModelStatusDTO: Codable, Equatable {
     var expectedSizeBytes: UInt64
 
     static let empty = ParakeetModelStatusDTO(
-        displayLabel: "NVIDIA Parakeet TDT v3",
+        displayLabel: "Parakeet Ultra",
         summary: "Preparing model status…",
         isSupported: true,
         isReady: false,

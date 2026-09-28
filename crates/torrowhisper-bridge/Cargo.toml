@@ -44,12 +44,16 @@ sysinfo = { version = "0.39", default-features = false, features = ["system", "d
 [target.'cfg(target_os = "macos")'.dependencies]
 whisper-rs = { version = "0.16.0", features = ["log_backend", "metal"] }
 
-# Apple Silicon: Parakeet TDT v3 runs through FluidAudio/Core ML on the ANE.
+# Apple Silicon: Parakeet Ultra runs through FluidAudio/Core ML on the ANE.
 # Keep this dependency arm64-only: Intel builds remain supported and use the
 # existing whisper.cpp backend instead. `default-features = false` avoids
 # pulling FluidAudio's unrelated VAD/diarization API into the bridge.
+# Our fork (mahype/fluidaudio-rs, branch feat/fluidaudio-0.17-parakeet-ultra)
+# pins FluidAudio 0.17.4 and exposes the model version; crates.io's 0.14.1
+# pins FluidAudio 0.14.1 without Parakeet Ultra (#61). Back to crates.io once
+# upstream publishes an equivalent release.
 [target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
-fluidaudio-rs = { version = "0.14.1", default-features = false, features = ["asr"] }
+fluidaudio-rs = { git = "https://github.com/mahype/fluidaudio-rs", rev = "bf8590022963b40e2805492140a725b8aa3803c2", default-features = false, features = ["asr"] }
 # `async` exposes token counting, which we await synchronously via pollster.
 foundation-models = { version = "0.12", features = ["macos_26_0", "async"] }
 pollster = "0.4"

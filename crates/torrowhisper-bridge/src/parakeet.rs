@@ -1,4 +1,8 @@
-//! NVIDIA Parakeet TDT v3 through FluidAudio/Core ML.
+//! Parakeet Ultra through FluidAudio/Core ML.
+//!
+//! Parakeet Ultra is moondream's post-training of NVIDIA Parakeet TDT v3:
+//! the same 25 languages, architecture and speed, with lower word error
+//! rates (FLEURS German 4.13 % → 3.61 %, English 4.25 % → 3.55 %).
 //!
 //! The model is owned and cached by FluidAudio. TorroWhisper only tracks the
 //! coarse preparation state because FluidAudio intentionally exposes model
@@ -9,8 +13,8 @@ use std::sync::{Arc, Mutex};
 
 use torrowhisper_core::ParakeetModelStatusDto;
 
-pub const DISPLAY_LABEL: &str = "NVIDIA Parakeet TDT v3";
-pub const EXPECTED_SIZE_BYTES: u64 = 600_000_000;
+pub const DISPLAY_LABEL: &str = "Parakeet Ultra";
+pub const EXPECTED_SIZE_BYTES: u64 = 630_000_000;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Intel builds retain only the explicit unsupported state.
@@ -84,9 +88,11 @@ impl ParakeetRuntime {
                     target: "models",
                     "preparing Parakeet/Core ML (download on first run)"
                 );
-                let next = match engine.init_asr() {
+                let next = match engine.init_asr_with_version(fluidaudio_rs::AsrModelVersion::Ultra)
+                {
                     Ok(()) => {
-                        log::info!(target: "models", "Parakeet/Core ML is ready");
+                        log::info!(target: "models", "Parakeet Ultra/Core ML is ready");
+                        remove_superseded_v3_model();
                         PreparationState::Ready
                     }
                     Err(err) => {
@@ -167,6 +173,30 @@ impl ParakeetRuntime {
         {
             let _ = samples_16khz;
             Err("Parakeet requires an Apple-Silicon Mac.".to_owned())
+        }
+    }
+}
+
+/// Deletes the Parakeet TDT v3 model that TorroWhisper up to 0.10 used.
+///
+/// Parakeet Ultra replaces it, and nothing else in the app loads v3, so the
+/// ~460 MB would otherwise stay on disk for good. Called only after Ultra is
+/// ready, so a failed Ultra download never leaves the user without a model
+/// they had. FluidAudio caches models per repo under this fixed directory.
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+fn remove_superseded_v3_model() {
+    let Some(home) = std::env::var_os("HOME") else {
+        return;
+    };
+    let dir = std::path::Path::new(&home)
+        .join("Library/Application Support/FluidAudio/Models/parakeet-tdt-0.6b-v3");
+    if !dir.is_dir() {
+        return;
+    }
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => log::info!(target: "models", "removed superseded Parakeet v3 model"),
+        Err(err) => {
+            log::warn!(target: "models", "could not remove superseded Parakeet v3 model: {err}")
         }
     }
 }

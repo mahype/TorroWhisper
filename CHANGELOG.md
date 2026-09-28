@@ -6,6 +6,9 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Changed
+- **Parakeet Ultra replaces Parakeet TDT v3 for transcription on Apple Silicon** (#61) — moondream's post-training of NVIDIA's v3 keeps the same 25 languages, architecture and speed but makes fewer recognition errors (FLEURS word error rate: German 4.13 % → 3.61 %, English 4.25 % → 3.55 %). TorroWhisper downloads it (~630 MB) automatically on the first start after the update, with the usual preparation status in the indicator and Settings; once it is ready, the previous v3 model (~460 MB) is deleted. This comes with FluidAudio 0.17.4 (was 0.14.1), which also fixes words lost at chunk seams and at the end of a recording. FluidAudio is used through our fork of `fluidaudio-rs` until upstream publishes a release with these changes.
+
 ### Fixed
 - **Long dictations no longer fail with Apple Foundation Models** (#63) — Apple's on-device model has a small context window (4096 tokens on current macOS), and a long dictation plus the mode prompt and the answer could exceed it, so post-processing failed outright. TorroWhisper now counts tokens before the request and, when needed, splits the transcript at sentence boundaries into parts that fit, edits each part in its own session, and joins them with the original spacing and paragraphs. A single sentence too long for the window is kept unedited. On macOS versions that do not report a context size, the previous behavior applies. Updates `foundation-models` to 0.12.
 

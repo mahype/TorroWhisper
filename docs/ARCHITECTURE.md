@@ -85,7 +85,7 @@ Module responsibilities:
 | --- | --- |
 | [lib.rs](../crates/torrowhisper-bridge/src/lib.rs) | FFI entry points, the `BridgeRuntime` aggregate that owns all subsystems |
 | [dictation.rs](../crates/torrowhisper-bridge/src/dictation.rs) | Mic capture via `cpal`, VAD-based silence detection, and routing to Parakeet or Whisper |
-| [parakeet.rs](../crates/torrowhisper-bridge/src/parakeet.rs) | NVIDIA Parakeet TDT v3 through FluidAudio, Core ML, and Apple Neural Engine; first-run preparation and process-lifetime state |
+| [parakeet.rs](../crates/torrowhisper-bridge/src/parakeet.rs) | Parakeet Ultra (post-trained NVIDIA Parakeet TDT v3) through FluidAudio, Core ML, and Apple Neural Engine; first-run preparation and process-lifetime state |
 | [model_manager.rs](../crates/torrowhisper-bridge/src/model_manager.rs) | Download, list, and delete Whisper `.bin` models |
 | [llm_model_manager.rs](../crates/torrowhisper-bridge/src/llm_model_manager.rs) | Download, list, and delete local LLM GGUF files (Gemma 4 presets and user-added custom models) |
 | [local_llm.rs](../crates/torrowhisper-bridge/src/local_llm.rs) | Client for the `torrowhisper-llm-helper` process (line-based JSON over stdin/stdout); idle-based auto-unload and cancellation by killing the helper. llama-cpp-2 lives only in the helper: its bundled ggml is incompatible with whisper-rs's, and linking both into one binary mixes the duplicated symbols and crashes the app |

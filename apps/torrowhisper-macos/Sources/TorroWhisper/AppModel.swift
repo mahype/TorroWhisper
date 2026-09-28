@@ -179,7 +179,7 @@ final class AppModel: ObservableObject {
 
     var selectedTranscriptionSummaryText: String {
         if settings.transcriptionBackend == .parakeet {
-            return "\(L(parakeetStatus.summary, locale: settings.effectiveLocale)) – ca. 600 MB"
+            return "\(L(parakeetStatus.summary, locale: settings.effectiveLocale)) – ca. 630 MB"
         }
         let preset = settings.localModel
         let locale = settings.effectiveLocale

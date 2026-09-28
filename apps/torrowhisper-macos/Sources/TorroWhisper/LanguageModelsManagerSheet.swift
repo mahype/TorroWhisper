@@ -291,7 +291,7 @@ struct LanguageModelsManagerSheet: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
-                Text("ca. 600 MB")
+                Text("ca. 630 MB")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
