@@ -6,6 +6,22 @@
     <description>Official update feed for Open Whisper.</description>
     <language>en</language>
     <item>
+      <title>Version 0.11.0</title>
+      <pubDate>Mon, 28 Sep 2026 21:27:25 +0000</pubDate>
+      <sparkle:shortVersionString>0.11.0</sparkle:shortVersionString>
+      <sparkle:version>0.11.0</sparkle:version>
+      <description>&lt;h3&gt;What's Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;fix(llm): lange Diktate für Apple Foundation Models aufteilen, foundation-models 0.12 by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/64"&gt;https://github.com/mahype/TorroWhisper/pull/64&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;fix(dictation): hängende Tonausgabe verzögert den Aufnahmestart nicht mehr by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/72"&gt;https://github.com/mahype/TorroWhisper/pull/72&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;feat(asr): Parakeet Ultra empfohlen, Modelle nach Stufen, sanfter Umstieg (FluidAudio 0.17.4) by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/66"&gt;https://github.com/mahype/TorroWhisper/pull/66&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;feat(llm): Gemma-4-QAT-Modelle von Google, 12B statt 26B – Release 0.11.0 by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/73"&gt;https://github.com/mahype/TorroWhisper/pull/73&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a href="https://github.com/mahype/TorroWhisper/compare/v0.10.0...v0.11.0"&gt;https://github.com/mahype/TorroWhisper/compare/v0.10.0...v0.11.0&lt;/a&gt;&lt;/p&gt;</description>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/mahype/TorroWhisper/releases/download/v0.11.0/TorroWhisper-0.11.0.dmg" sparkle:edSignature="vHDDRhG5jugcxKRadd8Fgv2fF6qSpqw8ewxJtkstW5ss/Fo4nlkKoTvDOWU4E/oyIhafZW9tnvTV7FMawb7jCg==" length="37713539" type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 0.10.0</title>
       <pubDate>Mon, 28 Sep 2026 13:26:28 +0000</pubDate>
       <sparkle:shortVersionString>0.10.0</sparkle:shortVersionString>
