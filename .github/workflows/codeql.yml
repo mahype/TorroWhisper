@@ -1,10 +1,12 @@
 name: CodeQL
 
+# Not on pull requests: the traced Swift build takes ~15 min (vs. <1 min
+# untraced in ci.yml) and blocked every PR iteration. Every merge to main
+# and the weekly schedule still get a full analysis.
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
   schedule:
     - cron: '0 4 * * 1'
 
