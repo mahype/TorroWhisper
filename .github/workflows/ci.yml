@@ -33,14 +33,13 @@ jobs:
         with:
           xcode-version: '26.5'
 
-      # Rust test binaries link the Swift bridge dynamically. Keep the selected
-      # toolchain's runtime path available for embedding in those binaries.
+      # Rust test binaries link the Swift bridge dynamically and resolve the
+      # Swift runtime through this rpath. On the macOS 26 runner the OS runtime
+      # (in the dyld shared cache under /usr/lib/swift) is current; the
+      # toolchain's swift-5.5 back-deployment copy we needed on macos-15 now
+      # lacks symbols the Xcode 26.5 SDK emits.
       - name: Configure Swift runtime path
-        run: |
-          swift_usr_dir="$(dirname "$(dirname "$(xcrun --find swiftc)")")"
-          swift_runtime_dir="$swift_usr_dir/lib/swift-5.5/macosx"
-          test -f "$swift_runtime_dir/libswift_Concurrency.dylib"
-          echo "SWIFT_RUNTIME_DIR=$swift_runtime_dir" >> "$GITHUB_ENV"
+        run: echo "SWIFT_RUNTIME_DIR=/usr/lib/swift" >> "$GITHUB_ENV"
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
