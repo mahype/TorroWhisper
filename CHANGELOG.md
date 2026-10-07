@@ -6,6 +6,9 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Fixed
+- **A muted or silent microphone is named as such instead of "recognized no text"** (#76) — macOS can mute an input device at the CoreAudio level (for example when a meeting app syncs its mute button), and System Settings never shows it: the input volume looks normal while the device delivers only zeros. TorroWhisper now checks every recording for digital silence (peak below about −80 dBFS) and skips transcription and the audio export for it. Instead of a puzzling "recognized no text", it names the cause it found, with one concrete fix: a muted device gets an *Unmute* button, missing microphone access a button straight to Privacy & Security › Microphone, and a device that delivers nothing a pointer to Sound › Input and Audio MIDI Setup. A muted device is also flagged right when recording starts. TorroWhisper never unmutes on its own, only on that click.
+
 ## [0.11.0] — 2026-09-28
 
 ### Changed

@@ -1713,6 +1713,15 @@ pub struct RuntimeStatusDto {
     /// during warmup isn't mistaken for a hang. Defaulted for wire compatibility.
     #[serde(default)]
     pub dictation_model_warming: bool,
+    /// Bumped whenever a finished recording turned out to be digital silence —
+    /// the microphone delivered only zeros (muted device, missing microphone
+    /// permission, disconnected hardware). The app compares it against the last
+    /// seen value to check the device's mute state and offer to unmute it (#76).
+    #[serde(default)]
+    pub silent_recording_count: u64,
+    /// Input device of the most recent silent recording (#76).
+    #[serde(default)]
+    pub silent_recording_device: String,
 }
 
 /// Per-stage latency breakdown of the most recent dictation, from recording

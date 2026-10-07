@@ -29,6 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var recordingIndicatorWindow: NSWindow?
     private var micSwitchToastWindow: NSPanel?
     private var micSwitchToastDismissTask: Task<Void, Never>?
+    private var micProblemToastWindow: NSPanel?
+    private var micProblemToastDismissTask: Task<Void, Never>?
     private var lastAnnouncedPhaseKey: String?
     private var powerEventObservers: [NSObjectProtocol] = []
     private let audioDeviceMonitor = AudioDeviceMonitor()
@@ -126,6 +128,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         model.onMicSwitched = { [weak self] notification in
             self?.showMicSwitchToast(notification)
+        }
+        model.onMicProblem = { [weak self] notification in
+            self?.showMicProblemToast(device: notification.device, state: .problem(notification.cause))
         }
         recordingOutputSettingsCancellable = model.$settings
             .map(\.recordingOutputVolumePercent)
@@ -470,6 +475,164 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 }
             }
         }
+    }
+
+    private enum MicProblemToastState {
+        case problem(MicProblemCause)
+        case unmuted
+        case unmuteFailed
+    }
+
+    /// Clickable toast for a microphone that delivers no audio (#76). Names the
+    /// cause and offers buttons that fix it or open the exact place in macOS to
+    /// look, so the user is never left guessing. Stays longer than the
+    /// mic-switch toast because it asks for an action.
+    private func showMicProblemToast(device: String, state: MicProblemToastState) {
+        let locale = currentLocale
+        let openAudioMIDISetup = MicProblemToastView.Action(
+            label: L("Open Audio MIDI Setup", locale: locale),
+            isPrimary: false,
+            perform: { [weak self] in
+                self?.model.openAudioMIDISetup()
+                self?.dismissMicProblemToast()
+            }
+        )
+        let symbol: String
+        let title: String
+        let detail: String
+        let actions: [MicProblemToastView.Action]
+        switch state {
+        case .problem(.muted):
+            symbol = "mic.slash.fill"
+            title = AppModel.micProblemTitle(.muted, device: device, locale: locale)
+            detail = L("Another app may have muted it. System Settings does not show this — only Audio MIDI Setup does (Mute button next to the volume slider).", locale: locale)
+            actions = [
+                MicProblemToastView.Action(
+                    label: L("Unmute", locale: locale),
+                    isPrimary: true,
+                    perform: { [weak self] in
+                        guard let self else { return }
+                        let success = self.model.unmuteMicrophone(device: device)
+                        self.showMicProblemToast(device: device, state: success ? .unmuted : .unmuteFailed)
+                    }
+                ),
+            ]
+        case .problem(.permissionDenied):
+            symbol = "lock.fill"
+            title = AppModel.micProblemTitle(.permissionDenied, device: device, locale: locale)
+            detail = L("Allow TorroWhisper under System Settings › Privacy & Security › Microphone.", locale: locale)
+            actions = [
+                MicProblemToastView.Action(
+                    label: L("Open Settings", locale: locale),
+                    isPrimary: true,
+                    perform: { [weak self] in
+                        self?.model.checkAndRequestMicrophoneAccess()
+                        self?.dismissMicProblemToast()
+                    }
+                ),
+            ]
+        case .problem(.noSignal):
+            symbol = "mic.badge.xmark"
+            title = AppModel.micProblemTitle(.noSignal, device: device, locale: locale)
+            detail = L("In System Settings › Sound › Input, check whether the level moves when you speak. Is the device connected? Otherwise choose another microphone in TorroWhisper.", locale: locale)
+            actions = [
+                MicProblemToastView.Action(
+                    label: L("Open Sound Settings", locale: locale),
+                    isPrimary: true,
+                    perform: { [weak self] in
+                        self?.model.openSoundInputSettings()
+                        self?.dismissMicProblemToast()
+                    }
+                ),
+                openAudioMIDISetup,
+            ]
+        case .unmuted:
+            symbol = "mic.fill"
+            title = String(format: L("Microphone '%@' unmuted.", locale: locale), device)
+            detail = ""
+            actions = []
+        case .unmuteFailed:
+            symbol = "mic.slash.fill"
+            title = String(format: L("Microphone '%@' could not be unmuted.", locale: locale), device)
+            detail = L("Open Audio MIDI Setup, select the device and click the Mute button next to the volume slider.", locale: locale)
+            actions = [openAudioMIDISetup]
+        }
+        let view = MicProblemToastView(symbol: symbol, title: title, detail: detail, actions: actions)
+
+        let window = micProblemToastWindow ?? makeMicProblemToastWindow()
+        let hosting: NSHostingController<MicProblemToastView>
+        if let existing = window.contentViewController as? NSHostingController<MicProblemToastView> {
+            existing.rootView = view
+            hosting = existing
+        } else {
+            hosting = NSHostingController(rootView: view)
+            window.contentViewController = hosting
+        }
+        // Height follows the content (one or two button rows of text).
+        let width: CGFloat = 460
+        let fitting = hosting.sizeThatFits(in: NSSize(width: width, height: 400))
+        window.setContentSize(NSSize(width: width, height: ceil(fitting.height)))
+
+        let wasVisible = micProblemToastWindow?.isVisible == true
+        micProblemToastWindow = window
+        postAccessibilityAnnouncement(detail.isEmpty ? title : "\(title) \(detail)")
+        positionMicSwitchToastWindow(window)
+        if wasVisible {
+            window.alphaValue = 1
+        } else {
+            window.alphaValue = 0
+            window.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.18
+                window.animator().alphaValue = 1
+            }
+        }
+
+        let needsAction = !actions.isEmpty
+        let displayNanoseconds: UInt64 = needsAction ? 12_000_000_000 : 4_000_000_000
+        micProblemToastDismissTask?.cancel()
+        micProblemToastDismissTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: displayNanoseconds)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.dismissMicProblemToast()
+            }
+        }
+    }
+
+    private func dismissMicProblemToast() {
+        micProblemToastDismissTask?.cancel()
+        guard let window = micProblemToastWindow, window.isVisible else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.25
+            window.animator().alphaValue = 0
+        } completionHandler: {
+            Task { @MainActor in
+                window.orderOut(nil)
+            }
+        }
+    }
+
+    private func makeMicProblemToastWindow() -> NSPanel {
+        let size = NSSize(width: 460, height: 96)
+        let panel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isFloatingPanel = true
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.level = .statusBar
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = false
+        // Unlike the mic-switch toast this one must take clicks (action buttons).
+        panel.ignoresMouseEvents = false
+        panel.hidesOnDeactivate = false
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        panel.isReleasedWhenClosed = false
+        return panel
     }
 
     private func makeMicSwitchToastWindow(message: String) -> NSPanel {

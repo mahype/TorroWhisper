@@ -524,3 +524,18 @@
 "Previous Gemma 4 file. Keeps working; the Google QAT version is smaller and faster." = "Previous Gemma 4 file. Keeps working; the Google QAT version is smaller and faster.";
 "Gemma 4 26B A4B (Mixture-of-Experts), needs 32 GB of RAM. Gemma 4 12B comes close at 40 % of the size." = "Gemma 4 26B A4B (Mixture-of-Experts), needs 32 GB of RAM. Gemma 4 12B comes close at 40 % of the size.";
 "Successor: %@" = "Successor: %@";
+
+/* Microphone delivers no audio (#76) */
+"Microphone '%@' is muted." = "Microphone '%@' is muted.";
+"Another app may have muted it. System Settings does not show this — only Audio MIDI Setup does (Mute button next to the volume slider)." = "Another app may have muted it. System Settings does not show this — only Audio MIDI Setup does (Mute button next to the volume slider).";
+"Microphone '%@' unmuted." = "Microphone '%@' unmuted.";
+"Microphone '%@' could not be unmuted." = "Microphone '%@' could not be unmuted.";
+"Open Audio MIDI Setup, select the device and click the Mute button next to the volume slider." = "Open Audio MIDI Setup, select the device and click the Mute button next to the volume slider.";
+"Unmute" = "Unmute";
+"TorroWhisper has no microphone access." = "TorroWhisper has no microphone access.";
+"Allow TorroWhisper under System Settings › Privacy & Security › Microphone." = "Allow TorroWhisper under System Settings › Privacy & Security › Microphone.";
+"Open Settings" = "Open Settings";
+"Microphone '%@' delivers no signal." = "Microphone '%@' delivers no signal.";
+"In System Settings › Sound › Input, check whether the level moves when you speak. Is the device connected? Otherwise choose another microphone in TorroWhisper." = "In System Settings › Sound › Input, check whether the level moves when you speak. Is the device connected? Otherwise choose another microphone in TorroWhisper.";
+"Open Sound Settings" = "Open Sound Settings";
+"Open Audio MIDI Setup" = "Open Audio MIDI Setup";

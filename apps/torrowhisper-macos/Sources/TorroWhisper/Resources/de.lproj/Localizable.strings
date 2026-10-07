@@ -546,3 +546,18 @@
 "Previous Gemma 4 file. Keeps working; the Google QAT version is smaller and faster." = "Bisherige Gemma-4-Datei. Funktioniert weiter; die Google-QAT-Version ist kleiner und schneller.";
 "Gemma 4 26B A4B (Mixture-of-Experts), needs 32 GB of RAM. Gemma 4 12B comes close at 40 % of the size." = "Gemma 4 26B A4B (Mixture-of-Experts), braucht 32 GB RAM. Gemma 4 12B kommt nah heran, bei 40 % der Größe.";
 "Successor: %@" = "Nachfolger: %@";
+
+/* Microphone delivers no audio (#76) */
+"Microphone '%@' is muted." = "Mikrofon '%@' ist stummgeschaltet.";
+"Another app may have muted it. System Settings does not show this — only Audio MIDI Setup does (Mute button next to the volume slider)." = "Vermutlich hat eine andere App es stummgeschaltet. Die Systemeinstellungen zeigen das nicht an – nur Audio-MIDI-Setup (Button „Stumm“ neben dem Lautstärkeregler).";
+"Microphone '%@' unmuted." = "Stummschaltung von Mikrofon '%@' aufgehoben.";
+"Microphone '%@' could not be unmuted." = "Stummschaltung von Mikrofon '%@' konnte nicht aufgehoben werden.";
+"Open Audio MIDI Setup, select the device and click the Mute button next to the volume slider." = "Öffne Audio-MIDI-Setup, wähle das Gerät aus und klicke auf den Button „Stumm“ neben dem Lautstärkeregler.";
+"Unmute" = "Stummschaltung aufheben";
+"TorroWhisper has no microphone access." = "TorroWhisper hat keinen Mikrofonzugriff.";
+"Allow TorroWhisper under System Settings › Privacy & Security › Microphone." = "Erlaube TorroWhisper unter Systemeinstellungen › Datenschutz & Sicherheit › Mikrofon.";
+"Open Settings" = "Einstellungen öffnen";
+"Microphone '%@' delivers no signal." = "Mikrofon '%@' liefert kein Signal.";
+"In System Settings › Sound › Input, check whether the level moves when you speak. Is the device connected? Otherwise choose another microphone in TorroWhisper." = "Prüfe unter Systemeinstellungen › Ton › Eingang, ob sich der Pegel beim Sprechen bewegt. Ist das Gerät verbunden? Sonst wähle in TorroWhisper ein anderes Mikrofon.";
+"Open Sound Settings" = "Ton-Einstellungen öffnen";
+"Open Audio MIDI Setup" = "Audio-MIDI-Setup öffnen";
