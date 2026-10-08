@@ -111,6 +111,10 @@ Deleting these resets the app to a fresh-install state — handy for testing onb
 
 ## Running tests
 
+For a repeatable CPU/Metal comparison with cold/warm runs, model/thread sweeps,
+raw JSON and measured default-setting rationale, see
+[Whisper performance validation](WHISPER-PERFORMANCE.md).
+
 ```bash
 cargo test --workspace
 swift test --package-path apps/torrowhisper-macos
