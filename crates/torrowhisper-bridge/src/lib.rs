@@ -2,7 +2,7 @@
 mod audio_export;
 #[allow(dead_code)]
 mod autostart;
-mod benchmark;
+pub mod benchmark;
 mod diagnostics;
 #[allow(dead_code)]
 mod dictation;

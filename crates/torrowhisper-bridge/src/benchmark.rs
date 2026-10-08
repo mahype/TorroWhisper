@@ -12,6 +12,7 @@
 //! safe to call from a background thread while the app stays responsive.
 
 use std::collections::HashMap;
+pub mod validation;
 use std::time::Instant;
 
 use torrowhisper_core::{

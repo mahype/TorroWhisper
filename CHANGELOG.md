@@ -6,6 +6,9 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Added
+- **Reproducible Whisper performance validation** (#43) — an offline benchmark compares CPU and Metal using the production decoder, separates the first pass from repeated warm measurements, and records model/thread sweeps, word errors and backend logs. The checked-in M4 Max report measures Turbo Q5_0 at 1.927 s on CPU versus 0.370 s with Metal for the same 13.58 s clip, supporting the existing six-thread cap without changing user settings.
+
 ### Fixed
 - **A muted or silent microphone is named as such instead of "recognized no text"** (#76) — macOS can mute an input device at the CoreAudio level (for example when a meeting app syncs its mute button), and System Settings never shows it: the input volume looks normal while the device delivers only zeros. TorroWhisper now checks every recording for digital silence (peak below about −80 dBFS) and skips transcription and the audio export for it. Instead of a puzzling "recognized no text", it names the cause it found, with one concrete fix: a muted device gets an *Unmute* button, missing microphone access a button straight to Privacy & Security › Microphone, and a device that delivers nothing a pointer to Sound › Input and Audio MIDI Setup. A muted device is also flagged right when recording starts. TorroWhisper never unmutes on its own, only on that click.
 
