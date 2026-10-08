@@ -1366,6 +1366,8 @@ struct RuntimeStatusDTO: Codable, Equatable {
     var micSwitchEventCount: UInt64
     var historyRevision: UInt64
     var dictationModelWarming: Bool
+    var silentRecordingCount: UInt64
+    var silentRecordingDevice: String
 
     static let empty = RuntimeStatusDTO(
         isRecording: false,
@@ -1392,7 +1394,9 @@ struct RuntimeStatusDTO: Codable, Equatable {
         lastMicSwitchMessage: "",
         micSwitchEventCount: 0,
         historyRevision: 0,
-        dictationModelWarming: false
+        dictationModelWarming: false,
+        silentRecordingCount: 0,
+        silentRecordingDevice: ""
     )
 }
 

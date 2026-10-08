@@ -44,6 +44,10 @@ final class AppModel: ObservableObject {
 
     var onStateChanged: (() -> Void)?
     var onMicSwitched: ((MicSwitchNotification) -> Void)?
+    /// Fired when the microphone delivers no audio — muted at the CoreAudio
+    /// level at recording start, or after a recording came back as pure
+    /// silence, with the cause narrowed down as far as possible (#76).
+    var onMicProblem: ((MicProblemNotification) -> Void)?
 
     private let bridge = BridgeClient()
     private var timer: Timer?
@@ -53,6 +57,12 @@ final class AppModel: ObservableObject {
     private static let autoSaveDebounceNanoseconds: UInt64 = 500_000_000
     private var lastSeenMicSwitchEventCount: UInt64 = 0
     private var lastSeenDictationErrorCount: UInt64 = 0
+    private var lastSeenSilentRecordingCount: UInt64 = 0
+    private var wasRecording = false
+    /// Cause found for the last silent recording, keyed by its error count;
+    /// while it is the latest error, the bubble names that cause instead of
+    /// the generic "no audio signal" text from the bridge (#76).
+    private var silentRecordingProblem: (errorCount: UInt64, cause: MicProblemCause)?
     private var dictationErrorOccurredAt: Date?
     /// How long the red error bubble stays visible after a dictation failure.
     private static let dictationErrorDisplaySeconds: TimeInterval = 6
@@ -78,7 +88,23 @@ final class AppModel: ObservableObject {
         else {
             return nil
         }
+        if let problem = silentRecordingProblem, problem.errorCount == runtime.dictationErrorCount {
+            return Self.micProblemTitle(
+                problem.cause, device: runtime.silentRecordingDevice, locale: settings.effectiveLocale
+            )
+        }
         return runtime.lastDictationError
+    }
+
+    static func micProblemTitle(_ cause: MicProblemCause, device: String, locale: Locale) -> String {
+        switch cause {
+        case .muted:
+            return String(format: L("Microphone '%@' is muted.", locale: locale), device)
+        case .permissionDenied:
+            return L("TorroWhisper has no microphone access.", locale: locale)
+        case .noSignal:
+            return String(format: L("Microphone '%@' delivers no signal.", locale: locale), device)
+        }
     }
 
     /// True for a short window right after a dictation completed successfully,
@@ -911,6 +937,8 @@ final class AppModel: ObservableObject {
             runtime = try bridge.getRuntimeStatus()
             lastSeenMicSwitchEventCount = runtime.micSwitchEventCount
             lastSeenDictationErrorCount = runtime.dictationErrorCount
+            lastSeenSilentRecordingCount = runtime.silentRecordingCount
+            wasRecording = runtime.isRecording
             lastSeenDictationSuccessCount = runtime.dictationSuccessCount
             history = (try? bridge.loadHistory()) ?? []
             lastSeenHistoryRevision = runtime.historyRevision
@@ -973,6 +1001,8 @@ final class AppModel: ObservableObject {
                     changed = true
             }
             checkMicSwitchEvent()
+            checkRecordingStartMute()
+            checkSilentRecordingEvent()
             checkDictationErrorEvent()
             checkDictationSuccessEvent()
             // Refresh the latency breakdown once per completed dictation (#43).
@@ -1010,6 +1040,74 @@ final class AppModel: ObservableObject {
         guard runtime.dictationErrorCount != lastSeenDictationErrorCount else { return }
         lastSeenDictationErrorCount = runtime.dictationErrorCount
         dictationErrorOccurredAt = Date()
+    }
+
+    /// A muted device still "records" — warn right when recording starts so
+    /// the user can unmute before speaking into the void (#76).
+    private func checkRecordingStartMute() {
+        let isRecording = runtime.isRecording
+        defer { wasRecording = isRecording }
+        guard isRecording, !wasRecording else { return }
+        let device = runtime.activeInputDeviceName
+        guard !device.isEmpty, AudioDeviceMonitor.isInputMuted(deviceName: device) == true else { return }
+        onMicProblem?(MicProblemNotification(device: device, cause: .muted))
+    }
+
+    /// The bridge reports a recording that was digital silence. Narrow down
+    /// why, so the user gets one concrete fix instead of a list of guesses (#76).
+    private func checkSilentRecordingEvent() {
+        let current = runtime.silentRecordingCount
+        guard current != lastSeenSilentRecordingCount else { return }
+        lastSeenSilentRecordingCount = current
+        let device = runtime.silentRecordingDevice
+        let cause = diagnoseSilentMicrophone(device: device)
+        silentRecordingProblem = (runtime.dictationErrorCount, cause)
+        onMicProblem?(MicProblemNotification(device: device, cause: cause))
+    }
+
+    /// Mute is checked first: it is the only cause we can fix in place, and a
+    /// muted device delivers zeros regardless of the permission. A missing
+    /// permission also yields zeros (macOS does not fail the stream). Anything
+    /// else points at the device itself.
+    private func diagnoseSilentMicrophone(device: String) -> MicProblemCause {
+        if !device.isEmpty, AudioDeviceMonitor.isInputMuted(deviceName: device) == true {
+            return .muted
+        }
+        if microphoneAuthorizationStatus != .authorized {
+            return .permissionDenied
+        }
+        return .noSignal
+    }
+
+    /// Clears the CoreAudio mute flag of `device`. Only called from the
+    /// "Unmute" button — never automatically, since another app may have muted
+    /// the device on purpose (#76).
+    @discardableResult
+    func unmuteMicrophone(device: String) -> Bool {
+        let success = AudioDeviceMonitor.setInputMuted(false, deviceName: device)
+        if success {
+            silentRecordingProblem = nil
+            onStateChanged?()
+        }
+        return success
+    }
+
+    /// Opens System Settings › Sound › Input, where the level meter shows
+    /// whether the device picks up anything (#76).
+    func openSoundInputSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Sound-Settings.extension?input"),
+           NSWorkspace.shared.open(url) {
+            return
+        }
+        openSystemSettings()
+    }
+
+    /// Opens Audio MIDI Setup — the only place macOS shows a device's input
+    /// mute flag (#76).
+    func openAudioMIDISetup() {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.audio.AudioMIDISetup") {
+            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        }
     }
 
     private func checkDictationSuccessEvent() {
@@ -1802,4 +1900,18 @@ private struct InlineHotkeyValidationError: LocalizedError {
 struct MicSwitchNotification {
     let message: String
     let activeDevice: String
+}
+
+enum MicProblemCause {
+    /// Muted at the CoreAudio level — invisible in System Settings.
+    case muted
+    /// Microphone permission denied or not yet granted.
+    case permissionDenied
+    /// Neither of the above: the device itself delivers nothing.
+    case noSignal
+}
+
+struct MicProblemNotification {
+    let device: String
+    let cause: MicProblemCause
 }

@@ -89,6 +89,9 @@ struct BridgeRuntime {
     last_dictation_error: String,
     dictation_error_count: u64,
     dictation_success_count: u64,
+    /// Bumped per finished recording that was digital silence (#76).
+    silent_recording_count: u64,
+    silent_recording_device: String,
     cancelled: Arc<AtomicBool>,
     history: Vec<HistoryEntry>,
     history_revision: u64,
@@ -222,6 +225,8 @@ impl BridgeRuntime {
             last_dictation_error: String::new(),
             dictation_error_count: 0,
             dictation_success_count: 0,
+            silent_recording_count: 0,
+            silent_recording_device: String::new(),
             cancelled: Arc::new(AtomicBool::new(false)),
             history: history_store::load().unwrap_or_default(),
             history_revision: 0,
@@ -411,6 +416,16 @@ impl BridgeRuntime {
                 }
                 DictationOutcome::Error(message) => {
                     self.report_dictation_error(message);
+                }
+                DictationOutcome::SilentRecording { device } => {
+                    // Bump the counter before the error so the app sees both in
+                    // the same snapshot and can refine the message (#76).
+                    self.silent_recording_count = self.silent_recording_count.wrapping_add(1);
+                    self.silent_recording_device = device.clone();
+                    self.report_dictation_error(format!(
+                        "No audio signal from microphone '{device}'. Check System Settings › Privacy & Security › \
+                         Microphone and Sound › Input, or the Mute button in Audio MIDI Setup."
+                    ));
                 }
                 DictationOutcome::PendingTranscriptSave(base) => {
                     self.pending_transcript_save = Some(base);
@@ -1231,6 +1246,8 @@ impl BridgeRuntime {
             mic_switch_event_count: self.dictation.mic_switch_event_count(),
             history_revision: self.history_revision,
             dictation_model_warming: self.dictation.is_model_warming(),
+            silent_recording_count: self.silent_recording_count,
+            silent_recording_device: self.silent_recording_device.clone(),
         }
     }
 

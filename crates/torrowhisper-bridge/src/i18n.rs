@@ -146,6 +146,7 @@ fn static_de(en: &str) -> Option<&'static str> {
         "No text available to copy." => "Kein Text zum Kopieren vorhanden.",
         "No text available to paste." => "Kein Text zum Einfügen vorhanden.",
         "Dictation cancelled." => "Diktat abgebrochen.",
+        "Parakeet recognized no text." => "Parakeet hat keinen Text erkannt.",
         "Dictation cancelled — saved to history." => {
             "Diktat abgebrochen — in Historie gespeichert."
         }
@@ -334,6 +335,10 @@ const TEMPLATES_DE: &[(&str, &str)] = &[
     ),
     // Microphone switching
     ("Microphone active: {0}.", "Mikrofon aktiv: {0}."),
+    (
+        "No audio signal from microphone '{0}'. Check System Settings › Privacy & Security › Microphone and Sound › Input, or the Mute button in Audio MIDI Setup.",
+        "Kein Audiosignal vom Mikrofon '{0}'. Prüfe Systemeinstellungen › Datenschutz & Sicherheit › Mikrofon und Ton › Eingang oder den Button „Stumm“ in Audio-MIDI-Setup.",
+    ),
     (
         "Microphone '{0}' unavailable — using '{1}'.",
         "Mikrofon '{0}' nicht verfügbar — verwende '{1}'.",
@@ -599,6 +604,21 @@ mod tests {
                 "Recording started via 'MacBook Pro Microphone', silence stop active."
             ),
             "Aufnahme gestartet über 'MacBook Pro Microphone', Silence-Stopp aktiv."
+        );
+    }
+
+    #[test]
+    fn silent_recording_error_is_translated() {
+        assert_eq!(
+            translate(
+                Lang::De,
+                "No audio signal from microphone 'MacBook Pro-Mikrofon'. Check System Settings › Privacy & Security › Microphone and Sound › Input, or the Mute button in Audio MIDI Setup."
+            ),
+            "Kein Audiosignal vom Mikrofon 'MacBook Pro-Mikrofon'. Prüfe Systemeinstellungen › Datenschutz & Sicherheit › Mikrofon und Ton › Eingang oder den Button „Stumm“ in Audio-MIDI-Setup."
+        );
+        assert_eq!(
+            translate(Lang::De, "Parakeet recognized no text."),
+            "Parakeet hat keinen Text erkannt."
         );
     }
 

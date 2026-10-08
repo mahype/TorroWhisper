@@ -54,6 +54,13 @@ pub enum DictationOutcome {
     /// should write the transcript under the same base name once it is ready,
     /// so audio and text files stay paired.
     PendingTranscriptSave(String),
+    /// The finished recording was digital silence: the device delivered only
+    /// zeros, so there is nothing to transcribe. Reported instead of the
+    /// misleading "recognized no text" so the UI can point at the microphone
+    /// (muted, blocked or disconnected) and offer to unmute it (#76).
+    SilentRecording {
+        device: String,
+    },
 }
 
 /// Whisper-side latency of one dictation plus the wall-clock anchor the runtime
@@ -589,12 +596,35 @@ impl DictationController {
         // Anchor the "total after stop" stopwatch at the very moment the user
         // stopped recording, before any post-stop work (#43).
         let stop_instant = Instant::now();
+        let device_name = recording.current_device_name.clone();
         let audio = recording.finish()?;
         play_recording_cue(cue);
         if audio.samples.is_empty() || audio.duration < Duration::from_millis(200) {
             return Ok(vec![DictationOutcome::Status(
                 "Recording was too short or empty.".to_owned(),
             )]);
+        }
+
+        // A muted or blocked microphone still "records" — CoreAudio just hands
+        // over zeros. Catch that before export and inference so the user gets a
+        // hint at the microphone instead of "recognized no text" (#76).
+        if is_digital_silence(&audio.samples) {
+            log::warn!(
+                target: "dictation",
+                "recording from '{device_name}' is digital silence (peak {:.1} dBFS over {:.1}s) \
+                 — microphone muted, blocked or not delivering audio",
+                amplitude_to_dbfs(peak_amplitude(&audio.samples)),
+                audio.duration.as_secs_f32()
+            );
+            // A cancelled take needs no error toast — the user stopped it anyway.
+            if matches!(cue, RecordingCue::Cancel) {
+                return Ok(vec![DictationOutcome::Status(
+                    "Recording was too short or empty.".to_owned(),
+                )]);
+            }
+            return Ok(vec![DictationOutcome::SilentRecording {
+                device: device_name,
+            }]);
         }
 
         // Optional on-disk save (never for cancelled dictations). The MP3 is
@@ -1395,6 +1425,29 @@ fn interleaved_to_mono(data: &[f32], channels: usize) -> Vec<f32> {
     mono
 }
 
+/// Peak level below which a whole recording counts as digital silence (#76):
+/// about -80 dBFS. A muted or blocked device delivers exact zeros (-91 dB was
+/// observed); even the self-noise of a working microphone in a quiet room sits
+/// well above this (typically -60 to -70 dBFS).
+const DIGITAL_SILENCE_PEAK: f32 = 1e-4;
+
+fn peak_amplitude(samples: &[f32]) -> f32 {
+    samples
+        .iter()
+        .fold(0.0_f32, |peak, sample| peak.max(sample.abs()))
+}
+
+/// True when not a single sample rose above the digital-silence floor — the
+/// peak (not the RMS) is used because one audible sound already proves the
+/// microphone delivers signal.
+fn is_digital_silence(samples: &[f32]) -> bool {
+    peak_amplitude(samples) < DIGITAL_SILENCE_PEAK
+}
+
+fn amplitude_to_dbfs(amplitude: f32) -> f32 {
+    20.0 * amplitude.max(1e-6).log10()
+}
+
 fn root_mean_square(samples: &[f32]) -> f32 {
     if samples.is_empty() {
         return 0.0;
@@ -2189,6 +2242,28 @@ fn cue_playback_duration(cue: RecordingCue) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn peak_amplitude_handles_empty_zero_and_mixed_buffers() {
+        assert_eq!(peak_amplitude(&[]), 0.0);
+        assert_eq!(peak_amplitude(&[0.0; 64]), 0.0);
+        assert_eq!(peak_amplitude(&[0.1, -0.5, 0.3]), 0.5);
+    }
+
+    #[test]
+    fn digital_silence_detects_zeros_but_not_quiet_room_noise() {
+        assert!(is_digital_silence(&[0.0; 48_000]));
+        assert!(is_digital_silence(&[]));
+        // Self-noise of a working microphone in a quiet room (~-60 dBFS).
+        let noise: Vec<f32> = (0..48_000)
+            .map(|i| if i % 2 == 0 { 1e-3 } else { -1e-3 })
+            .collect();
+        assert!(!is_digital_silence(&noise));
+        // A single audible click is enough to prove the device delivers signal.
+        let mut click = vec![0.0; 48_000];
+        click[24_000] = 0.2;
+        assert!(!is_digital_silence(&click));
+    }
 
     #[test]
     fn mono_conversion_averages_channels() {

@@ -53,6 +53,77 @@ final class AudioDeviceMonitor {
     }
 
     static func currentInputDevices() -> [(name: String, uid: String?)] {
+        allDeviceIDs().compactMap { id -> (name: String, uid: String?)? in
+            guard hasInputStreams(deviceID: id) else { return nil }
+            let name = stringProperty(deviceID: id, selector: kAudioObjectPropertyName)
+            let uid = stringProperty(deviceID: id, selector: kAudioDevicePropertyDeviceUID)
+            guard let name else { return nil }
+            return (name: name, uid: uid)
+        }
+    }
+
+    /// Whether the named input device is muted at the CoreAudio level (#76).
+    /// macOS hides this flag — System Settings only shows the input volume, so
+    /// a device muted by another app (e.g. a meeting client syncing its mute
+    /// button) looks "on and loud" while delivering only zeros. Returns nil
+    /// when the device is unknown or has no mute control.
+    static func isInputMuted(deviceName: String) -> Bool? {
+        guard let deviceID = inputDeviceID(named: deviceName) else { return nil }
+        for element in muteElements {
+            var address = muteAddress(element: element)
+            guard AudioObjectHasProperty(deviceID, &address) else { continue }
+            var muted: UInt32 = 0
+            var dataSize = UInt32(MemoryLayout<UInt32>.size)
+            if AudioObjectGetPropertyData(deviceID, &address, 0, nil, &dataSize, &muted) == noErr {
+                return muted != 0
+            }
+        }
+        return nil
+    }
+
+    /// Clears (or sets) the CoreAudio mute flag of the named input device.
+    /// Only ever called on an explicit user click — another app may have muted
+    /// the device on purpose (#76). Returns true when at least one mute control
+    /// accepted the new value.
+    @discardableResult
+    static func setInputMuted(_ muted: Bool, deviceName: String) -> Bool {
+        guard let deviceID = inputDeviceID(named: deviceName) else { return false }
+        var changed = false
+        for element in muteElements {
+            var address = muteAddress(element: element)
+            var settable: DarwinBoolean = false
+            guard AudioObjectHasProperty(deviceID, &address),
+                  AudioObjectIsPropertySettable(deviceID, &address, &settable) == noErr,
+                  settable.boolValue
+            else { continue }
+            var value: UInt32 = muted ? 1 : 0
+            let dataSize = UInt32(MemoryLayout<UInt32>.size)
+            if AudioObjectSetPropertyData(deviceID, &address, 0, nil, dataSize, &value) == noErr {
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    /// Some devices expose mute on the main element, others only per channel.
+    private static let muteElements: [AudioObjectPropertyElement] = [kAudioObjectPropertyElementMain, 1]
+
+    private static func muteAddress(element: AudioObjectPropertyElement) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeInput,
+            mElement: element
+        )
+    }
+
+    private static func inputDeviceID(named name: String) -> AudioObjectID? {
+        allDeviceIDs().first { id in
+            hasInputStreams(deviceID: id)
+                && stringProperty(deviceID: id, selector: kAudioObjectPropertyName) == name
+        }
+    }
+
+    private static func allDeviceIDs() -> [AudioObjectID] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -84,14 +155,7 @@ final class AudioDeviceMonitor {
         ) == noErr else {
             return []
         }
-
-        return ids.compactMap { id -> (name: String, uid: String?)? in
-            guard hasInputStreams(deviceID: id) else { return nil }
-            let name = stringProperty(deviceID: id, selector: kAudioObjectPropertyName)
-            let uid = stringProperty(deviceID: id, selector: kAudioDevicePropertyDeviceUID)
-            guard let name else { return nil }
-            return (name: name, uid: uid)
-        }
+        return ids
     }
 
     private static func hasInputStreams(deviceID: AudioObjectID) -> Bool {
