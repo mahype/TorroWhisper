@@ -13,7 +13,9 @@ jobs:
   rust-and-swift:
     name: Rust + Swift build
     runs-on: macos-26
-    timeout-minutes: 30
+    # A cold build (e.g. after a new stable rustc invalidates the rust-cache
+    # key) takes ~30 min on its own; leave room so the cache gets saved.
+    timeout-minutes: 45
     env:
       # Opt whisper.cpp's CMake out of -mcpu=native, which newer Apple clang
       # on the macOS runner rejects. The flag is only used for native-CPU
