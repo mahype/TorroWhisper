@@ -1,0 +1,121 @@
+large_v3_turbo-cpu-6-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo-metal-1-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo-metal-2-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo-metal-4-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo-metal-6-auto-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo-metal-6-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo-metal-6-de-single.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo-metal-8-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo_q5_0-cpu-6-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo_q5_0-metal-1-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo_q5_0-metal-2-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo_q5_0-metal-4-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo_q5_0-metal-6-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+large_v3_turbo_q5_0-metal-8-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend
+
+standard-cpu-6-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+whisper_backend_init: using BLAS backend
+
+standard-metal-6-de-multi.log
+whisper_init_with_params_no_state: use gpu    = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: device 0: Metal (type: 1)
+whisper_backend_init_gpu: found GPU device 0: Metal (type: 1, cnt: 0)
+whisper_backend_init_gpu: using Metal backend
+whisper_backend_init: using BLAS backend

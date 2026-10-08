@@ -1,0 +1,178 @@
+[
+  {
+    "configuration": "large_v3_turbo_q5_0-cpu-6-de-multi",
+    "load_secs": 5.7967615,
+    "cold_total_secs": 1.9430331,
+    "warm_median_secs": 1.9266324,
+    "warm_min_secs": 1.912308,
+    "warm_max_secs": 1.932303,
+    "warm_median_inference_secs": 1.9210477,
+    "warm_median_rtf": 0.14144851,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo_q5_0-metal-1-de-multi",
+    "load_secs": 0.18710108,
+    "cold_total_secs": 0.7768881,
+    "warm_median_secs": 0.38043073,
+    "warm_min_secs": 0.37940097,
+    "warm_max_secs": 0.38189095,
+    "warm_median_inference_secs": 0.36637044,
+    "warm_median_rtf": 0.026976194,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo_q5_0-metal-2-de-multi",
+    "load_secs": 0.19180636,
+    "cold_total_secs": 0.37959358,
+    "warm_median_secs": 0.37379095,
+    "warm_min_secs": 0.3725815,
+    "warm_max_secs": 0.37460428,
+    "warm_median_inference_secs": 0.35925975,
+    "warm_median_rtf": 0.026452627,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo_q5_0-metal-4-de-multi",
+    "load_secs": 0.18985105,
+    "cold_total_secs": 0.45289755,
+    "warm_median_secs": 0.37137583,
+    "warm_min_secs": 0.37110272,
+    "warm_max_secs": 0.37271103,
+    "warm_median_inference_secs": 0.35852093,
+    "warm_median_rtf": 0.026398227,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo_q5_0-metal-6-de-multi",
+    "load_secs": 0.17719428,
+    "cold_total_secs": 0.38268924,
+    "warm_median_secs": 0.3696844,
+    "warm_min_secs": 0.3687203,
+    "warm_max_secs": 0.37367925,
+    "warm_median_inference_secs": 0.35586464,
+    "warm_median_rtf": 0.026202643,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo_q5_0-metal-8-de-multi",
+    "load_secs": 0.18322705,
+    "cold_total_secs": 0.44508272,
+    "warm_median_secs": 0.36958873,
+    "warm_min_secs": 0.36872125,
+    "warm_max_secs": 0.37121502,
+    "warm_median_inference_secs": 0.35570613,
+    "warm_median_rtf": 0.02619097,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo-cpu-6-de-multi",
+    "load_secs": 0.37325025,
+    "cold_total_secs": 2.079084,
+    "warm_median_secs": 2.0216703,
+    "warm_min_secs": 2.00203,
+    "warm_max_secs": 2.066886,
+    "warm_median_inference_secs": 2.0154436,
+    "warm_median_rtf": 0.14839897,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo-metal-8-de-multi",
+    "load_secs": 0.4534075,
+    "cold_total_secs": 0.48953226,
+    "warm_median_secs": 0.36802304,
+    "warm_min_secs": 0.3678327,
+    "warm_max_secs": 0.3689199,
+    "warm_median_inference_secs": 0.35348922,
+    "warm_median_rtf": 0.026027737,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo-metal-6-de-multi",
+    "load_secs": 0.42625475,
+    "cold_total_secs": 0.38732553,
+    "warm_median_secs": 0.3703042,
+    "warm_min_secs": 0.36830333,
+    "warm_max_secs": 0.37094787,
+    "warm_median_inference_secs": 0.35661155,
+    "warm_median_rtf": 0.026257638,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo-metal-4-de-multi",
+    "load_secs": 0.42724916,
+    "cold_total_secs": 0.4341778,
+    "warm_median_secs": 0.36857846,
+    "warm_min_secs": 0.36708003,
+    "warm_max_secs": 0.37051806,
+    "warm_median_inference_secs": 0.35410568,
+    "warm_median_rtf": 0.026073128,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo-metal-2-de-multi",
+    "load_secs": 0.42935285,
+    "cold_total_secs": 0.4469375,
+    "warm_median_secs": 0.37417033,
+    "warm_min_secs": 0.37348258,
+    "warm_max_secs": 0.37836707,
+    "warm_median_inference_secs": 0.36003458,
+    "warm_median_rtf": 0.02650968,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo-metal-1-de-multi",
+    "load_secs": 0.4600472,
+    "cold_total_secs": 0.39976087,
+    "warm_median_secs": 0.38070622,
+    "warm_min_secs": 0.3803535,
+    "warm_max_secs": 0.38164073,
+    "warm_median_inference_secs": 0.3662262,
+    "warm_median_rtf": 0.026965573,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "standard-cpu-6-de-multi",
+    "load_secs": 0.17233296,
+    "cold_total_secs": 0.62426203,
+    "warm_median_secs": 0.6014199,
+    "warm_min_secs": 0.5937591,
+    "warm_max_secs": 0.60221237,
+    "warm_median_inference_secs": 0.59478945,
+    "warm_median_rtf": 0.043794896,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "standard-metal-6-de-multi",
+    "load_secs": 0.188193,
+    "cold_total_secs": 0.2917116,
+    "warm_median_secs": 0.21934159,
+    "warm_min_secs": 0.21886,
+    "warm_max_secs": 0.21986228,
+    "warm_median_inference_secs": 0.20725143,
+    "warm_median_rtf": 0.015260114,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo-metal-6-auto-multi",
+    "load_secs": 0.44940397,
+    "cold_total_secs": 0.7452418,
+    "warm_median_secs": 0.6224482,
+    "warm_min_secs": 0.62163544,
+    "warm_max_secs": 0.62395734,
+    "warm_median_inference_secs": 0.60800487,
+    "warm_median_rtf": 0.04476796,
+    "max_wer": 0.0
+  },
+  {
+    "configuration": "large_v3_turbo-metal-6-de-single",
+    "load_secs": 0.444868,
+    "cold_total_secs": 0.38365287,
+    "warm_median_secs": 0.3660451,
+    "warm_min_secs": 0.3660444,
+    "warm_max_secs": 0.3664199,
+    "warm_median_inference_secs": 0.35275033,
+    "warm_median_rtf": 0.025973333,
+    "max_wer": 0.0
+  }
+]

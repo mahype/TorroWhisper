@@ -6,6 +6,9 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Added
+- **Reproducible Whisper performance validation** (#43) — an offline benchmark compares CPU and Metal using the production decoder, separates the first pass from repeated warm measurements, and records model/thread sweeps, word errors and backend logs. The checked-in M4 Max report measures Turbo Q5_0 at 1.927 s on CPU versus 0.370 s with Metal for the same 13.58 s clip, supporting the existing six-thread cap without changing user settings.
+
 ## [0.11.0] — 2026-09-28
 
 ### Changed
