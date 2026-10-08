@@ -20,7 +20,7 @@ use llama_cpp_2::{
     context::params::LlamaContextParams,
     llama_backend::LlamaBackend,
     llama_batch::LlamaBatch,
-    model::{AddBos, LlamaModel, params::LlamaModelParams},
+    model::{LlamaModel, params::LlamaModelParams},
     sampling::LlamaSampler,
 };
 use serde::{Deserialize, Serialize};
@@ -203,9 +203,12 @@ fn generate(
         HelperTask::Chat => build_gemma_conversation_prompt(system_prompt, user_text),
         HelperTask::PostProcessing => build_gemma_chat_prompt(system_prompt, user_text),
     };
-    let tokens = model
-        .str_to_token(&prompt, AddBos::Always)
-        .map_err(|err| format!("LLM tokenization failed: {err}"))?;
+    // Tokenization lives on the vocabulary since llama-cpp-2 0.1.158. The
+    // Gemma prompt already starts with a literal `<bos>`, so no special tokens
+    // are added (the former `AddBos::Always` produced a double BOS, which
+    // llama.cpp warns about); the turn markers are parsed as special tokens.
+    let vocab = model.vocab();
+    let tokens = vocab.tokenize(prompt.as_bytes(), false, true);
 
     if tokens.is_empty() {
         return Err("LLM prompt produced no tokens.".to_owned());
@@ -242,15 +245,12 @@ fn generate(
         let token = sampler.sample(&ctx, batch.n_tokens() - 1);
         sampler.accept(token);
 
-        if model.is_eog_token(token) {
+        if vocab.is_eog(token) {
             break;
         }
 
-        let piece = model
-            .token_to_piece(token, &mut decoder, false, None)
-            .map_err(|err| format!("LLM detokenization failed: {err}"))?;
-
-        output.push_str(&piece);
+        let piece = vocab.token_to_piece(token, false, None);
+        decode_piece(&mut decoder, &piece, &mut output);
 
         if let Some(idx) = output.find(STOP_SEQUENCE) {
             output.truncate(idx);
@@ -276,6 +276,19 @@ fn generate(
     }
 
     Ok(cleaned)
+}
+
+/// Appends one token's bytes to `output`. Tokens can split a multi-byte UTF-8
+/// character, so the streaming decoder keeps an incomplete tail until the
+/// next token completes it (formerly done inside llama-cpp-2's
+/// `token_to_piece`, which now returns raw bytes).
+fn decode_piece(decoder: &mut encoding_rs::Decoder, bytes: &[u8], output: &mut String) {
+    // `decode_to_string` never grows its destination; reserve the decoder's
+    // worst case, which includes a retained incomplete sequence.
+    if let Some(needed) = decoder.max_utf8_buffer_length(bytes.len()) {
+        output.reserve(needed);
+    }
+    let _ = decoder.decode_to_string(bytes, output, false);
 }
 
 fn build_gemma_chat_prompt(mode_instruction: &str, transcript: &str) -> String {
@@ -380,6 +393,17 @@ fn strip_control_tokens(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decode_piece_joins_utf8_split_across_tokens() {
+        let mut decoder = encoding_rs::UTF_8.new_decoder();
+        let mut output = String::new();
+        // "für": the two bytes of "ü" arrive in separate tokens.
+        decode_piece(&mut decoder, b"f\xC3", &mut output);
+        assert_eq!(output, "f");
+        decode_piece(&mut decoder, b"\xBCr", &mut output);
+        assert_eq!(output, "für");
+    }
 
     #[test]
     fn post_processing_drops_the_empty_thought_channel_of_gemma_12b() {
