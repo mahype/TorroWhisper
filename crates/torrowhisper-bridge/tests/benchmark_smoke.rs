@@ -24,15 +24,21 @@ fn benchmark_runs_over_installed_models() {
     unsafe { torrowhisper_bridge::ow_string_free(raw) };
 
     println!("benchmark report:\n{json}");
+    let response: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(response["ok"], true, "benchmark FFI must succeed: {json}");
+    let rows = response["value"]["rows"]
+        .as_array()
+        .expect("report must carry rows");
+    // Missing models also produce timing fields (all zero). Those placeholders
+    // must not make this real-inference smoke test pass.
     assert!(
-        json.contains("\"ok\":true"),
-        "benchmark FFI must succeed: {json}"
-    );
-    assert!(json.contains("\"rows\""), "report must carry rows");
-    // At least one real measurement (inference_secs > 0) should be present when
-    // any model is installed.
-    assert!(
-        json.contains("\"inference_secs\""),
-        "report rows must contain inference timing"
+        rows.iter().any(|row| row["model_available"] == true
+            && row["inference_secs"]
+                .as_f64()
+                .is_some_and(|seconds| seconds > 0.0)
+            && row["transcript"]
+                .as_str()
+                .is_some_and(|text| !text.is_empty())),
+        "expected at least one successful inference: {json}"
     );
 }

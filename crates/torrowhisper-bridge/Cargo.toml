@@ -56,7 +56,7 @@ whisper-rs = { version = "0.16.0", features = ["log_backend", "metal"] }
 fluidaudio-rs = { git = "https://github.com/mahype/fluidaudio-rs", rev = "c1569ab731f61c2543dd81879e3c4b457f9a98de", default-features = false, features = ["asr"] }
 # `async` exposes token counting, which we await synchronously via pollster.
 foundation-models = { version = "0.12", features = ["macos_26_0", "async"] }
-pollster = "0.4"
+pollster = "1.0"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 whisper-rs = { version = "0.16.0", features = ["log_backend"] }
