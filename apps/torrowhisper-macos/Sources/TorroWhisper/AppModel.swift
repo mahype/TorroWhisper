@@ -71,6 +71,11 @@ final class AppModel: ObservableObject {
     /// report is fetched once per completed dictation instead of every poll (#43).
     private var lastTimingSuccessCount: UInt64 = 0
     private var dictationSuccessOccurredAt: Date?
+    private var lastSeenClipboardNoticeCount: UInt64 = 0
+    private var clipboardNoticeOccurredAt: Date?
+    /// How long the orange "copied to clipboard" bubble stays visible. Longer
+    /// than "done": the user has to notice it and paste by hand.
+    private static let clipboardNoticeDisplaySeconds: TimeInterval = 4
     /// Whether the last poll tick saw a time-limited bubble (done/error) on
     /// screen; lets the poll fire one final refresh after it expires.
     private var lastTransientBubbleVisible = false
@@ -113,6 +118,18 @@ final class AppModel: ObservableObject {
     var isShowingDictationDone: Bool {
         guard let dictationSuccessOccurredAt else { return false }
         return Date().timeIntervalSince(dictationSuccessOccurredAt) < Self.dictationDoneDisplaySeconds
+    }
+
+    /// Message of a recent "text only in the clipboard" result while the
+    /// bubble should still show it; nil once the display window has elapsed.
+    var currentClipboardNotice: String? {
+        guard let clipboardNoticeOccurredAt,
+              Date().timeIntervalSince(clipboardNoticeOccurredAt) < Self.clipboardNoticeDisplaySeconds,
+              !runtime.lastClipboardNotice.isEmpty
+        else {
+            return nil
+        }
+        return runtime.lastClipboardNotice
     }
 
     init() {
@@ -940,6 +957,7 @@ final class AppModel: ObservableObject {
             lastSeenSilentRecordingCount = runtime.silentRecordingCount
             wasRecording = runtime.isRecording
             lastSeenDictationSuccessCount = runtime.dictationSuccessCount
+            lastSeenClipboardNoticeCount = runtime.clipboardNoticeCount
             history = (try? bridge.loadHistory()) ?? []
             lastSeenHistoryRevision = runtime.historyRevision
             bridgeError = nil
@@ -1005,6 +1023,7 @@ final class AppModel: ObservableObject {
             checkSilentRecordingEvent()
             checkDictationErrorEvent()
             checkDictationSuccessEvent()
+            checkClipboardNoticeEvent()
             // Refresh the latency breakdown once per completed dictation (#43).
             if runtime.dictationSuccessCount != lastTimingSuccessCount {
                 lastTimingSuccessCount = runtime.dictationSuccessCount
@@ -1026,7 +1045,9 @@ final class AppModel: ObservableObject {
             // (their display window elapsing), not through a state change —
             // keep refreshing while one is visible, plus one final tick right
             // after it expires so the bubble is actually taken down.
-            let transientBubbleVisible = isShowingDictationDone || currentDictationErrorMessage != nil
+            let transientBubbleVisible = isShowingDictationDone
+                || currentDictationErrorMessage != nil
+                || currentClipboardNotice != nil
             if changed || transientBubbleVisible || lastTransientBubbleVisible {
                 onStateChanged?()
             }
@@ -1114,6 +1135,12 @@ final class AppModel: ObservableObject {
         guard runtime.dictationSuccessCount != lastSeenDictationSuccessCount else { return }
         lastSeenDictationSuccessCount = runtime.dictationSuccessCount
         dictationSuccessOccurredAt = Date()
+    }
+
+    private func checkClipboardNoticeEvent() {
+        guard runtime.clipboardNoticeCount != lastSeenClipboardNoticeCount else { return }
+        lastSeenClipboardNoticeCount = runtime.clipboardNoticeCount
+        clipboardNoticeOccurredAt = Date()
     }
 
     private func checkMicSwitchEvent() {

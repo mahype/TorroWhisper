@@ -217,6 +217,9 @@
 "Report bugs or submit feature requests." = "Report bugs or submit feature requests.";
 "Restart onboarding" = "Restart onboarding";
 "Restore clipboard after inserting" = "Restore clipboard after inserting";
+"Copied to clipboard" = "Copied to clipboard";
+"Always keep text in the clipboard" = "Always keep text in the clipboard";
+"If no text field is focused, the text is copied to the clipboard instead of being inserted. With \"Always keep text in the clipboard\", every dictation stays in the clipboard, also after it was inserted." = "If no text field is focused, the text is copied to the clipboard instead of being inserted. With \"Always keep text in the clipboard\", every dictation stays in the clipboard, also after it was inserted.";
 "Select" = "Select";
 "Select a GGUF or GGML model file." = "Select a GGUF or GGML model file.";
 "Send feedback" = "Send feedback";

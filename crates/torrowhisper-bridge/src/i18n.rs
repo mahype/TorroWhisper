@@ -153,6 +153,10 @@ fn static_de(en: &str) -> Option<&'static str> {
         "Insertion failed – text copied to clipboard." => {
             "Einfügen fehlgeschlagen – Text in Zwischenablage kopiert."
         }
+        "No text field focused – text copied to clipboard." => {
+            "Kein Textfeld aktiv – Text in Zwischenablage kopiert."
+        }
+        "Text copied to clipboard." => "Text in Zwischenablage kopiert.",
         "Post-processing cancelled." => "Nachbearbeitung abgebrochen.",
         "Post-processing returned no text." => "Nachbearbeitung lieferte keinen Text.",
         "Post-processing worker stopped unexpectedly." => {
@@ -526,6 +530,10 @@ const TEMPLATES_DE: &[(&str, &str)] = &[
     (
         "Launch at login could not be confirmed: {0}",
         "Start bei Anmeldung konnte nicht bestätigt werden: {0}",
+    ),
+    (
+        "Text could not be copied to the clipboard: {0}",
+        "Text konnte nicht in die Zwischenablage kopiert werden: {0}",
     ),
     (
         "{0} Clipboard fallback: {1}",

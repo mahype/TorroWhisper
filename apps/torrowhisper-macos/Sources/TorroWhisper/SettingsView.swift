@@ -334,8 +334,17 @@ struct SettingsView: View {
             Toggle(isOn: model.binding(for: \.restoreClipboardAfterInsert)) {
                 Text("Restore clipboard after inserting", bundle: .module)
             }
+            .disabled(model.settings.alwaysCopyToClipboard)
+            Toggle(isOn: model.binding(for: \.alwaysCopyToClipboard)) {
+                Text("Always keep text in the clipboard", bundle: .module)
+            }
         } header: {
             Text("Text output", bundle: .module)
+        } footer: {
+            Text("If no text field is focused, the text is copied to the clipboard instead of being inserted. With \"Always keep text in the clipboard\", every dictation stays in the clipboard, also after it was inserted.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
 
         Section {

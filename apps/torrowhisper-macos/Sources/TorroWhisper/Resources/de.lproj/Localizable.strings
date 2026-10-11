@@ -250,6 +250,9 @@
 "Report bugs or submit feature requests." = "Bugs melden oder Funktionswünsche einreichen.";
 "Restart onboarding" = "Onboarding erneut starten";
 "Restore clipboard after inserting" = "Clipboard wiederherstellen";
+"Copied to clipboard" = "In Zwischenablage kopiert";
+"Always keep text in the clipboard" = "Text immer in der Zwischenablage behalten";
+"If no text field is focused, the text is copied to the clipboard instead of being inserted. With \"Always keep text in the clipboard\", every dictation stays in the clipboard, also after it was inserted." = "Ist kein Textfeld aktiv, wird der Text in die Zwischenablage kopiert statt eingefügt. Mit „Text immer in der Zwischenablage behalten“ bleibt jedes Diktat in der Zwischenablage, auch nachdem es eingefügt wurde.";
 "Select" = "Auswählen";
 "Select a GGUF or GGML model file." = "GGUF- oder GGML-Modelldatei auswählen.";
 "Send feedback" = "Feedback geben";

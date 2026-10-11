@@ -45,7 +45,10 @@ pub fn insert_text_into_active_app(text: &str, settings: &AppSettings) -> Result
         .key(modifier, Release)
         .map_err(|err| format!("Paste hotkey could not be released: {err}"))?;
 
+    // "Always copy" keeps the transcript in the clipboard after pasting, so
+    // restoring the previous content would defeat it.
     if settings.restore_clipboard_after_insert
+        && !settings.always_copy_to_clipboard
         && let Some(previous_text) = previous_text
     {
         thread::spawn(move || {

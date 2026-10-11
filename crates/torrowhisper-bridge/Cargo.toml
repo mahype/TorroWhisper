@@ -42,6 +42,9 @@ sysinfo = { version = "0.39", default-features = false, features = ["system", "d
 # (arm64 + x86_64) build. Feature must stay confined to whisper-rs's own ggml —
 # see the llama-cpp-2 warning above.
 [target.'cfg(target_os = "macos")'.dependencies]
+# Accessibility focus probe (CFString/CFType helpers); already in the tree
+# via security-framework.
+core-foundation = "0.10"
 whisper-rs = { version = "0.16.0", features = ["log_backend", "metal"] }
 
 # Apple Silicon: Parakeet Ultra runs through FluidAudio/Core ML on the ANE.
