@@ -542,3 +542,5 @@
 "In System Settings › Sound › Input, check whether the level moves when you speak. Is the device connected? Otherwise choose another microphone in TorroWhisper." = "In System Settings › Sound › Input, check whether the level moves when you speak. Is the device connected? Otherwise choose another microphone in TorroWhisper.";
 "Open Sound Settings" = "Open Sound Settings";
 "Open Audio MIDI Setup" = "Open Audio MIDI Setup";
+"Cloud (audio is sent to the provider)" = "Cloud (audio is sent to the provider)";
+"Audio is sent to the cloud provider for transcription. Nothing falls back to local transcription when a request fails." = "Audio is sent to the cloud provider for transcription. Nothing falls back to local transcription when a request fails.";

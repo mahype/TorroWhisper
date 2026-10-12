@@ -12,6 +12,8 @@ use std::{
 };
 
 use crate::audio_export;
+use crate::cloud_transcription::{self, TranscriptionOptions};
+use crate::llm::keychain;
 use crate::model_manager::validated_model_path;
 use crate::parakeet::ParakeetRuntime;
 use crate::streaming_transcription::{
@@ -22,8 +24,8 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use torrowhisper_core::{
-    AppSettings, ParakeetModelStatusDto, SYSTEM_DEFAULT_DEVICE_LABEL, StreamingTranscriptDto,
-    TranscriptionBackend, TriggerMode,
+    AppSettings, CloudTranscriptionModel, ParakeetModelStatusDto, SYSTEM_DEFAULT_DEVICE_LABEL,
+    StreamingTranscriptDto, TranscriptionBackend, TriggerMode,
 };
 use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState,
@@ -536,6 +538,13 @@ impl DictationController {
                     return Err(format!("Recording blocked: {err}"));
                 }
             },
+            TranscriptionBackend::Cloud => {
+                if let Err(err) = validated_cloud_model(settings) {
+                    self.mark_blocked_now();
+                    return Err(format!("Recording blocked: {err}"));
+                }
+                None
+            }
         };
 
         let resolved_name = resolve_input_device_name(settings, &self.available_input_devices);
@@ -661,6 +670,10 @@ impl DictationController {
                 let (context, load_secs) = self.ensure_whisper_context(settings)?;
                 (TranscriptionEngine::Whisper(context), load_secs)
             }
+            TranscriptionBackend::Cloud => (
+                TranscriptionEngine::Cloud(validated_cloud_model(settings)?),
+                0.0,
+            ),
         };
         let language = normalized_language(&settings.transcription_language);
         let app_settings = settings.clone();
@@ -687,6 +700,9 @@ impl DictationController {
                 TranscriptionEngine::Parakeet(runtime) => transcribe_with_parakeet(&runtime, audio),
                 TranscriptionEngine::Whisper(context) => {
                     transcribe_with_whisper(context, &app_settings, audio, language.as_deref())
+                }
+                TranscriptionEngine::Cloud(model) => {
+                    transcribe_with_cloud(&model, &app_settings, audio, language.as_deref())
                 }
             };
             match &result {
@@ -884,6 +900,7 @@ struct ModelCache {
 enum TranscriptionEngine {
     Parakeet(ParakeetRuntime),
     Whisper(Arc<WhisperContext>),
+    Cloud(CloudTranscriptionModel),
 }
 
 struct ActiveRecording {
@@ -1524,6 +1541,62 @@ fn transcribe_with_parakeet(
 
     let inference_started = Instant::now();
     let text = runtime.transcribe(&mono_16khz)?;
+    let inference_secs = inference_started.elapsed().as_secs_f32();
+
+    Ok(TranscriptionOutput {
+        text,
+        resample_secs,
+        state_secs: 0.0,
+        inference_secs,
+    })
+}
+
+/// Returns the cloud model to use, or an error explaining what is missing.
+/// Used both when starting a recording (fail early) and when transcribing.
+fn validated_cloud_model(settings: &AppSettings) -> Result<CloudTranscriptionModel, String> {
+    let model = settings
+        .cloud_transcription
+        .clone()
+        .ok_or_else(|| "No cloud transcription model is selected.".to_owned())?;
+    if !keychain::has_api_key(model.provider.llm_backend()) {
+        return Err(format!(
+            "No {} API key is stored. Add one in the language model settings.",
+            model.provider.label()
+        ));
+    }
+    Ok(model)
+}
+
+fn transcribe_with_cloud(
+    model: &CloudTranscriptionModel,
+    settings: &AppSettings,
+    audio: RecordedAudio,
+    language: Option<&str>,
+) -> Result<TranscriptionOutput, String> {
+    let speech = trim_trailing_silence(&audio.samples, audio.sample_rate, audio.last_voiced_end);
+    let resample_started = Instant::now();
+    let mono_16khz = resample_to_16khz(speech, audio.sample_rate);
+    let resample_secs = resample_started.elapsed().as_secs_f32();
+    if mono_16khz.is_empty() {
+        return Err("No audio data available for cloud transcription.".to_owned());
+    }
+
+    // Dictionary replacement targets are the words the user wants to see in
+    // the output, so they are the best vocabulary hint for the provider.
+    let vocabulary = settings
+        .dictionary
+        .iter()
+        .filter(|entry| !entry.replacement.trim().is_empty())
+        .map(|entry| entry.replacement.trim())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let options = TranscriptionOptions {
+        language,
+        prompt: (!vocabulary.is_empty()).then_some(vocabulary.as_str()),
+    };
+
+    let inference_started = Instant::now();
+    let text = cloud_transcription::transcribe(model, &mono_16khz, &options)?;
     let inference_secs = inference_started.elapsed().as_secs_f32();
 
     Ok(TranscriptionOutput {

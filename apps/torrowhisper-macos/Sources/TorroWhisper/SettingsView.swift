@@ -623,6 +623,12 @@ struct SettingsView: View {
                 Text("Transcription model", bundle: .module)
             }
 
+            if model.settings.transcriptionBackend == .cloud {
+                Text("Audio is sent to the cloud provider for transcription. Nothing falls back to local transcription when a request fails.", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             if let preparing = model.parakeetStatus.preparingModel,
                model.parakeetStatus.isReady,
                let info = model.parakeetInfo(preparing) {
