@@ -176,6 +176,54 @@ struct LanguageModelsManagerSheet: View {
                 Text(group.tier.title(locale: locale))
             }
         }
+
+        if !model.cloudTranscriptionModels.isEmpty {
+            Section {
+                ForEach(model.cloudTranscriptionModels) { info in
+                    cloudTranscriptionTile(info)
+                        .padding(.leading, 16)
+                }
+            } header: {
+                Text("Cloud (audio is sent to the provider)", bundle: .module)
+            }
+        }
+    }
+
+    /// A cloud transcription model. Selectable once its API key is stored; the
+    /// key itself is entered in the cloud models section above.
+    @ViewBuilder
+    private func cloudTranscriptionTile(_ info: CloudTranscriptionModelDTO) -> some View {
+        let isActive = model.settings.transcriptionBackend == .cloud
+            && model.settings.cloudTranscription == info.ref
+
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(info.label)
+                        .font(.body.weight(.medium))
+                    if isActive {
+                        TorroStatusChip(text: L("Active", locale: locale), color: .green)
+                    }
+                }
+                Text(info.hasKey
+                    ? L("Ready", locale: locale)
+                    : L("Needs API key", locale: locale))
+                    .font(.caption)
+                    .foregroundStyle(info.hasKey ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
+            }
+
+            Spacer()
+
+            if !isActive {
+                Button {
+                    model.selectCloudTranscription(info.ref)
+                } label: {
+                    Text("Use", bundle: .module)
+                }
+                .disabled(!info.hasKey)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     @ViewBuilder

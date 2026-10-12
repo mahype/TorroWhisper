@@ -3,6 +3,7 @@ mod audio_export;
 #[allow(dead_code)]
 mod autostart;
 pub mod benchmark;
+mod cloud_transcription;
 mod diagnostics;
 #[allow(dead_code)]
 mod dictation;
@@ -816,6 +817,8 @@ impl BridgeRuntime {
                     // next dictation doesn't pay the load cost inline (#43).
                     self.dictation.start_model_warmup(&self.settings);
                 }
+                // Cloud models have nothing to load locally.
+                TranscriptionBackend::Cloud => {}
             }
         }
 
@@ -1756,6 +1759,23 @@ pub extern "C" fn ow_get_llm_api_key_status() -> *mut c_char {
     })
     .collect();
     response_ok(statuses)
+}
+
+/// Lists the curated cloud transcription models with whether their provider's
+/// key is stored. Booleans only, the key never leaves the Keychain here.
+#[unsafe(no_mangle)]
+pub extern "C" fn ow_cloud_transcription_models() -> *mut c_char {
+    use torrowhisper_core::{CLOUD_TRANSCRIPTION_CATALOG, CloudTranscriptionModelDto};
+    let models: Vec<CloudTranscriptionModelDto> = CLOUD_TRANSCRIPTION_CATALOG
+        .iter()
+        .map(|(provider, model_name, label)| CloudTranscriptionModelDto {
+            provider: *provider,
+            model_name: (*model_name).to_owned(),
+            label: (*label).to_owned(),
+            has_key: llm::keychain::has_api_key(provider.llm_backend()),
+        })
+        .collect();
+    response_ok(models)
 }
 
 /// Returns the unified local + cloud model registry. Remote Ollama / LM Studio

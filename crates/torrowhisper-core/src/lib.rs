@@ -149,6 +149,9 @@ pub enum TranscriptionBackend {
     #[default]
     Parakeet,
     Whisper,
+    /// Audio is sent to a cloud speech-to-text API; the model is chosen in
+    /// [`AppSettings::cloud_transcription`].
+    Cloud,
 }
 
 impl TranscriptionBackend {
@@ -156,9 +159,70 @@ impl TranscriptionBackend {
         match self {
             Self::Parakeet => "Parakeet Ultra",
             Self::Whisper => "OpenAI Whisper",
+            Self::Cloud => "Cloud transcription",
         }
     }
 }
+
+/// Providers that offer cloud speech-to-text. Only OpenAI for now; the
+/// request format is shared with other OpenAI-compatible services (e.g. Groq).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum CloudTranscriptionProvider {
+    OpenAi,
+}
+
+impl CloudTranscriptionProvider {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::OpenAi => "OpenAI",
+        }
+    }
+
+    /// The Keychain slot (and wire-format owner) this provider's key lives in.
+    pub fn llm_backend(self) -> LlmBackendKind {
+        match self {
+            Self::OpenAi => LlmBackendKind::OpenAi,
+        }
+    }
+}
+
+/// One entry of the cloud transcription catalog as shown in the model manager.
+/// `has_key` is a boolean only; the key itself never crosses the FFI boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudTranscriptionModelDto {
+    pub provider: CloudTranscriptionProvider,
+    pub model_name: String,
+    pub label: String,
+    pub has_key: bool,
+}
+
+/// A cloud transcription model selected by the user. Its API key lives in the
+/// Keychain slot of the matching provider, never in `settings.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudTranscriptionModel {
+    pub provider: CloudTranscriptionProvider,
+    pub model_name: String,
+}
+
+/// Curated cloud transcription models as `(provider, model_name, label)`.
+pub const CLOUD_TRANSCRIPTION_CATALOG: &[(CloudTranscriptionProvider, &str, &str)] = &[
+    (
+        CloudTranscriptionProvider::OpenAi,
+        "gpt-4o-transcribe",
+        "GPT-4o Transcribe",
+    ),
+    (
+        CloudTranscriptionProvider::OpenAi,
+        "gpt-4o-mini-transcribe",
+        "GPT-4o mini Transcribe",
+    ),
+    (
+        CloudTranscriptionProvider::OpenAi,
+        "whisper-1",
+        "Whisper (OpenAI API)",
+    ),
+];
 
 /// How strongly a model is recommended. Settings and the model manager group
 /// their lists by tier, in this order (#67).
@@ -1119,6 +1183,10 @@ pub struct AppSettings {
     /// Speech-to-text engine. Parakeet is the Apple-Silicon default; Whisper
     /// remains available as the portable fallback and for additional languages.
     pub transcription_backend: TranscriptionBackend,
+    /// Cloud model used when `transcription_backend` is `Cloud`. `None` until the
+    /// user picks one; older settings files simply don't have the key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cloud_transcription: Option<CloudTranscriptionModel>,
     /// Parakeet model chosen by the user. `None` on installations from before
     /// the choice existed; see [`ParakeetModel::effective`].
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1400,7 +1468,9 @@ impl AppSettings {
         let transcription = self.transcription_backend.label();
         if !self.post_processing_enabled {
             return match self.transcription_backend {
-                TranscriptionBackend::Parakeet => transcription.to_owned(),
+                TranscriptionBackend::Parakeet | TranscriptionBackend::Cloud => {
+                    transcription.to_owned()
+                }
                 TranscriptionBackend::Whisper => {
                     format!("{transcription} with {}", self.local_model.display_label())
                 }
@@ -1468,6 +1538,7 @@ impl Default for AppSettings {
             save_transcripts: false,
             save_directory: String::new(),
             transcription_backend: TranscriptionBackend::default(),
+            cloud_transcription: None,
             parakeet_model: None,
             parakeet_upgrade_offer_dismissed: false,
             local_model: ModelPreset::default(),
@@ -1907,6 +1978,29 @@ mod tests {
         let chosen: AppSettings = serde_json::from_str(r#"{"parakeet_model":"ultra"}"#)
             .expect("configured settings parse");
         assert_eq!(chosen.parakeet_model, Some(ParakeetModel::Ultra));
+    }
+
+    #[test]
+    fn cloud_transcription_choice_round_trips_and_defaults_to_none() {
+        let legacy: AppSettings =
+            serde_json::from_str(r#"{"transcription_backend":"whisper"}"#).expect("legacy parse");
+        assert_eq!(legacy.cloud_transcription, None);
+
+        let chosen = AppSettings {
+            transcription_backend: TranscriptionBackend::Cloud,
+            cloud_transcription: Some(CloudTranscriptionModel {
+                provider: CloudTranscriptionProvider::OpenAi,
+                model_name: "gpt-4o-transcribe".to_owned(),
+            }),
+            ..AppSettings::default()
+        };
+        let json = serde_json::to_string(&chosen).expect("serialize");
+        assert!(json.contains(
+            r#""cloud_transcription":{"provider":"open_ai","model_name":"gpt-4o-transcribe"}"#
+        ));
+        let parsed: AppSettings = serde_json::from_str(&json).expect("round trip");
+        assert_eq!(parsed.transcription_backend, TranscriptionBackend::Cloud);
+        assert_eq!(parsed.cloud_transcription, chosen.cloud_transcription);
     }
 
     #[test]

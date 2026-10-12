@@ -253,6 +253,7 @@ enum ModelPreset: String, Codable, CaseIterable, Identifiable {
 enum TranscriptionBackend: String, Codable, CaseIterable, Identifiable {
     case parakeet
     case whisper
+    case cloud
 
     var id: String { rawValue }
 
@@ -260,7 +261,38 @@ enum TranscriptionBackend: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .parakeet: return "Parakeet Ultra"
         case .whisper: return "OpenAI Whisper"
+        case .cloud: return "Cloud transcription"
         }
+    }
+}
+
+/// Cloud speech-to-text provider. Raw values mirror Rust `CloudTranscriptionProvider`.
+enum CloudTranscriptionProvider: String, Codable, Hashable {
+    case openAi = "open_ai"
+
+    var displayName: String {
+        switch self {
+        case .openAi: return "OpenAI"
+        }
+    }
+}
+
+/// The cloud transcription model the user selected. Mirrors Rust `CloudTranscriptionModel`.
+struct CloudTranscriptionModelRef: Codable, Hashable {
+    var provider: CloudTranscriptionProvider
+    var modelName: String
+}
+
+/// One catalog entry for the model manager. Mirrors Rust `CloudTranscriptionModelDto`.
+struct CloudTranscriptionModelDTO: Codable, Hashable, Identifiable {
+    var provider: CloudTranscriptionProvider
+    var modelName: String
+    var label: String
+    var hasKey: Bool
+
+    var id: String { "\(provider.rawValue)/\(modelName)" }
+    var ref: CloudTranscriptionModelRef {
+        CloudTranscriptionModelRef(provider: provider, modelName: modelName)
     }
 }
 
@@ -1026,6 +1058,8 @@ struct AppSettings: Codable, Equatable {
     var saveTranscripts: Bool
     var saveDirectory: String
     var transcriptionBackend: TranscriptionBackend
+    /// Cloud model used while `transcriptionBackend` is `.cloud`. Mirrors Rust `cloud_transcription`.
+    var cloudTranscription: CloudTranscriptionModelRef?
     /// Nil on installations from before the choice existed (#67).
     var parakeetModel: ParakeetModel?
     var parakeetUpgradeOfferDismissed: Bool
@@ -1089,6 +1123,7 @@ struct AppSettings: Codable, Equatable {
         saveTranscripts: false,
         saveDirectory: "",
         transcriptionBackend: .parakeet,
+        cloudTranscription: nil,
         parakeetModel: nil,
         parakeetUpgradeOfferDismissed: false,
         localModel: .standard,

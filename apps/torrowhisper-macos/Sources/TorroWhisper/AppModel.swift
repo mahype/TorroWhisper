@@ -21,6 +21,7 @@ final class AppModel: ObservableObject {
     /// each entry carrying its app-wide `enabled` flag. Source for the cloud rows
     /// and enable state in the language-models manager.
     @Published var llmRegistry: [LlmRegistryEntryDTO] = []
+    @Published var cloudTranscriptionModels: [CloudTranscriptionModelDTO] = []
     @Published var diagnostics: DiagnosticsDTO = .empty
     @Published var runtime: RuntimeStatusDTO = .empty
     /// Latency breakdown of the most recent dictation (#43). `revision == 0`
@@ -184,7 +185,42 @@ final class AppModel: ObservableObject {
         switch settings.transcriptionBackend {
         case .parakeet: return parakeetStatus.displayLabel
         case .whisper: return settings.localModel.displayName
+        case .cloud: return cloudTranscriptionLabel(settings.cloudTranscription)
         }
+    }
+
+    /// "OpenAI · GPT-4o Transcribe" for the selected cloud model.
+    func cloudTranscriptionLabel(_ ref: CloudTranscriptionModelRef?) -> String {
+        guard let ref else { return TranscriptionBackend.cloud.displayName }
+        let label = cloudTranscriptionModels.first { $0.ref == ref }?.label ?? ref.modelName
+        return "\(ref.provider.displayName) · \(label)"
+    }
+
+    /// Settings picker tag for a cloud model. Parsed back by `cloudModelRef(fromTag:)`.
+    static func cloudTranscriptionTag(_ ref: CloudTranscriptionModelRef) -> String {
+        "cloud:\(ref.provider.rawValue)/\(ref.modelName)"
+    }
+
+    /// Resolves a picker tag to a catalog model whose key is stored. Models
+    /// without a key are never selectable.
+    private func cloudModelRef(fromTag tag: String) -> CloudTranscriptionModelRef? {
+        let parts = tag.dropFirst("cloud:".count).split(separator: "/", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let provider = CloudTranscriptionProvider(rawValue: parts[0]) else {
+            return nil
+        }
+        let ref = CloudTranscriptionModelRef(provider: provider, modelName: parts[1])
+        guard cloudTranscriptionModels.contains(where: { $0.ref == ref && $0.hasKey }) else {
+            return nil
+        }
+        return ref
+    }
+
+    /// Makes a cloud transcription model the active one. Callers only offer
+    /// models whose key is stored.
+    func selectCloudTranscription(_ ref: CloudTranscriptionModelRef) {
+        settings.transcriptionBackend = .cloud
+        settings.cloudTranscription = ref
+        requestAutoSave()
     }
 
     var selectedPostProcessingDisplayName: String {
@@ -547,6 +583,9 @@ final class AppModel: ObservableObject {
             if !selectedStatus.isDownloaded && !selectedStatus.isDownloading {
                 startModelDownload()
             }
+        case .cloud:
+            // Nothing to download; the key is checked when recording starts.
+            break
         }
     }
 
@@ -561,6 +600,8 @@ final class AppModel: ObservableObject {
                     return "parakeet:\(self.effectiveParakeetModel.rawValue)"
                 case .whisper:
                     return "whisper:\(self.settings.localModel.rawValue)"
+                case .cloud:
+                    return self.settings.cloudTranscription.map(AppModel.cloudTranscriptionTag) ?? "cloud"
                 }
             },
             set: { selection in
@@ -581,6 +622,10 @@ final class AppModel: ObservableObject {
                           ) {
                     self.settings.transcriptionBackend = .whisper
                     self.settings.localModel = preset
+                } else if selection.hasPrefix("cloud:"),
+                          let ref = self.cloudModelRef(fromTag: selection) {
+                    self.selectCloudTranscription(ref)
+                    return
                 } else {
                     return
                 }
@@ -677,7 +722,15 @@ final class AppModel: ObservableObject {
                 isEnabled: true
             )
         }
-        return parakeet + whisper
+        let cloud = cloudTranscriptionModels.map {
+            TranscriptionModelOption(
+                tag: AppModel.cloudTranscriptionTag($0.ref),
+                label: "\($0.provider.displayName) · \($0.label)",
+                tier: .stable,
+                isEnabled: $0.hasKey
+            )
+        }
+        return parakeet + whisper + cloud
     }
 
     /// Options grouped by tier in display order; empty tiers are left out.
@@ -950,6 +1003,7 @@ final class AppModel: ObservableObject {
             llmStatusList = (try? bridge.getLlmStatusList()) ?? []
             customLlmStatusList = (try? bridge.getCustomLlmStatusList()) ?? []
             llmRegistry = (try? bridge.getLlmRegistry()) ?? []
+            cloudTranscriptionModels = (try? bridge.listCloudTranscriptionModels()) ?? []
             diagnostics = try bridge.runPermissionDiagnostics()
             runtime = try bridge.getRuntimeStatus()
             lastSeenMicSwitchEventCount = runtime.micSwitchEventCount

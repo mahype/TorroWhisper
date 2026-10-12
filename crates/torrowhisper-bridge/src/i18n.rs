@@ -137,6 +137,32 @@ fn split_template(template: &str) -> Vec<&str> {
 
 fn static_de(en: &str) -> Option<&'static str> {
     Some(match en {
+        // Cloud transcription
+        "No OpenAI API key is stored. Add one in the language model settings." => {
+            "Kein OpenAI-API-Schlüssel hinterlegt. Bitte in den Sprachmodell-Einstellungen eintragen."
+        }
+        "No cloud transcription model is selected." => {
+            "Kein Cloud-Transkriptionsmodell ausgewählt."
+        }
+        "Cloud transcription is not reachable right now." => {
+            "Cloud-Transkription ist gerade nicht erreichbar."
+        }
+        "Cloud transcription response could not be read." => {
+            "Antwort der Cloud-Transkription konnte nicht gelesen werden."
+        }
+        "Cloud transcription returned an unreadable response." => {
+            "Die Cloud-Transkription lieferte eine unlesbare Antwort."
+        }
+        "Cloud transcription recognized no text." => "Cloud-Transkription hat keinen Text erkannt.",
+        "No audio data available for cloud transcription." => {
+            "Keine Audiodaten für die Cloud-Transkription vorhanden."
+        }
+        "The OpenAI API key is invalid or missing." => {
+            "Der OpenAI-API-Schlüssel ist ungültig oder fehlt."
+        }
+        "OpenAI rate limit reached. Try again later." => {
+            "OpenAI-Ratenlimit erreicht. Bitte später erneut versuchen."
+        }
         // Generic runtime status
         "Ready" => "Bereit",
         "History cleared." => "Historie geleert.",
@@ -315,6 +341,15 @@ fn static_de(en: &str) -> Option<&'static str> {
 /// enough to anchor the match; every template is anchored at the start and
 /// the end of the message. Order matters: more specific templates first.
 const TEMPLATES_DE: &[(&str, &str)] = &[
+    // Cloud transcription
+    (
+        "OpenAI rejected the transcription request (HTTP {0}).",
+        "OpenAI hat die Transkriptionsanfrage abgelehnt (HTTP {0}).",
+    ),
+    (
+        "Cloud transcription is unavailable right now (HTTP {0}).",
+        "Cloud-Transkription ist gerade nicht verfügbar (HTTP {0}).",
+    ),
     // Recording lifecycle
     (
         "Recording started via '{0}'{1}.",

@@ -109,6 +109,11 @@ final class BridgeClient {
         try decodeResponse(from: ow_get_llm_api_key_status())
     }
 
+    /// Curated cloud transcription models, each with whether its key is stored.
+    func listCloudTranscriptionModels() throws -> [CloudTranscriptionModelDTO] {
+        try decodeResponse(from: ow_cloud_transcription_models())
+    }
+
     /// Available post-processing pipeline stages (built-in + plugin) for the
     /// per-mode pipeline editor.
     func listPipelineStages() throws -> [StageCatalogEntry] {

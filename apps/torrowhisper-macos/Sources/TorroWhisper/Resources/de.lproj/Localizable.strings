@@ -564,3 +564,5 @@
 "In System Settings › Sound › Input, check whether the level moves when you speak. Is the device connected? Otherwise choose another microphone in TorroWhisper." = "Prüfe unter Systemeinstellungen › Ton › Eingang, ob sich der Pegel beim Sprechen bewegt. Ist das Gerät verbunden? Sonst wähle in TorroWhisper ein anderes Mikrofon.";
 "Open Sound Settings" = "Ton-Einstellungen öffnen";
 "Open Audio MIDI Setup" = "Audio-MIDI-Setup öffnen";
+"Cloud (audio is sent to the provider)" = "Cloud (Audio wird an den Anbieter gesendet)";
+"Audio is sent to the cloud provider for transcription. Nothing falls back to local transcription when a request fails." = "Das Audio wird zur Transkription an den Cloud-Anbieter gesendet. Schlägt eine Anfrage fehl, wird nicht lokal transkribiert.";

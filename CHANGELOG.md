@@ -6,9 +6,12 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10-12
+
 ### Added
 - **Reproducible Whisper performance validation** (#43) — an offline benchmark compares CPU and Metal using the production decoder, separates the first pass from repeated warm measurements, and records model/thread sweeps, word errors and backend logs. The checked-in M4 Max report measures Turbo Q5_0 at 1.927 s on CPU versus 0.370 s with Metal for the same 13.58 s clip, supporting the existing six-thread cap without changing user settings.
 - **Option to always keep dictated text in the clipboard** — Settings › Text output has a new switch *Always keep text in the clipboard*. When on, every dictation stays in the clipboard, also after it was inserted (and when automatic insertion is off); it overrides *Restore clipboard after inserting*. Off by default.
+- **Cloud transcription with OpenAI** (#80) — the dictation transcription model can now be a cloud model: *GPT-4o Transcribe*, *GPT-4o mini Transcribe* or *Whisper (OpenAI API)*. They appear in the language-model manager under *Cloud* and in the transcription picker once an OpenAI key is stored (the same key as for cloud post-processing). Audio is sent to OpenAI only while a cloud model is selected; a failed request shows an error and is never retried locally. The live preview is off for cloud models. Dictionary terms are passed to the provider as a vocabulary hint.
 
 ### Fixed
 - **Dictations are no longer lost when no text field has focus** — TorroWhisper used to send ⌘V blindly, so with a button, list or nothing at all focused the text went nowhere (and *Restore clipboard after inserting* then wiped it from the clipboard too). Before pasting, it now asks macOS accessibility what has focus. If that is clearly not a text field, the text is put into the clipboard instead, and the recording bubble says so in orange ("No text field focused – text copied to clipboard") for a few seconds. Apps with sparse accessibility support (some terminals, games) are pasted into as before.
@@ -279,7 +282,8 @@ First public release. Everything below has landed since the project was initiali
 - CI runner bumped to `macos-15` for a newer Metal.framework ([`47caf7d`](https://github.com/mahype/TorroWhisper/commit/47caf7d)); Xcode 16 pinned on `macos-14` for Swift 6 ([`a1a2b63`](https://github.com/mahype/TorroWhisper/commit/a1a2b63)).
 - Legacy egui desktop app removed ([`82a3f6d`](https://github.com/mahype/TorroWhisper/commit/82a3f6d)).
 
-[Unreleased]: https://github.com/mahype/TorroWhisper/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/mahype/TorroWhisper/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/mahype/TorroWhisper/compare/v0.11.0...v0.12.0
 [0.9.1]: https://github.com/mahype/TorroWhisper/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/mahype/TorroWhisper/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mahype/TorroWhisper/compare/v0.7.4...v0.8.0

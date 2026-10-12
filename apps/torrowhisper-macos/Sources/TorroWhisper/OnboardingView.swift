@@ -629,6 +629,10 @@ struct OnboardingView: View {
         switch model.settings.transcriptionBackend {
         case .parakeet: return model.parakeetStatus.isReady
         case .whisper: return currentWhisperStatus?.isDownloaded == true
+        case .cloud:
+            return model.cloudTranscriptionModels.contains {
+                $0.ref == model.settings.cloudTranscription && $0.hasKey
+            }
         }
     }
 }
