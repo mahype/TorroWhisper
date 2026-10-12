@@ -323,9 +323,10 @@ mod tests {
             .windows(4)
             .position(|window| window == b"data")
             .expect("data chunk");
-        bytes[data_at + 8..]
-            .chunks_exact(2)
-            .map(|pair| f32::from(i16::from_le_bytes([pair[0], pair[1]])) / f32::from(i16::MAX))
+        let (pairs, _) = bytes[data_at + 8..].as_chunks::<2>();
+        pairs
+            .iter()
+            .map(|pair| f32::from(i16::from_le_bytes(*pair)) / f32::from(i16::MAX))
             .collect()
     }
 }
