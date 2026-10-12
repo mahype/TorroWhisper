@@ -703,6 +703,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             if let errorMessage = model.currentDictationErrorMessage {
                 return .error(message: errorMessage)
             }
+            if let clipboardNotice = model.currentClipboardNotice {
+                return .copiedToClipboard(message: clipboardNotice)
+            }
             if model.isShowingDictationDone {
                 return .done
             }
@@ -750,7 +753,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             switch phase {
             case .recording, .transcribing, .postProcessing:
                 streamingTranscriptFeed.start()
-            case .done, .error, .modelNotReady:
+            case .done, .error, .copiedToClipboard, .modelNotReady:
                 // Keep the snapshot (done/error still show the text), just
                 // stop polling.
                 streamingTranscriptFeed.stop()
@@ -768,7 +771,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 return model.selectedModelDisplayName
             case .postProcessing:
                 return model.selectedPostProcessingDisplayName
-            case .modelNotReady, .error, .done:
+            case .modelNotReady, .error, .copiedToClipboard, .done:
                 return nil
             }
         }()

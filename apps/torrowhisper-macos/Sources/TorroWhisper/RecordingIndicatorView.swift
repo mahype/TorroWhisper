@@ -9,6 +9,9 @@ enum IndicatorPhase: Equatable {
     /// error, worker crash, insertion failure) so the bubble doesn't just
     /// vanish without explanation.
     case error(message: String)
+    /// Shown for a few seconds when the transcript went only to the clipboard
+    /// (no text field had focus), so the user knows to paste it by hand.
+    case copiedToClipboard(message: String)
     /// Shown briefly (~1s) after a successful dictation so a fast completion
     /// reads as "finished" instead of the bubble silently disappearing.
     case done
@@ -238,7 +241,7 @@ struct RecordingIndicatorView: View {
     @ViewBuilder
     private var content: some View {
         switch phase {
-        case .recording, .transcribing, .postProcessing, .error, .done:
+        case .recording, .transcribing, .postProcessing, .error, .copiedToClipboard, .done:
             // Identical layout across every active phase (including the failure
             // and done states) so the box never jumps: the dark waveform area stays up top
             // (flat while not recording) and the status line stays put — only the
@@ -330,6 +333,8 @@ struct RecordingIndicatorView: View {
                 .help(statusDotLabel)
         case .error(let message):
             minimalMessage(symbol: "exclamationmark.triangle.fill", color: .red, text: message)
+        case .copiedToClipboard(let message):
+            minimalMessage(symbol: "doc.on.clipboard.fill", color: .orange, text: message)
         case .modelNotReady(let label, let progress, let isDownloading):
             let text: String = {
                 if isDownloading, let progress {
@@ -531,12 +536,19 @@ struct RecordingIndicatorView: View {
 
     private var isDonePhase: Bool { phase == .done }
 
+    /// The notice text when the transcript went only to the clipboard.
+    private var clipboardNotice: String? {
+        if case let .copiedToClipboard(message) = phase { return message }
+        return nil
+    }
+
     /// Title line in the status row: "Dictation failed" in the error phase,
     /// "Done" in the done phase, otherwise the active mode. The model name is
     /// only a fallback when post-processing is off. Keeping this to one title
     /// plus one detail line leaves the compact bubble's height to the waveform.
     private var primaryLineText: String {
         if errorMessage != nil { return L("Dictation failed", locale: locale) }
+        if clipboardNotice != nil { return L("Copied to clipboard", locale: locale) }
         if isDonePhase { return L("Done", locale: locale) }
         if let modeName, !modeName.isEmpty { return modeName }
         return modelName
@@ -544,7 +556,7 @@ struct RecordingIndicatorView: View {
 
     /// Detail line: the error message in the error phase, otherwise the phase hint.
     private var secondaryLineText: String {
-        errorMessage ?? phaseHint
+        errorMessage ?? clipboardNotice ?? phaseHint
     }
 
     /// Centered status line: a leading control — the stop button while
@@ -606,7 +618,7 @@ struct RecordingIndicatorView: View {
             return isCancelling
                 ? L("Cancelling — saving to history…", locale: locale)
                 : L("Post-processing in progress", locale: locale)
-        case .modelNotReady, .error, .done:
+        case .modelNotReady, .error, .copiedToClipboard, .done:
             return ""
         }
     }
@@ -639,6 +651,7 @@ struct RecordingIndicatorView: View {
         case .postProcessing: return L("Post-processing in progress", locale: locale)
         case .modelNotReady: return L("Loading speech model…", locale: locale)
         case .error: return L("Error", locale: locale)
+        case .copiedToClipboard: return L("Copied to clipboard", locale: locale)
         case .done: return L("Done", locale: locale)
         }
     }
@@ -664,7 +677,7 @@ struct RecordingIndicatorView: View {
         }
         switch phase {
         case .recording, .transcribing, .postProcessing, .done: return .green
-        case .modelNotReady: return .orange
+        case .modelNotReady, .copiedToClipboard: return .orange
         case .error: return .red
         }
     }
@@ -672,7 +685,7 @@ struct RecordingIndicatorView: View {
     private var isBlinkPhase: Bool {
         switch phase {
         case .transcribing, .postProcessing: return true
-        case .recording, .modelNotReady, .error, .done: return false
+        case .recording, .modelNotReady, .error, .copiedToClipboard, .done: return false
         }
     }
 

@@ -1008,6 +1008,9 @@ struct AppSettings: Codable, Equatable {
     var insertTextAutomatically: Bool
     var insertDelayMs: UInt32
     var restoreClipboardAfterInsert: Bool
+    /// Keep every transcript in the clipboard, also after a successful insert.
+    /// Overrides `restoreClipboardAfterInsert`.
+    var alwaysCopyToClipboard: Bool
     var vadEnabled: Bool
     var vadThreshold: Float
     var vadSilenceMs: UInt32
@@ -1072,6 +1075,7 @@ struct AppSettings: Codable, Equatable {
         insertTextAutomatically: true,
         insertDelayMs: 120,
         restoreClipboardAfterInsert: true,
+        alwaysCopyToClipboard: false,
         vadEnabled: false,
         vadThreshold: 0.014,
         vadSilenceMs: 900,
@@ -1350,6 +1354,10 @@ struct RuntimeStatusDTO: Codable, Equatable {
     var lastDictationError: String
     var dictationErrorCount: UInt64
     var dictationSuccessCount: UInt64
+    /// Bumped when a dictation went only to the clipboard (no text field
+    /// focused). Such a dictation also bumps `dictationSuccessCount`.
+    var clipboardNoticeCount: UInt64
+    var lastClipboardNotice: String
     var dictationTriggerCount: UInt64
     var hotkeyRegistered: Bool
     var hotkeyText: String
@@ -1379,6 +1387,8 @@ struct RuntimeStatusDTO: Codable, Equatable {
         lastDictationError: "",
         dictationErrorCount: 0,
         dictationSuccessCount: 0,
+        clipboardNoticeCount: 0,
+        lastClipboardNotice: "",
         dictationTriggerCount: 0,
         hotkeyRegistered: false,
         hotkeyText: "Ctrl+Shift+Space",

@@ -1084,6 +1084,11 @@ pub struct AppSettings {
     pub insert_text_automatically: bool,
     pub insert_delay_ms: u32,
     pub restore_clipboard_after_insert: bool,
+    /// Leave every transcript in the clipboard, also after a successful
+    /// insert (and when auto-insert is off). Overrides
+    /// `restore_clipboard_after_insert`. Without it the clipboard is only used
+    /// as a fallback when no text field has focus.
+    pub always_copy_to_clipboard: bool,
     pub vad_enabled: bool,
     pub vad_threshold: f32,
     pub vad_silence_ms: u32,
@@ -1449,6 +1454,7 @@ impl Default for AppSettings {
             insert_text_automatically: true,
             insert_delay_ms: 120,
             restore_clipboard_after_insert: true,
+            always_copy_to_clipboard: false,
             vad_enabled: false,
             vad_threshold: 0.014,
             vad_silence_ms: 900,
@@ -1693,6 +1699,15 @@ pub struct RuntimeStatusDto {
     /// value to flash a brief green "done" state in the recording bubble so a
     /// fast completion doesn't look like the bubble crashing.
     pub dictation_success_count: u64,
+    /// Bumped whenever a delivered dictation went only to the clipboard (no
+    /// text field had focus, or "always copy" with auto-insert off). Such a
+    /// dictation also bumps `dictation_success_count`; the app shows the
+    /// clipboard notice instead of the plain "done" state.
+    #[serde(default)]
+    pub clipboard_notice_count: u64,
+    /// Localized message for the most recent clipboard notice.
+    #[serde(default)]
+    pub last_clipboard_notice: String,
     pub dictation_trigger_count: u64,
     pub hotkey_registered: bool,
     pub hotkey_text: String,
@@ -1810,6 +1825,7 @@ mod tests {
         assert!(!settings.onboarding_completed);
         assert!(settings.insert_text_automatically);
         assert!(settings.restore_clipboard_after_insert);
+        assert!(!settings.always_copy_to_clipboard);
         assert_eq!(settings.trigger_mode, TriggerMode::PushToTalk);
         assert_eq!(settings.recording_output_volume_percent, 100);
         assert!(!settings.vad_enabled);

@@ -7,6 +7,7 @@ mod diagnostics;
 #[allow(dead_code)]
 mod dictation;
 mod dictionary;
+mod focus_probe;
 mod history_store;
 mod i18n;
 mod llm;
@@ -89,6 +90,10 @@ struct BridgeRuntime {
     last_dictation_error: String,
     dictation_error_count: u64,
     dictation_success_count: u64,
+    /// Bumped whenever a dictation ended up only in the clipboard (no text
+    /// field focused, or "always copy" with auto-insert off).
+    clipboard_notice_count: u64,
+    last_clipboard_notice: String,
     /// Bumped per finished recording that was digital silence (#76).
     silent_recording_count: u64,
     silent_recording_device: String,
@@ -225,6 +230,8 @@ impl BridgeRuntime {
             last_dictation_error: String::new(),
             dictation_error_count: 0,
             dictation_success_count: 0,
+            clipboard_notice_count: 0,
+            last_clipboard_notice: String::new(),
             silent_recording_count: 0,
             silent_recording_device: String::new(),
             cancelled: Arc::new(AtomicBool::new(false)),
@@ -501,6 +508,31 @@ impl BridgeRuntime {
         self.dictation_success_count = self.dictation_success_count.wrapping_add(1);
     }
 
+    /// Records that the transcript was parked in the clipboard instead of
+    /// being inserted, so the bubble can say where the text went.
+    fn note_clipboard_notice(&mut self, message: &str) {
+        self.clipboard_notice_count = self.clipboard_notice_count.wrapping_add(1);
+        self.last_clipboard_notice = message.to_owned();
+        self.last_status = message.to_owned();
+    }
+
+    /// Puts the transcript into the clipboard without pasting it. A failure is
+    /// reported as a dictation error; the text is still in the history.
+    fn park_transcript_in_clipboard(&mut self, transcript: &str, notice: &str) {
+        match text_inserter::copy_to_clipboard(transcript) {
+            Ok(()) => {
+                log::info!(target: "bridge", "transcript copied to clipboard ({} chars)", transcript.chars().count());
+                self.note_dictation_success();
+                self.note_clipboard_notice(notice);
+            }
+            Err(err) => {
+                self.report_dictation_error(format!(
+                    "Text could not be copied to the clipboard: {err}"
+                ));
+            }
+        }
+    }
+
     fn cancel_dictation(&mut self) -> Result<String, String> {
         let was_recording = self.dictation.is_recording();
         let was_transcribing = self.dictation.is_transcribing();
@@ -586,7 +618,16 @@ impl BridgeRuntime {
         }
 
         let insertion_started = std::time::Instant::now();
-        if self.settings.insert_text_automatically {
+        if self.settings.insert_text_automatically
+            && focus_probe::focused_text_target() == focus_probe::FocusTarget::NotEditable
+        {
+            // Pasting now would send ⌘V into a button, list or nothing at
+            // all and the text would be gone. Keep it in the clipboard instead.
+            self.park_transcript_in_clipboard(
+                &transcript,
+                "No text field focused – text copied to clipboard.",
+            );
+        } else if self.settings.insert_text_automatically {
             match text_inserter::insert_text_into_active_app(&transcript, &self.settings) {
                 Ok(message) => {
                     log::info!(target: "bridge", "transcript inserted ({} chars)", transcript.chars().count());
@@ -611,6 +652,8 @@ impl BridgeRuntime {
                     }
                 },
             }
+        } else if self.settings.always_copy_to_clipboard {
+            self.park_transcript_in_clipboard(&transcript, "Text copied to clipboard.");
         } else {
             self.note_dictation_success();
             self.last_status = ready_status.to_owned();
@@ -1213,6 +1256,8 @@ impl BridgeRuntime {
             last_dictation_error: i18n::translate(lang, &self.last_dictation_error),
             dictation_error_count: self.dictation_error_count,
             dictation_success_count: self.dictation_success_count,
+            clipboard_notice_count: self.clipboard_notice_count,
+            last_clipboard_notice: i18n::translate(lang, &self.last_clipboard_notice),
             is_recording: self.dictation.is_recording(),
             is_transcribing,
             is_post_processing,

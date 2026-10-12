@@ -1192,6 +1192,9 @@
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Onboarding erneut starten" } }
       }
     },
+    "Copied to clipboard" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Copied to clipboard"}}, "de": {"stringUnit": {"state": "translated", "value": "In Zwischenablage kopiert"}}}},
+    "Always keep text in the clipboard" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Always keep text in the clipboard"}}, "de": {"stringUnit": {"state": "translated", "value": "Text immer in der Zwischenablage behalten"}}}},
+    "If no text field is focused, the text is copied to the clipboard instead of being inserted. With \"Always keep text in the clipboard\", every dictation stays in the clipboard, also after it was inserted." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "If no text field is focused, the text is copied to the clipboard instead of being inserted. With \"Always keep text in the clipboard\", every dictation stays in the clipboard, also after it was inserted."}}, "de": {"stringUnit": {"state": "translated", "value": "Ist kein Textfeld aktiv, wird der Text in die Zwischenablage kopiert statt eingefügt. Mit „Text immer in der Zwischenablage behalten“ bleibt jedes Diktat in der Zwischenablage, auch nachdem es eingefügt wurde."}}}},
     "Restore clipboard after inserting" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Clipboard wiederherstellen" } }
