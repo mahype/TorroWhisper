@@ -29,6 +29,8 @@ pub(crate) struct TranscriptionOptions<'a> {
     /// ISO-639-1 code such as `de`. `None` lets the provider detect the language.
     pub language: Option<&'a str>,
     /// Vocabulary hint (dictionary replacement targets). Newlines are flattened.
+    /// Only sent to `whisper-1`; the gpt-4o models drop the end of the take
+    /// when they receive it (see [`multipart_body`]).
     pub prompt: Option<&'a str>,
 }
 
@@ -126,7 +128,11 @@ fn multipart_body(model_name: &str, options: &TranscriptionOptions<'_>, wav: &[u
     if let Some(language) = options.language {
         push_text_field(&mut body, "language", language);
     }
-    if let Some(prompt) = options.prompt {
+    // gpt-4o-transcribe cuts the end off a take when a prompt is sent: the
+    // vocabulary hint is read, then the tail of the audio is dropped, and the
+    // hint can even come back as text ("comitte, comitte, …"). whisper-1 keeps
+    // the full take with the same prompt, so only it gets the hint.
+    if let Some(prompt) = options.prompt.filter(|_| !model_name.starts_with("gpt-4o")) {
         let flat = truncate_chars(&prompt.replace(['\r', '\n'], " "), PROMPT_MAX_CHARS);
         if !flat.trim().is_empty() {
             push_text_field(&mut body, "prompt", flat.trim());
@@ -224,6 +230,24 @@ mod tests {
         assert!(text.contains("name=\"file\"; filename=\"audio.wav\""));
         assert!(!text.contains("name=\"prompt\""));
         assert!(text.ends_with(&format!("--{BOUNDARY}--\r\n")));
+    }
+
+    #[test]
+    fn gpt4o_models_get_no_prompt_but_whisper_does() {
+        let options = TranscriptionOptions {
+            language: Some("de"),
+            prompt: Some("comitte, Anika, Herdr"),
+        };
+        let gpt = String::from_utf8_lossy(&multipart_body("gpt-4o-transcribe", &options, &[]))
+            .into_owned();
+        let gpt_mini =
+            String::from_utf8_lossy(&multipart_body("gpt-4o-mini-transcribe", &options, &[]))
+                .into_owned();
+        let whisper =
+            String::from_utf8_lossy(&multipart_body("whisper-1", &options, &[])).into_owned();
+        assert!(!gpt.contains("name=\"prompt\""));
+        assert!(!gpt_mini.contains("name=\"prompt\""));
+        assert!(whisper.contains("name=\"prompt\"\r\n\r\ncomitte, Anika, Herdr"));
     }
 
     #[test]
