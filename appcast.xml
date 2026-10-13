@@ -6,6 +6,24 @@
     <description>Official update feed for Open Whisper.</description>
     <language>en</language>
     <item>
+      <title>Version 0.12.0</title>
+      <pubDate>Tue, 13 Oct 2026 10:10:43 +0000</pubDate>
+      <sparkle:shortVersionString>0.12.0</sparkle:shortVersionString>
+      <sparkle:version>0.12.0</sparkle:version>
+      <description>&lt;h3&gt;What's Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Whisper-Performance mit CPU-/Metal-Messungen belegen (#43) by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/78"&gt;https://github.com/mahype/TorroWhisper/pull/78&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;build(deps): bump pollster from 0.4.0 to 1.0.1 by @dependabot[bot] in &lt;a href="https://github.com/mahype/TorroWhisper/pull/75"&gt;https://github.com/mahype/TorroWhisper/pull/75&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;fix(dictation): name a muted or silent microphone instead of "no text" by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/77"&gt;https://github.com/mahype/TorroWhisper/pull/77&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;feat(dictation): clipboard fallback when no text field has focus by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/79"&gt;https://github.com/mahype/TorroWhisper/pull/79&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;feat(dictation): Cloud-Transkription mit OpenAI-Modellen (0.12.0) by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/81"&gt;https://github.com/mahype/TorroWhisper/pull/81&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;fix(cloud-transcription): full take and no prompt for gpt-4o models by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/83"&gt;https://github.com/mahype/TorroWhisper/pull/83&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a href="https://github.com/mahype/TorroWhisper/compare/v0.11.0...v0.12.0"&gt;https://github.com/mahype/TorroWhisper/compare/v0.11.0...v0.12.0&lt;/a&gt;&lt;/p&gt;</description>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/mahype/TorroWhisper/releases/download/v0.12.0/TorroWhisper-0.12.0.dmg" sparkle:edSignature="Gjf1q/7tCz44ELVh+mxFx13CpPOOpwqK21S9+LGqNHt6jXLdIV5u6N55tialG7WcJQgqiSuNZSHsXBHey9oNAw==" length="38068417" type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 0.11.0</title>
       <pubDate>Mon, 28 Sep 2026 21:27:25 +0000</pubDate>
       <sparkle:shortVersionString>0.11.0</sparkle:shortVersionString>
