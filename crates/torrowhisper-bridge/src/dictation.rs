@@ -1573,9 +1573,11 @@ fn transcribe_with_cloud(
     audio: RecordedAudio,
     language: Option<&str>,
 ) -> Result<TranscriptionOutput, String> {
-    let speech = trim_trailing_silence(&audio.samples, audio.sample_rate, audio.last_voiced_end);
+    // The full buffer goes to the provider. Trimming at the last tracked voice
+    // end can cut off trailing speech that voice tracking missed; the trim only
+    // exists to stop local Whisper from hallucinating on silence.
     let resample_started = Instant::now();
-    let mono_16khz = resample_to_16khz(speech, audio.sample_rate);
+    let mono_16khz = resample_to_16khz(&audio.samples, audio.sample_rate);
     let resample_secs = resample_started.elapsed().as_secs_f32();
     if mono_16khz.is_empty() {
         return Err("No audio data available for cloud transcription.".to_owned());
