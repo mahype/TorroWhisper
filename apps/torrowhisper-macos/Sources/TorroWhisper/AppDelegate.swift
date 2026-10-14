@@ -226,6 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        model.refreshCloudTranscriptionModels()
         refreshMenuState()
     }
 
@@ -338,6 +339,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             let preset = ModelPreset(rawValue: raw)
         else { return }
         model.persistWhisperPresetImmediately(preset)
+    }
+
+    @objc private func selectCloudTranscription(_ sender: NSMenuItem) {
+        guard sender.isEnabled,
+              let ref = sender.representedObject as? CloudTranscriptionModelRef else { return }
+        model.persistCloudTranscriptionImmediately(ref)
     }
 
     @objc private func selectParakeet(_ sender: NSMenuItem) {
@@ -961,6 +968,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
 
     private func rebuildModelMenu() {
         modelMenu.removeAllItems()
+        // Keep AppKit from enabling cloud models whose API key is missing.
+        modelMenu.autoenablesItems = false
         let parakeetItem = NSMenuItem(
             title: model.parakeetStatus.displayLabel,
             action: #selector(selectParakeet(_:)),
@@ -983,6 +992,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             item.representedObject = preset.rawValue
             item.state = (model.settings.transcriptionBackend == .whisper && preset == activePreset)
                 ? .on : .off
+            modelMenu.addItem(item)
+        }
+
+        if !model.cloudTranscriptionModels.isEmpty {
+            modelMenu.addItem(.separator())
+        }
+        for cloudModel in model.cloudTranscriptionModels {
+            let item = NSMenuItem(
+                title: "\(cloudModel.provider.displayName) · \(cloudModel.label)",
+                action: #selector(selectCloudTranscription(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = cloudModel.ref
+            item.state = (model.settings.transcriptionBackend == .cloud
+                && model.settings.cloudTranscription == cloudModel.ref) ? .on : .off
+            item.isEnabled = cloudModel.hasKey
             modelMenu.addItem(item)
         }
     }

@@ -223,6 +223,16 @@ final class AppModel: ObservableObject {
         requestAutoSave()
     }
 
+    /// Refresh key availability when opening the tray menu, including keys
+    /// added or removed in the cloud-model manager since the last full reload.
+    func refreshCloudTranscriptionModels() {
+        do {
+            cloudTranscriptionModels = try bridge.listCloudTranscriptionModels()
+        } catch {
+            publish(error)
+        }
+    }
+
     var selectedPostProcessingDisplayName: String {
         if let selected = settings.activePostProcessingModel,
            let entry = llmRegistry.first(where: { $0.modelRef == selected }) {
@@ -1496,6 +1506,21 @@ final class AppModel: ObservableObject {
             freshSettings.transcriptionBackend = .whisper
             freshSettings.localModel = preset
             clearPinnedDefaultModelPath(&freshSettings.localModelPath)
+            _ = try bridge.saveSettings(freshSettings)
+            reloadAll()
+        } catch {
+            publish(error)
+        }
+    }
+
+    /// Saves a tray-menu cloud selection immediately, like the local model choices.
+    func persistCloudTranscriptionImmediately(_ ref: CloudTranscriptionModelRef) {
+        do {
+            let catalog = try bridge.listCloudTranscriptionModels()
+            guard catalog.contains(where: { $0.ref == ref && $0.hasKey }) else { return }
+            var freshSettings = try bridge.loadSettings()
+            freshSettings.transcriptionBackend = .cloud
+            freshSettings.cloudTranscription = ref
             _ = try bridge.saveSettings(freshSettings)
             reloadAll()
         } catch {
