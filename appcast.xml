@@ -6,6 +6,29 @@
     <description>Official update feed for Open Whisper.</description>
     <language>en</language>
     <item>
+      <title>Version 0.12.1</title>
+      <pubDate>Mon, 02 Nov 2026 12:53:51 +0000</pubDate>
+      <sparkle:shortVersionString>0.12.1</sparkle:shortVersionString>
+      <sparkle:version>0.12.1</sparkle:version>
+      <description>&lt;h3&gt;Fixed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Automatic text insertion in Claude Code, ChatGPT and other apps with incomplete accessibility support:&lt;/strong&gt; TorroWhisper no longer blocks automatic paste just because macOS reports no focused accessibility element or only a generic web container. This fixes the incorrect “No text field focused – text copied to clipboard” fallback while an input is active.&lt;/li&gt;
+&lt;li&gt;Clearly identified non-text controls, such as buttons, lists and menus, still use the clipboard fallback.&lt;/li&gt;
+&lt;li&gt;Configured cloud transcription models appear in the menu-bar model picker, matching the language-model settings.&lt;/li&gt;
+&lt;li&gt;Networking dependencies include security fixes for TLS, certificate validation and Tokio I/O safety.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;Updating&lt;/h3&gt;
+&lt;p&gt;Open &lt;strong&gt;Settings → Updates → Check Now&lt;/strong&gt; on each Mac, or install the attached DMG. No settings changes or model downloads are required for this fix.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Full changelog:&lt;/strong&gt; &lt;a href="https://github.com/mahype/TorroWhisper/compare/v0.12.0...v0.12.1"&gt;https://github.com/mahype/TorroWhisper/compare/v0.12.0...v0.12.1&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;What's Changed&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;fix(macos): Cloud-Modelle im Transkriptionsmenü anzeigen by @mahype in &lt;a href="https://github.com/mahype/TorroWhisper/pull/84"&gt;https://github.com/mahype/TorroWhisper/pull/84&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: &lt;a href="https://github.com/mahype/TorroWhisper/compare/v0.12.0...v0.12.1"&gt;https://github.com/mahype/TorroWhisper/compare/v0.12.0...v0.12.1&lt;/a&gt;&lt;/p&gt;</description>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/mahype/TorroWhisper/releases/download/v0.12.1/TorroWhisper-0.12.1.dmg" sparkle:edSignature="KoxHUG7J9DETjf0CPcgpxO+XQ4nvdlPUwz90acKYf7caY0vuYV7UWWAmFzmkwaD6LCxH1qJK7DqEiz96bHpFBw==" length="38046960" type="application/octet-stream" />
+    </item>
+    <item>
       <title>Version 0.12.0</title>
       <pubDate>Tue, 13 Oct 2026 10:10:43 +0000</pubDate>
       <sparkle:shortVersionString>0.12.0</sparkle:shortVersionString>
