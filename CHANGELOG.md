@@ -289,7 +289,8 @@ First public release. Everything below has landed since the project was initiali
 - CI runner bumped to `macos-15` for a newer Metal.framework ([`47caf7d`](https://github.com/mahype/TorroWhisper/commit/47caf7d)); Xcode 16 pinned on `macos-14` for Swift 6 ([`a1a2b63`](https://github.com/mahype/TorroWhisper/commit/a1a2b63)).
 - Legacy egui desktop app removed ([`82a3f6d`](https://github.com/mahype/TorroWhisper/commit/82a3f6d)).
 
-[Unreleased]: https://github.com/mahype/TorroWhisper/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/mahype/TorroWhisper/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/mahype/TorroWhisper/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/mahype/TorroWhisper/compare/v0.11.0...v0.12.0
 [0.9.1]: https://github.com/mahype/TorroWhisper/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/mahype/TorroWhisper/compare/v0.8.0...v0.9.0
