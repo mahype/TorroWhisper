@@ -1,0 +1,37 @@
+# enon-tools-vorlage: phasen-labels 2
+# Entfernt die Phasen-Labels des Issue-Workflows von einem geschlossenen Issue,
+# auch wenn es ein Merge mit "Closes #<nr>" schließt (enon-tools #202).
+# Vorlage aus dem Plugin enon-tools, eingerichtet mit /setup. Ohne die erste
+# Zeile gilt die Datei als eigene Fassung, und /setup ändert sie nicht mehr.
+name: Phasen-Labels
+
+on:
+  issues:
+    types: [closed]
+
+permissions:
+  issues: write
+
+jobs:
+  entfernen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Phasen-Labels entfernen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NR: ${{ github.event.issue.number }}
+          # Muss zu PHASEN_LABELS_GESCHLOSSEN in plugins/enon-tools/lib/conventions.mjs passen.
+          PHASEN: plan-ready plan-accepted started-implementation pr-open awaiting-review
+        run: |
+          # Nur Labels, die am Issue hängen, in dessen Schreibweise; GitHub
+          # vergleicht Label-Namen ohne Groß-/Kleinschreibung.
+          jq -r '.issue.labels[].name' "$GITHUB_EVENT_PATH" | while IFS= read -r label; do
+            klein=$(printf '%s' "$label" | tr '[:upper:]' '[:lower:]')
+            for p in $PHASEN; do
+              if [ "$klein" = "$p" ]; then
+                gh issue edit "$NR" --repo "$REPO" --remove-label "$label"
+                echo "Entfernt: $label"
+              fi
+            done
+          done
