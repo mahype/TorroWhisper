@@ -11,6 +11,7 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 ### Fixed
 - **Automatic insertion no longer stops at "No text field focused" in apps with incomplete accessibility support** — missing macOS accessibility focus was incorrectly treated as proof that no text field was active, blocking insertion in apps such as Claude Code and ChatGPT. An unavailable focus or a generic web container now leaves the target unknown and allows the usual automatic paste. Clearly identified non-text controls (such as buttons, lists and menus) still use the clipboard fallback. Regression tests cover missing focus, accessibility errors and web containers.
 - **Cloud transcription models appear in the menu-bar model picker** — configured cloud models are available alongside local models, matching the language-model settings.
+- **Security updates for networking dependencies** — update rustls to 0.23.46, rustls-webpki to 0.103.16 and webpki-root-certs to 1.0.10 to address six RustSec advisories; update Tokio to 1.53.3 for its I/O-safety advisory and replace the yanked clipboard-win 5.4.1 with 5.4.3.
 
 ## [0.12.0] — 2026-10-12
 
