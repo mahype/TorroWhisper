@@ -622,8 +622,9 @@ impl BridgeRuntime {
         if self.settings.insert_text_automatically
             && focus_probe::focused_text_target() == focus_probe::FocusTarget::NotEditable
         {
-            // Pasting now would send ⌘V into a button, list or nothing at
-            // all and the text would be gone. Keep it in the clipboard instead.
+            // A known non-text control (e.g. a button or list) has focus.
+            // Keep the text in the clipboard instead of sending ⌘V into it.
+            // Missing accessibility focus stays Unknown and still allows paste.
             self.park_transcript_in_clipboard(
                 &transcript,
                 "No text field focused – text copied to clipboard.",

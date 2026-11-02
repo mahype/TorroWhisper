@@ -1,19 +1,20 @@
 //! Asks the accessibility API whether the system-wide focused element can take
-//! text, so a dictation is not pasted into the void (no field focused, a
-//! button or list has focus) but parked in the clipboard instead.
+//! text, so a dictation is parked in the clipboard instead of pasted into a
+//! known non-text control such as a button or list.
 //!
 //! The probe is deliberately conservative: only a positive "nothing editable
 //! has focus" answer stops the paste. Apps with sparse accessibility (custom
 //! terminals, games, some cross-platform toolkits) often report a bare window
-//! or group as focused even while a text cursor is active — those land in
-//! `Unknown` and keep the old behaviour (paste as before).
+//! or group as focused, or no element at all, even while a text cursor is
+//! active. Web editors can expose only their enclosing web area. Those cases
+//! land in `Unknown` and keep the old behaviour (paste as before).
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FocusTarget {
     /// A text field, text area or another element whose value can be set.
     Editable,
-    /// No element has focus, or the focused element is a known non-text
-    /// control (button, list, table, menu, …).
+    /// The focused element is a known non-text control (button, list, table,
+    /// menu, …). A missing accessibility focus is not enough to establish this.
     NotEditable,
     /// The accessibility API could not tell (no permission, timeout, app with
     /// sparse accessibility support). Callers paste as usual.
@@ -24,8 +25,9 @@ pub enum FocusTarget {
 const TEXT_ROLES: &[&str] = &["AXTextField", "AXTextArea", "AXComboBox"];
 
 /// Roles that never accept typed text. Containers such as `AXWindow`,
-/// `AXGroup` or `AXScrollArea` are intentionally missing: apps without proper
-/// accessibility report those while a custom text view has the cursor.
+/// `AXGroup`, `AXScrollArea` or `AXWebArea` are intentionally missing: apps
+/// without proper accessibility report those while a custom text view or web
+/// editor has the cursor.
 const NON_TEXT_ROLES: &[&str] = &[
     "AXButton",
     "AXCell",
@@ -49,7 +51,6 @@ const NON_TEXT_ROLES: &[&str] = &[
     "AXTabGroup",
     "AXTable",
     "AXToolbar",
-    "AXWebArea",
 ];
 
 fn classify(role: Option<&str>, value_settable: bool) -> FocusTarget {
@@ -86,8 +87,8 @@ mod macos {
     type AXError = i32;
 
     const AX_ERROR_SUCCESS: AXError = 0;
-    /// The attribute exists but has no value — for the system-wide element's
-    /// focused-element attribute this means nothing has keyboard focus.
+    /// The attribute exists but has no value. This can also mean the app does
+    /// not expose its keyboard focus through accessibility.
     const AX_ERROR_NO_VALUE: AXError = -25212;
     /// Upper bound for each accessibility round trip into the target app, so a
     /// hung app can't stall the dictation pipeline.
@@ -161,11 +162,15 @@ mod macos {
         }
         unsafe { AXUIElementSetMessagingTimeout(system.0, MESSAGING_TIMEOUT_SECS) };
 
-        let focused = match system.copy_raw("AXFocusedUIElement") {
-            Ok(value) => Element(value),
+        classify_focused_element(system.copy_raw("AXFocusedUIElement").map(Element))
+    }
+
+    fn classify_focused_element(result: Result<Element, AXError>) -> FocusTarget {
+        let focused = match result {
+            Ok(element) => element,
             Err(AX_ERROR_NO_VALUE) => {
-                log::info!(target: "bridge", "focus probe: no focused element");
-                return FocusTarget::NotEditable;
+                log::info!(target: "bridge", "focus probe: no accessibility focused element -> Unknown (paste allowed)");
+                return FocusTarget::Unknown;
             }
             Err(err) => {
                 log::info!(target: "bridge", "focus probe: focused element unavailable (AXError {err})");
@@ -187,6 +192,29 @@ mod macos {
             role.as_deref().unwrap_or("<none>")
         );
         target
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn missing_focused_element_is_unknown_not_non_editable() {
+            // Some apps report no AX element even with a live text cursor.
+            // This also covers a successful AX query returning a null value:
+            // copy_raw normalizes that case to AX_ERROR_NO_VALUE.
+            assert_eq!(
+                classify_focused_element(Err(AX_ERROR_NO_VALUE)),
+                FocusTarget::Unknown
+            );
+        }
+
+        #[test]
+        fn unavailable_focused_element_is_unknown() {
+            for error in [-25204, -25205, -25211] {
+                assert_eq!(classify_focused_element(Err(error)), FocusTarget::Unknown);
+            }
+        }
     }
 }
 
@@ -211,13 +239,23 @@ mod tests {
     fn known_controls_are_not_editable() {
         assert_eq!(classify(Some("AXButton"), false), FocusTarget::NotEditable);
         assert_eq!(classify(Some("AXOutline"), false), FocusTarget::NotEditable);
-        assert_eq!(classify(Some("AXWebArea"), false), FocusTarget::NotEditable);
+        assert_eq!(classify(Some("AXList"), false), FocusTarget::NotEditable);
+        assert_eq!(
+            classify(Some("AXMenuItem"), false),
+            FocusTarget::NotEditable
+        );
+    }
+
+    #[test]
+    fn web_container_without_settable_value_stays_unknown() {
+        assert_eq!(classify(Some("AXWebArea"), false), FocusTarget::Unknown);
     }
 
     #[test]
     fn containers_and_missing_roles_stay_unknown() {
         assert_eq!(classify(Some("AXWindow"), false), FocusTarget::Unknown);
         assert_eq!(classify(Some("AXGroup"), false), FocusTarget::Unknown);
+        assert_eq!(classify(Some("AXScrollArea"), false), FocusTarget::Unknown);
         assert_eq!(classify(None, false), FocusTarget::Unknown);
     }
 }
