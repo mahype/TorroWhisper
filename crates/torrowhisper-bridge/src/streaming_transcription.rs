@@ -412,8 +412,13 @@ unsafe extern "C" fn abort_when_stopped(user_data: *mut std::ffi::c_void) -> boo
 
 /// Streaming passes deliberately use fewer threads than the final pass: they
 /// run while the UI, the audio callback and the user's foreground app are all
-/// live, and preview latency matters less than system responsiveness.
+/// live, and preview latency matters less than system responsiveness. On
+/// Apple Silicon the GPU does the work: two threads were measured no slower
+/// than four on Metal (#88), so the preview takes the minimum there.
 fn streaming_thread_count() -> i32 {
+    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        return 2;
+    }
     let cores = thread::available_parallelism()
         .map(|cores| cores.get())
         .unwrap_or(4);
