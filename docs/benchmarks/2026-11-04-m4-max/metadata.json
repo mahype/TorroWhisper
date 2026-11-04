@@ -1,0 +1,30 @@
+{
+  "source_commit": "7b47b5c98f673d13f6cb3064b93314ca95d98573",
+  "source_dirty": false,
+  "os": "27.0.1",
+  "hardware": "Mac16,5",
+  "chip": "Apple M4 Max",
+  "memory_bytes": 137438953472,
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "binary_sha256": "a2d5a26ca55e838c5688b67ede70e30f0b64de551e53f94aee1221c8e046c42a",
+  "suite": "tuning",
+  "reference_sha256": "7a870173d19c2b67d838f9746e9c7d82d1794329aae18ab012c3de3287bb9606",
+  "reference_short_sha256": "0804d446ba66ca1040cfb6ab0b43ee64e76afbc867d609ee7d43eaf293ce8d15",
+  "source_sha256": {
+    "crates/torrowhisper-bridge/src/benchmark.rs": "d8cd119225001cf4947d870ef8a31e25e8e04555c7ae460e78d4585bd822b5bb",
+    "crates/torrowhisper-bridge/src/benchmark/validation.rs": "a319072b978a53cd0b2a1e86c100e21fc99e4cdf5987709e73fd94d220986c26",
+    "crates/torrowhisper-bridge/src/dictation.rs": "3afdc52abbb6aeebc12764966fe65eb5587bf0e29aed3cc6ad85f3c74485e7df",
+    "crates/torrowhisper-bridge/src/streaming_transcription.rs": "91f1d32f5389b53207586343857fb94a16eae488871c423d844dd63ece652d03",
+    "crates/torrowhisper-bridge/examples/whisper_benchmark.rs": "aa4c8f4ce0c3529958d1650eca68b943dc9f60337ae5268e2bbb60c015845187",
+    "scripts/benchmark-whisper.py": "f6c4f56fe2fab1c90e9220701b4c0be5b483ffe689c36a5b0e0e098c13fc8861",
+    "Cargo.lock": "7c5621078c7513eea0f1ecf3b559d392fcf1f29232d05f1daa0eb4bf5bd3a34e"
+  },
+  "repetitions": 5,
+  "scope": "Whisper only; excludes capture, VAD trimming, LLM post-processing and insertion",
+  "baseline": "Same binary and decoding, use_gpu=false; CPU backend may use Accelerate/BLAS. Not a historical-build replay.",
+  "models_sha256": {
+    "ggml-large-v3-turbo-q5_0.bin": "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
+    "ggml-large-v3-turbo.bin": "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+    "ggml-small.bin": "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"
+  }
+}

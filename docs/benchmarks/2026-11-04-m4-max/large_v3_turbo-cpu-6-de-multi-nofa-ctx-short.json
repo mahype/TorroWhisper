@@ -1,0 +1,67 @@
+{
+  "model": "large_v3_turbo",
+  "model_filename": "ggml-large-v3-turbo.bin",
+  "whisper_version": "1.8.3",
+  "backend_requested": "cpu",
+  "threads": 6,
+  "language": "de",
+  "single_segment": false,
+  "clip": "short",
+  "flash_attn": false,
+  "audio_ctx": 173,
+  "audio_secs": 2.44775,
+  "reference_text": "Bitte schick mir die Unterlagen bis morgen.",
+  "prepare_audio_secs": 0.000039208,
+  "load_secs": 0.40264592,
+  "load_rss_mib": 1583.5625,
+  "cold": {
+    "state_secs": 0.003778917,
+    "inference_secs": 2.505641,
+    "total_secs": 2.5106156,
+    "real_time_factor": 1.0236506,
+    "word_error_rate": 2.857143,
+    "transcript": "Bitte schick mir die Unterlagen bis morgen. Schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+  },
+  "warm": [
+    {
+      "state_secs": 0.003643916,
+      "inference_secs": 2.5929778,
+      "total_secs": 2.5972383,
+      "real_time_factor": 1.059331,
+      "word_error_rate": 2.857143,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.003117875,
+      "inference_secs": 2.5600023,
+      "total_secs": 2.5638068,
+      "real_time_factor": 1.0458593,
+      "word_error_rate": 2.857143,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.003589458,
+      "inference_secs": 2.2407577,
+      "total_secs": 2.2453043,
+      "real_time_factor": 0.9154357,
+      "word_error_rate": 2.857143,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.003084333,
+      "inference_secs": 2.1880617,
+      "total_secs": 2.191863,
+      "real_time_factor": 0.8939073,
+      "word_error_rate": 2.857143,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.002957917,
+      "inference_secs": 2.2216756,
+      "total_secs": 2.225246,
+      "real_time_factor": 0.9076399,
+      "word_error_rate": 2.857143,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    }
+  ]
+}
