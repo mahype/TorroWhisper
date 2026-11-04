@@ -1679,11 +1679,17 @@ pub(crate) fn run_whisper_inference(
 /// Whether Whisper contexts are created with flash attention (#88). One switch
 /// for every context the app creates (dictation cache, warmup, benchmark), so
 /// the live preview — which borrows the dictation context — follows as well.
-pub(crate) const WHISPER_FLASH_ATTN: bool = false;
+/// On by measurement only on Apple Silicon (Metal ~16-18 % faster, no extra
+/// word errors; docs/WHISPER-PERFORMANCE.md). Intel Macs stay off: CPU-only
+/// decoding got ~80 % slower with flash attention on the M4 Max and could not
+/// be measured on Intel hardware.
+pub(crate) const WHISPER_FLASH_ATTN: bool = cfg!(all(target_os = "macos", target_arch = "aarch64"));
 
 /// Whether the encoder window (`audio_ctx`) is fitted to the audio length
 /// instead of always encoding 30 s (#88). Applies to the final pass, the live
-/// preview, the model warmup and the in-app benchmark alike.
+/// preview, the model warmup and the in-app benchmark alike. Off by
+/// measurement: the Turbo models repeat or truncate text with a shortened
+/// window (docs/WHISPER-PERFORMANCE.md); the switch stays for future models.
 pub(crate) const WHISPER_DYNAMIC_AUDIO_CTX: bool = false;
 
 /// Whisper's encoder covers 30 s of audio with 1500 positions, i.e. one
