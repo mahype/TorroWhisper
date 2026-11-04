@@ -18,9 +18,12 @@ use std::time::Instant;
 use torrowhisper_core::{
     AppSettings, BenchmarkReportDto, BenchmarkRequestDto, BenchmarkRowDto, ModelPreset,
 };
-use whisper_rs::{WhisperContext, WhisperContextParameters};
+use whisper_rs::WhisperContext;
 
-use crate::dictation::{resample_to_16khz, resolve_thread_count, run_whisper_inference};
+use crate::dictation::{
+    WHISPER_DYNAMIC_AUDIO_CTX, WHISPER_FLASH_ATTN, resample_to_16khz, resolve_thread_count,
+    run_whisper_inference, whisper_context_params,
+};
 use crate::model_manager::{ModelIntegrity, default_model_path, preset_model_integrity};
 
 /// Fixed reference clip (16 kHz mono, 16-bit PCM), generated offline with macOS
@@ -33,6 +36,15 @@ const REFERENCE_WAV: &[u8] = include_bytes!("../resources/benchmark-de.wav");
 const REFERENCE_TEXT: &str = "Das schnelle Diktieren funktioniert am besten, wenn die \
 Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben \
 alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet.";
+
+/// Short reference clip (~2.4 s, same format and voice as [`REFERENCE_WAV`]) for
+/// the developer benchmark (#88): a typical short dictation, where a reduced
+/// `audio_ctx` saves the most encoder work. Separately synthesized sentence,
+/// not a cut of the long clip.
+const REFERENCE_SHORT_WAV: &[u8] = include_bytes!("../resources/benchmark-de-short.wav");
+
+/// Ground-truth transcript of [`REFERENCE_SHORT_WAV`].
+const REFERENCE_SHORT_TEXT: &str = "Bitte schick mir die Unterlagen bis morgen.";
 
 const REFERENCE_LANGUAGE: &str = "de";
 const DEFAULT_THREAD_SWEEP: [u32; 5] = [1, 2, 4, 6, 8];
@@ -107,6 +119,7 @@ pub fn run_benchmark(
                         settings,
                         Some(REFERENCE_LANGUAGE),
                         n_threads,
+                        WHISPER_DYNAMIC_AUDIO_CTX,
                     ) {
                         Ok(inference) => {
                             let rtf = inference.inference_secs / audio_secs;
@@ -162,6 +175,7 @@ fn measure_run(
         settings,
         Some(REFERENCE_LANGUAGE),
         n_threads,
+        WHISPER_DYNAMIC_AUDIO_CTX,
     )?;
     let rtf = inference.inference_secs / audio_secs;
     let quality = quality_score(reference_words, &inference.text);
@@ -188,8 +202,9 @@ fn load_context(preset: ModelPreset) -> Result<(WhisperContext, f32, f32), Strin
     let path_str = path.to_string_lossy().to_string();
     let rss_before = current_rss_mb();
     let started = Instant::now();
-    let context = WhisperContext::new_with_params(&path_str, WhisperContextParameters::default())
-        .map_err(|err| format!("model could not be loaded: {err}"))?;
+    let context =
+        WhisperContext::new_with_params(&path_str, whisper_context_params(WHISPER_FLASH_ATTN))
+            .map_err(|err| format!("model could not be loaded: {err}"))?;
     let load_secs = started.elapsed().as_secs_f32();
     let load_rss_mb = current_rss_mb().map_or(0.0, |after| {
         rss_before.map_or(0.0, |before| (after - before).max(0.0))
@@ -289,11 +304,15 @@ fn normalized_words(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Minimal PCM-WAV decoder for the embedded reference: scans RIFF chunks for
-/// `fmt ` + `data`, requires 16-bit PCM, and downmixes to mono. Kept
-/// self-contained to avoid adding a WAV crate for one fixed asset.
+/// Decodes the embedded long reference clip.
 fn decode_reference_wav() -> Result<(Vec<f32>, u32), String> {
-    let bytes = REFERENCE_WAV;
+    decode_wav(REFERENCE_WAV)
+}
+
+/// Minimal PCM-WAV decoder for the embedded references: scans RIFF chunks for
+/// `fmt ` + `data`, requires 16-bit PCM, and downmixes to mono. Kept
+/// self-contained to avoid adding a WAV crate for two fixed assets.
+fn decode_wav(bytes: &[u8]) -> Result<(Vec<f32>, u32), String> {
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         return Err("benchmark reference is not a RIFF/WAVE file".to_owned());
     }
@@ -375,6 +394,15 @@ mod tests {
             samples.len() > 16_000 * 5,
             "reference should be several seconds"
         );
+        assert!(samples.iter().all(|s| (-1.0..=1.0).contains(s)));
+    }
+
+    #[test]
+    fn short_reference_wav_is_a_short_16khz_clip() {
+        let (samples, sample_rate) = decode_wav(REFERENCE_SHORT_WAV).expect("short clip decodes");
+        assert_eq!(sample_rate, 16_000);
+        let secs = samples.len() as f32 / 16_000.0;
+        assert!((2.0..=4.0).contains(&secs), "short clip is {secs:.2}s");
         assert!(samples.iter().all(|s| (-1.0..=1.0).contains(s)));
     }
 

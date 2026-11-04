@@ -357,22 +357,24 @@ impl DictationController {
         thread::spawn(move || {
             let started = Instant::now();
             let path_string = path_for_thread.to_string_lossy().to_string();
-            let result =
-                WhisperContext::new_with_params(&path_string, WhisperContextParameters::default())
-                    .map(|context| {
-                        log::info!(
-                            target: "dictation",
-                            "model warmup complete in {:.1}s ({label})",
-                            started.elapsed().as_secs_f32()
-                        );
-                        let context = Arc::new(context);
-                        warm_inference_graph(&context, &settings_for_thread);
-                        (path_for_thread, context)
-                    })
-                    .map_err(|err| {
-                        log::warn!(target: "dictation", "model warmup failed ({label}): {err}");
-                        format!("Whisper model warmup failed: {err}")
-                    });
+            let result = WhisperContext::new_with_params(
+                &path_string,
+                whisper_context_params(WHISPER_FLASH_ATTN),
+            )
+            .map(|context| {
+                log::info!(
+                    target: "dictation",
+                    "model warmup complete in {:.1}s ({label})",
+                    started.elapsed().as_secs_f32()
+                );
+                let context = Arc::new(context);
+                warm_inference_graph(&context, &settings_for_thread);
+                (path_for_thread, context)
+            })
+            .map_err(|err| {
+                log::warn!(target: "dictation", "model warmup failed ({label}): {err}");
+                format!("Whisper model warmup failed: {err}")
+            });
             let _ = tx.send(result);
         });
         self.warmup_rx = Some(rx);
@@ -867,7 +869,7 @@ impl DictationController {
         let load_started = Instant::now();
         let context = WhisperContext::new_with_params(
             &model_path_string,
-            WhisperContextParameters::default(),
+            whisper_context_params(WHISPER_FLASH_ATTN),
         )
         .map_err(|err| {
             log::error!(
@@ -1504,7 +1506,14 @@ fn transcribe_with_whisper(
     }
 
     let n_threads = resolve_thread_count(settings.whisper_thread_count);
-    let inference = run_whisper_inference(&context, &mono_16khz, settings, language, n_threads)?;
+    let inference = run_whisper_inference(
+        &context,
+        &mono_16khz,
+        settings,
+        language,
+        n_threads,
+        WHISPER_DYNAMIC_AUDIO_CTX,
+    )?;
 
     // Belt-and-suspenders over the silence trim: a short residual pause can
     // still trigger a hallucinated subtitle/broadcast phrase. Strip those known
@@ -1620,13 +1629,16 @@ pub(crate) struct WhisperInference {
 /// state-creation and inference timings. Shared by the live dictation path and
 /// the benchmark engine so both exercise identical decoding parameters (#43).
 /// `n_threads` is passed in so the benchmark can sweep thread counts without
-/// mutating settings.
+/// mutating settings; `dynamic_audio_ctx` likewise lets the developer benchmark
+/// compare both encoder windows (#88). Production callers pass
+/// [`WHISPER_DYNAMIC_AUDIO_CTX`].
 pub(crate) fn run_whisper_inference(
     context: &WhisperContext,
     samples: &[f32],
     settings: &AppSettings,
     language: Option<&str>,
     n_threads: i32,
+    dynamic_audio_ctx: bool,
 ) -> Result<WhisperInference, String> {
     let state_started = Instant::now();
     let mut state = context
@@ -1634,7 +1646,12 @@ pub(crate) fn run_whisper_inference(
         .map_err(|err| format!("Whisper state could not be created: {err}"))?;
     let state_secs = state_started.elapsed().as_secs_f32();
 
-    let params = base_full_params(settings, language, n_threads);
+    let params = base_full_params(
+        settings,
+        language,
+        n_threads,
+        audio_ctx_for(samples.len(), dynamic_audio_ctx),
+    );
 
     // Serialize all Whisper inference process-wide. Today the paths (a live
     // dictation, a benchmark run) never overlap by design, but nothing enforced
@@ -1659,15 +1676,61 @@ pub(crate) fn run_whisper_inference(
     })
 }
 
+/// Whether Whisper contexts are created with flash attention (#88). One switch
+/// for every context the app creates (dictation cache, warmup, benchmark), so
+/// the live preview — which borrows the dictation context — follows as well.
+pub(crate) const WHISPER_FLASH_ATTN: bool = false;
+
+/// Whether the encoder window (`audio_ctx`) is fitted to the audio length
+/// instead of always encoding 30 s (#88). Applies to the final pass, the live
+/// preview, the model warmup and the in-app benchmark alike.
+pub(crate) const WHISPER_DYNAMIC_AUDIO_CTX: bool = false;
+
+/// Whisper's encoder covers 30 s of audio with 1500 positions, i.e. one
+/// position per 320 samples at 16 kHz.
+const SAMPLES_PER_AUDIO_CTX: usize = 16_000 * 30 / 1500;
+/// Positions added on top of the audio length (1 s), so the last spoken word
+/// is never encoded right at the edge of the window.
+const AUDIO_CTX_PADDING: usize = 50;
+/// whisper.cpp rejects `audio_ctx` beyond the model's 1500 positions.
+const AUDIO_CTX_FULL_WINDOW: usize = 1500;
+
+/// Context parameters for every `WhisperContext` the app creates: whisper-rs
+/// defaults plus the flash-attention switch.
+pub(crate) fn whisper_context_params(flash_attn: bool) -> WhisperContextParameters<'static> {
+    let mut params = WhisperContextParameters::default();
+    params.flash_attn(flash_attn);
+    params
+}
+
+/// The `audio_ctx` for `n_samples_16k` samples of 16 kHz audio: `0` (whisper.cpp
+/// default, full 30 s window) when disabled or when the audio plus padding
+/// fills the window anyway, otherwise the audio length in encoder positions
+/// plus one second of padding.
+pub(crate) fn audio_ctx_for(n_samples_16k: usize, enabled: bool) -> i32 {
+    if !enabled {
+        return 0;
+    }
+    let ctx = n_samples_16k.div_ceil(SAMPLES_PER_AUDIO_CTX) + AUDIO_CTX_PADDING;
+    if ctx >= AUDIO_CTX_FULL_WINDOW {
+        0
+    } else {
+        ctx as i32
+    }
+}
+
 /// Decoding parameters shared by the final dictation pass, the benchmark and
 /// the streaming preview (#41), so their behavior can never drift apart.
+/// `audio_ctx` comes from [`audio_ctx_for`]; `0` keeps the full window.
 pub(crate) fn base_full_params<'lang>(
     settings: &AppSettings,
     language: Option<&'lang str>,
     n_threads: i32,
+    audio_ctx: i32,
 ) -> FullParams<'lang, 'static> {
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 0 });
     params.set_n_threads(n_threads);
+    params.set_audio_ctx(audio_ctx);
     params.set_translate(false);
     params.set_language(language);
     params.set_print_special(false);
@@ -1949,12 +2012,13 @@ fn warm_inference_graph(context: &WhisperContext, settings: &AppSettings) {
         }
     };
     let language = normalized_language(&settings.transcription_language);
+    let silence = vec![0.0_f32; 16_000];
     let params = base_full_params(
         settings,
         language.as_deref(),
         resolve_thread_count(settings.whisper_thread_count),
+        audio_ctx_for(silence.len(), WHISPER_DYNAMIC_AUDIO_CTX),
     );
-    let silence = vec![0.0_f32; 16_000];
     let _inference_guard = whisper_inference_lock();
     match state.full(params, &silence) {
         Ok(()) => log::info!(
@@ -2317,6 +2381,38 @@ fn cue_playback_duration(cue: RecordingCue) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn audio_ctx_is_zero_when_disabled() {
+        assert_eq!(audio_ctx_for(0, false), 0);
+        assert_eq!(audio_ctx_for(48_000, false), 0);
+        assert_eq!(audio_ctx_for(456_000, false), 0);
+    }
+
+    #[test]
+    fn audio_ctx_fits_audio_plus_one_second() {
+        assert_eq!(audio_ctx_for(48_000, true), 200);
+        assert_eq!(audio_ctx_for(0, true), 50);
+        assert_eq!(audio_ctx_for(1, true), 51, "partial positions round up");
+        assert_eq!(audio_ctx_for(456_000, true), 1475);
+    }
+
+    #[test]
+    fn audio_ctx_falls_back_to_full_window_near_30s() {
+        assert_eq!(audio_ctx_for(464_000, true), 0);
+        assert_eq!(audio_ctx_for(480_000, true), 0);
+        assert_eq!(audio_ctx_for(10 * 480_000, true), 0);
+    }
+
+    #[test]
+    fn whisper_context_params_only_toggle_flash_attn() {
+        assert!(whisper_context_params(true).flash_attn);
+        assert!(!whisper_context_params(false).flash_attn);
+        assert_eq!(
+            whisper_context_params(true).use_gpu,
+            WhisperContextParameters::default().use_gpu
+        );
+    }
 
     #[test]
     fn peak_amplitude_handles_empty_zero_and_mixed_buffers() {
