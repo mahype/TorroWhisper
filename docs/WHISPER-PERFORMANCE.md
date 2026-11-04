@@ -233,13 +233,13 @@ Audiolänge; `max_wer` = schlechtester Wortfehlerwert der fünf Durchläufe
 - **Angepasstes `audio_ctx`: verworfen.** Beim kurzen Clip (`audio_ctx` 173)
   wiederholen beide Turbo-Modelle den Satz mehrfach (`max_wer` 200–1500 %), mit
   Metal und `de` wird es dadurch sogar vier- bis sechsmal langsamer. Mit automatischer
-  Spracherkennung und Flash Attention erkennt Q5_0 die Sprache falsch und liefert nur
-  „of“ (100 %). Beim langen Clip (`audio_ctx` 730) ist ein Durchlauf mit `de` zwar 35–55 %
+  Spracherkennung und Flash Attention liefert Q5_0 nur „of“ (100 %), offenbar eine
+  falsch erkannte Sprache. Beim langen Clip (`audio_ctx` 730) ist ein Durchlauf mit `de` zwar 35–55 %
   schneller, aber sieben der acht Varianten mit `de` hängen „Die Privatsphäre ist jederzeit
   gewährleistet.“ ein zweites Mal an (17 %), mit automatischer Spracherkennung und
   Flash Attention wird ein ganzer Satz wiederholt (52 %). Die Turbo-Modelle sind auf das volle 30-s-Fenster
   trainiert; ein kürzeres Fenster verletzt die WER-Regel. Zusammen mit Flash Attention
-  wird es beim kurzen Clip noch schlechter (bis 1500 %): whisper.cpp rechnet die
+  wird es beim kurzen Clip mit `de` noch schlechter (bis 1500 %): whisper.cpp rechnet die
   Cross-Attention dann über ein auf 256 aufgerundetes Fenster ohne Maske. Der Schalter
   `WHISPER_DYNAMIC_AUDIO_CTX` bleibt aus, die Funktion `audio_ctx_for` und die
   Benchmark-Variante bleiben für künftige Modelle erhalten.
@@ -269,7 +269,9 @@ Audiolänge; `max_wer` = schlechtester Wortfehlerwert der fünf Durchläufe
 Beide Clips sind synthetische Sprache einer Stimme ohne Rauschen. Flash Attention
 ändert die Rechenreihenfolge, nicht das Modell; ein Qualitätsnachweis für echte
 Diktate ist dieser Clip trotzdem nicht. Die CPU-Messung läuft auf dem M4 Max und
-sagt wenig über Intel-Macs aus. Gemessen wurde nur Whisper, nicht Aufnahme,
+sagt wenig über Intel-Macs aus. Fällt auf Apple Silicon der Metal-Start aus und
+whisper.cpp rechnet auf der CPU, bleibt Flash Attention trotzdem an und macht diesen
+seltenen Notfallpfad langsamer. Gemessen wurde nur Whisper, nicht Aufnahme,
 VAD-Kürzung, Nachbearbeitung und Einfügen.
 
 ## Reproduzieren
