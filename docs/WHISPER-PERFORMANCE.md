@@ -220,8 +220,9 @@ Audiolänge; `max_wer` = schlechtester Wortfehlerwert der fünf Durchläufe
 - **Flash Attention: übernommen, nur auf Apple Silicon.** Mit Metal und `de` ist der
   kurze Clip 15,6 % (Q5_0, 0,310 → 0,262 s) bzw. 17,2 % (FP16, 0,292 → 0,242 s)
   schneller, die Spannweiten überschneiden sich nicht. Der lange Clip wird ebenfalls
-  schneller (17,8 % bzw. 17,3 %). In keiner der 20 Messungen mit Flash Attention
-  steigt die Wortfehlerrate, alle bleiben bei 0 %. Mit automatischer Spracherkennung
+  schneller (17,8 % bzw. 17,3 %). In keiner der zehn Messungen mit Flash Attention
+  und vollem Fenster steigt die Wortfehlerrate, alle bleiben bei 0 % (mit verkürztem
+  Fenster siehe unten). Mit automatischer Spracherkennung
   ist der Median 16,8 % (kurz) bzw. 4,8 % (lang) niedriger; dort streuen die
   Durchläufe stärker und die Spannweiten überschneiden sich, ein Gegenbefund ist das
   nicht. Auf der CPU des M4 Max ist Flash Attention dagegen **76–86 % langsamer**.
@@ -231,23 +232,37 @@ Audiolänge; `max_wer` = schlechtester Wortfehlerwert der fünf Durchläufe
   `flash attn = 1`, für die übrigen 24 `flash attn = 0`.
 - **Angepasstes `audio_ctx`: verworfen.** Beim kurzen Clip (`audio_ctx` 173)
   wiederholen beide Turbo-Modelle den Satz mehrfach (`max_wer` 200–1500 %), mit
-  Metal wird es dadurch sogar vier- bis sechsmal langsamer. Mit automatischer
+  Metal und `de` wird es dadurch sogar vier- bis sechsmal langsamer. Mit automatischer
   Spracherkennung und Flash Attention erkennt Q5_0 die Sprache falsch und liefert nur
-  „of“ (100 %). Beim langen Clip (`audio_ctx` 730) ist die Inferenz zwar 35–55 %
+  „of“ (100 %). Beim langen Clip (`audio_ctx` 730) ist ein Durchlauf mit `de` zwar 35–55 %
   schneller, aber sieben der acht Varianten mit `de` hängen „Die Privatsphäre ist jederzeit
   gewährleistet.“ ein zweites Mal an (17 %), mit automatischer Spracherkennung und
   Flash Attention wird ein ganzer Satz wiederholt (52 %). Die Turbo-Modelle sind auf das volle 30-s-Fenster
-  trainiert; ein kürzeres Fenster verletzt die WER-Regel. Der Schalter
+  trainiert; ein kürzeres Fenster verletzt die WER-Regel. Zusammen mit Flash Attention
+  wird es beim kurzen Clip noch schlechter (bis 1500 %): whisper.cpp rechnet die
+  Cross-Attention dann über ein auf 256 aufgerundetes Fenster ohne Maske. Der Schalter
   `WHISPER_DYNAMIC_AUDIO_CTX` bleibt aus, die Funktion `audio_ctx_for` und die
   Benchmark-Variante bleiben für künftige Modelle erhalten.
 - **Kombination**: entfällt, weil nur Flash Attention übernommen wird.
-- **Threads der Live-Vorschau: auf Apple Silicon zwei.** Mit Metal, kurzem Clip und
-  ohne Flash Attention braucht Q5_0 mit zwei Threads 0,305 s, mit vier 0,315 s
+- **Threads der Live-Vorschau: auf Apple Silicon zwei.** Gemessen mit Metal, kurzem
+  Clip, `de`, ohne Flash Attention und mit vollem Fenster:
+
+  | Modell | Threads | Median | Spannweite | RTF | `max_wer` |
+  |---|---:|---:|---:|---:|---:|
+  | Turbo Q5_0 | 2 | 0,305 s | 0,303–0,306 s | 0,1187 | 0 % |
+  | Turbo Q5_0 | 4 | 0,315 s | 0,314–0,323 s | 0,1216 | 0 % |
+  | Turbo FP16 | 2 | 0,305 s | 0,294–0,344 s | 0,1181 | 0 % |
+  | Turbo FP16 | 4 | 0,380 s | 0,353–0,434 s | 0,1469 | 0 % |
+
+  Damit braucht Q5_0 mit zwei Threads 0,305 s, mit vier 0,315 s
   (Verhältnis 0,97); FP16 0,305 s gegen 0,380 s (0,80, die Vier-Thread-Reihe streut
   hier mit 0,353–0,434 s). Zwei Threads sind also bei beiden Modellen nicht langsamer
   als vier (Regel: Median ≤ 1,05 × vier Threads). `streaming_thread_count` gibt auf
   Apple Silicon deshalb 2 zurück, andere Plattformen behalten `Kerne / 2` (2–4). Der
-  finale Durchlauf bleibt bei seiner Einstellung (Standard sechs Threads).
+  finale Durchlauf bleibt bei seiner Einstellung (Standard sechs Threads). Die
+  Thread-Reihe lief wie geplant ohne Flash Attention; ob zwei Threads auch mit Flash
+  Attention nicht langsamer sind, ist nicht eigens gemessen. Der End-to-End-Test der
+  Live-Vorschau mit Flash Attention und zwei Threads liefert den ersten Text nach 0,57 s.
 
 ### Grenzen
 

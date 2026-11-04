@@ -7,7 +7,7 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 ## [Unreleased]
 
 ### Changed
-- **Faster local Whisper transcription on Apple Silicon** (#88) — Whisper now runs with flash attention on Macs with Apple chips. In the M4 Max benchmark, a short dictation finishes about 16–17 % faster (Turbo Q5_0: 0.310 s → 0.262 s) and the 13.6 s reference clip about 17 % faster, with no additional recognition errors. Intel Macs are unchanged, because flash attention slows down CPU-only decoding. The live preview uses two threads on Apple Silicon, which measured no slower than four. A shortened audio window (`audio_ctx`) was measured too and rejected: the Turbo models then repeat or drop text. The developer benchmark gains a short clip and variants for both settings; results are in `docs/WHISPER-PERFORMANCE.md`.
+- **Faster local Whisper transcription on Apple Silicon** (#88) — Whisper now runs with flash attention on Macs with Apple chips. In the M4 Max benchmark, a short dictation finishes about 15–17 % faster (Turbo Q5_0: 0.310 s → 0.262 s) and the 13.6 s reference clip about 17 % faster, with no additional recognition errors. Intel Macs are unchanged, because flash attention slows down CPU-only decoding. The live preview uses two threads on Apple Silicon, which measured no slower than four. A shortened audio window (`audio_ctx`) was measured too and rejected: the Turbo models then repeat or drop text. The developer benchmark gains a short clip and variants for both settings; results are in `docs/WHISPER-PERFORMANCE.md`.
 
 ## [0.12.1] — 2026-11-02
 
