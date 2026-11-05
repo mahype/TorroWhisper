@@ -1,0 +1,67 @@
+{
+  "model": "large_v3_turbo_q5_0",
+  "model_filename": "ggml-large-v3-turbo-q5_0.bin",
+  "whisper_version": "1.8.3",
+  "backend_requested": "metal",
+  "threads": 6,
+  "language": "de",
+  "single_segment": false,
+  "clip": "long",
+  "flash_attn": true,
+  "audio_ctx": 730,
+  "audio_secs": 13.58125,
+  "reference_text": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet.",
+  "prepare_audio_secs": 0.000160333,
+  "load_secs": 0.18980438,
+  "load_rss_mib": 647.40625,
+  "cold": {
+    "state_secs": 0.009237209,
+    "inference_secs": 0.20833416,
+    "total_secs": 0.21800345,
+    "real_time_factor": 0.0153398365,
+    "word_error_rate": 0.1724138,
+    "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet. Die Privatsphäre ist jederzeit gewährleistet."
+  },
+  "warm": [
+    {
+      "state_secs": 0.009822875,
+      "inference_secs": 0.1909173,
+      "total_secs": 0.20117654,
+      "real_time_factor": 0.014057417,
+      "word_error_rate": 0.1724138,
+      "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet. Die Privatsphäre ist jederzeit gewährleistet."
+    },
+    {
+      "state_secs": 0.010327792,
+      "inference_secs": 0.19386809,
+      "total_secs": 0.20467101,
+      "real_time_factor": 0.014274687,
+      "word_error_rate": 0.1724138,
+      "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet. Die Privatsphäre ist jederzeit gewährleistet."
+    },
+    {
+      "state_secs": 0.010260416,
+      "inference_secs": 0.19242413,
+      "total_secs": 0.20310153,
+      "real_time_factor": 0.014168367,
+      "word_error_rate": 0.1724138,
+      "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet. Die Privatsphäre ist jederzeit gewährleistet."
+    },
+    {
+      "state_secs": 0.009991666,
+      "inference_secs": 0.1904888,
+      "total_secs": 0.20093612,
+      "real_time_factor": 0.014025866,
+      "word_error_rate": 0.1724138,
+      "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet. Die Privatsphäre ist jederzeit gewährleistet."
+    },
+    {
+      "state_secs": 0.01001525,
+      "inference_secs": 0.19341066,
+      "total_secs": 0.2038577,
+      "real_time_factor": 0.014241006,
+      "word_error_rate": 0.1724138,
+      "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet. Die Privatsphäre ist jederzeit gewährleistet."
+    }
+  ]
+}

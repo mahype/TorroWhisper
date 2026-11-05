@@ -1,0 +1,67 @@
+{
+  "model": "large_v3_turbo_q5_0",
+  "model_filename": "ggml-large-v3-turbo-q5_0.bin",
+  "whisper_version": "1.8.3",
+  "backend_requested": "metal",
+  "threads": 6,
+  "language": "de",
+  "single_segment": false,
+  "clip": "short",
+  "flash_attn": true,
+  "audio_ctx": 173,
+  "audio_secs": 2.44775,
+  "reference_text": "Bitte schick mir die Unterlagen bis morgen.",
+  "prepare_audio_secs": 0.000028666,
+  "load_secs": 0.19345392,
+  "load_rss_mib": 647.5156,
+  "cold": {
+    "state_secs": 0.008647833,
+    "inference_secs": 1.3890417,
+    "total_secs": 1.3982341,
+    "real_time_factor": 0.5674769,
+    "word_error_rate": 11.285714,
+    "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Noch mal. Bitte schick mir die Unterlagen bis morgen."
+  },
+  "warm": [
+    {
+      "state_secs": 0.011397416,
+      "inference_secs": 1.1431499,
+      "total_secs": 1.1550831,
+      "real_time_factor": 0.46702066,
+      "word_error_rate": 11.285714,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Noch mal. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.011066208,
+      "inference_secs": 1.2331271,
+      "total_secs": 1.244842,
+      "real_time_factor": 0.5037798,
+      "word_error_rate": 11.285714,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Noch mal. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.010155041,
+      "inference_secs": 1.3389943,
+      "total_secs": 1.3496069,
+      "real_time_factor": 0.5470306,
+      "word_error_rate": 11.285714,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Noch mal. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.009800291,
+      "inference_secs": 1.185548,
+      "total_secs": 1.1958536,
+      "real_time_factor": 0.48434192,
+      "word_error_rate": 11.285714,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Noch mal. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.010485042,
+      "inference_secs": 1.1342015,
+      "total_secs": 1.1451737,
+      "real_time_factor": 0.46336493,
+      "word_error_rate": 11.285714,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Noch mal. Bitte schick mir die Unterlagen bis morgen."
+    }
+  ]
+}

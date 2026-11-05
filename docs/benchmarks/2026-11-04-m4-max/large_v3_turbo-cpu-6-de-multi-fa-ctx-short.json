@@ -1,0 +1,67 @@
+{
+  "model": "large_v3_turbo",
+  "model_filename": "ggml-large-v3-turbo.bin",
+  "whisper_version": "1.8.3",
+  "backend_requested": "cpu",
+  "threads": 6,
+  "language": "de",
+  "single_segment": false,
+  "clip": "short",
+  "flash_attn": true,
+  "audio_ctx": 173,
+  "audio_secs": 2.44775,
+  "reference_text": "Bitte schick mir die Unterlagen bis morgen.",
+  "prepare_audio_secs": 0.000031917,
+  "load_secs": 0.41378883,
+  "load_rss_mib": 1583.625,
+  "cold": {
+    "state_secs": 0.003622709,
+    "inference_secs": 2.330641,
+    "total_secs": 2.3355367,
+    "real_time_factor": 0.9521564,
+    "word_error_rate": 8.0,
+    "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+  },
+  "warm": [
+    {
+      "state_secs": 0.003653917,
+      "inference_secs": 2.3978527,
+      "total_secs": 2.4025838,
+      "real_time_factor": 0.979615,
+      "word_error_rate": 8.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.003390375,
+      "inference_secs": 2.3398037,
+      "total_secs": 2.3441558,
+      "real_time_factor": 0.9558998,
+      "word_error_rate": 8.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.003469667,
+      "inference_secs": 2.315611,
+      "total_secs": 2.319931,
+      "real_time_factor": 0.9460161,
+      "word_error_rate": 8.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.003191958,
+      "inference_secs": 2.3027859,
+      "total_secs": 2.3071003,
+      "real_time_factor": 0.9407765,
+      "word_error_rate": 8.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.002978083,
+      "inference_secs": 2.3423126,
+      "total_secs": 2.34596,
+      "real_time_factor": 0.95692474,
+      "word_error_rate": 8.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    }
+  ]
+}

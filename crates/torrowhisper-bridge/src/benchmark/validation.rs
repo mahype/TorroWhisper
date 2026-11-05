@@ -5,11 +5,48 @@ use std::time::Instant;
 
 use serde::Serialize;
 use torrowhisper_core::{AppSettings, ModelPreset};
-use whisper_rs::{WhisperContext, WhisperContextParameters};
+use whisper_rs::WhisperContext;
 
-use super::{REFERENCE_TEXT, current_rss_mb, decode_reference_wav, normalized_words};
-use crate::dictation::{resample_to_16khz, run_whisper_inference};
+use super::{
+    REFERENCE_SHORT_TEXT, REFERENCE_SHORT_WAV, REFERENCE_TEXT, REFERENCE_WAV, current_rss_mb,
+    decode_wav, normalized_words,
+};
+use crate::dictation::{
+    audio_ctx_for, resample_to_16khz, run_whisper_inference, whisper_context_params,
+};
 use crate::model_manager::{ModelIntegrity, default_model_path, preset_model_integrity};
+
+/// Reference clip of a benchmark run (#88): the long clip measures sustained
+/// decoding, the short one a typical quick dictation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Clip {
+    Long,
+    Short,
+}
+
+impl Clip {
+    fn wav(self) -> &'static [u8] {
+        match self {
+            Self::Long => REFERENCE_WAV,
+            Self::Short => REFERENCE_SHORT_WAV,
+        }
+    }
+
+    pub fn reference_text(self) -> &'static str {
+        match self {
+            Self::Long => REFERENCE_TEXT,
+            Self::Short => REFERENCE_SHORT_TEXT,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Long => "long",
+            Self::Short => "short",
+        }
+    }
+}
 
 #[derive(Serialize)]
 pub struct Pass {
@@ -33,6 +70,10 @@ pub struct ValidationReport {
     pub threads: u32,
     pub language: Option<String>,
     pub single_segment: bool,
+    pub clip: Clip,
+    pub flash_attn: bool,
+    /// Encoder window actually passed to whisper.cpp; `0` = full 30 s window.
+    pub audio_ctx: i32,
     pub audio_secs: f32,
     pub reference_text: &'static str,
     pub prepare_audio_secs: f32,
@@ -45,6 +86,9 @@ pub struct ValidationReport {
 /// One configuration per fresh process keeps Metal pipeline initialization out
 /// of subsequent configurations' cold measurements. The first pass is retained
 /// separately; repetitions reuse the model but create a fresh state, like dictation.
+/// `flash_attn` and `dynamic_audio_ctx` select the #88 variant independently of
+/// the app's production switches.
+#[allow(clippy::too_many_arguments)]
 pub fn run(
     model: ModelPreset,
     gpu: bool,
@@ -52,6 +96,9 @@ pub fn run(
     repetitions: u32,
     language: Option<&str>,
     single_segment: bool,
+    flash_attn: bool,
+    dynamic_audio_ctx: bool,
+    clip: Clip,
 ) -> Result<ValidationReport, String> {
     if !(1..=16).contains(&threads) || !(1..=20).contains(&repetitions) {
         return Err("threads must be 1..=16 and repetitions 1..=20".to_owned());
@@ -66,15 +113,17 @@ pub fn run(
         ));
     }
     let prep = Instant::now();
-    let (audio, rate) = decode_reference_wav()?;
+    let (audio, rate) = decode_wav(clip.wav())?;
     let samples = resample_to_16khz(&audio, rate);
     let prepare_audio_secs = prep.elapsed().as_secs_f32();
     let audio_secs = samples.len() as f32 / 16_000.0;
+    let audio_ctx = audio_ctx_for(samples.len(), dynamic_audio_ctx);
+    let reference_text = clip.reference_text();
     let settings = AppSettings {
         whisper_single_segment: single_segment,
         ..AppSettings::default()
     };
-    let mut params = WhisperContextParameters::default();
+    let mut params = whisper_context_params(flash_attn);
     params.use_gpu(gpu);
     let rss_before = current_rss_mb();
     let load_started = Instant::now();
@@ -86,15 +135,21 @@ pub fn run(
         .map(|(before, after)| (after - before).max(0.0));
     let measure = || -> Result<Pass, String> {
         let started = Instant::now();
-        let result =
-            run_whisper_inference(&context, &samples, &settings, language, threads as i32)?;
+        let result = run_whisper_inference(
+            &context,
+            &samples,
+            &settings,
+            language,
+            threads as i32,
+            dynamic_audio_ctx,
+        )?;
         let total_secs = started.elapsed().as_secs_f32();
         Ok(Pass {
             state_secs: result.state_secs,
             inference_secs: result.inference_secs,
             total_secs,
             real_time_factor: result.inference_secs / audio_secs,
-            word_error_rate: word_error_rate(REFERENCE_TEXT, &result.text),
+            word_error_rate: word_error_rate(reference_text, &result.text),
             transcript: result.text,
         })
     };
@@ -110,8 +165,11 @@ pub fn run(
         threads,
         language: language.map(str::to_owned),
         single_segment,
+        clip,
+        flash_attn,
+        audio_ctx,
         audio_secs,
-        reference_text: REFERENCE_TEXT,
+        reference_text,
         prepare_audio_secs,
         load_secs,
         load_rss_mib,
@@ -153,9 +211,32 @@ mod tests {
 
     #[test]
     fn invalid_sweeps_fail_before_loading_models() {
-        assert!(run(ModelPreset::Tiny, false, 0, 3, Some("de"), false).is_err());
-        assert!(run(ModelPreset::Tiny, false, 4, 0, Some("de"), false).is_err());
-        assert!(run(ModelPreset::Tiny, false, 17, 3, Some("de"), false).is_err());
-        assert!(run(ModelPreset::Tiny, false, 4, 21, Some("de"), false).is_err());
+        let invalid = |threads, repetitions, clip| {
+            run(
+                ModelPreset::Tiny,
+                false,
+                threads,
+                repetitions,
+                Some("de"),
+                false,
+                true,
+                true,
+                clip,
+            )
+            .is_err()
+        };
+        assert!(invalid(0, 3, Clip::Long));
+        assert!(invalid(4, 0, Clip::Short));
+        assert!(invalid(17, 3, Clip::Long));
+        assert!(invalid(4, 21, Clip::Short));
+    }
+
+    #[test]
+    fn clips_carry_their_own_reference_text() {
+        assert_eq!(Clip::Long.reference_text(), REFERENCE_TEXT);
+        assert_eq!(Clip::Short.reference_text(), REFERENCE_SHORT_TEXT);
+        assert_eq!(Clip::Long.name(), "long");
+        assert_eq!(Clip::Short.name(), "short");
+        assert_eq!(serde_json::to_value(Clip::Short).unwrap(), "short");
     }
 }

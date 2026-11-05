@@ -1,0 +1,264 @@
+large_v3_turbo_q5_0-cpu-6-de-multi-fa-ctx-long.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo_q5_0-cpu-6-de-multi-fa-ctx-short.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo_q5_0-cpu-6-de-multi-fa-noctx-long.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo_q5_0-cpu-6-de-multi-fa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo_q5_0-cpu-6-de-multi-nofa-ctx-long.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo_q5_0-cpu-6-de-multi-nofa-ctx-short.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo_q5_0-cpu-6-de-multi-nofa-noctx-long.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo_q5_0-cpu-6-de-multi-nofa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo_q5_0-metal-2-de-multi-nofa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-4-de-multi-nofa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-auto-multi-fa-ctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-auto-multi-fa-ctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-auto-multi-fa-noctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-auto-multi-fa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-auto-multi-nofa-ctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-auto-multi-nofa-ctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-auto-multi-nofa-noctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-auto-multi-nofa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-de-multi-fa-ctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-de-multi-fa-ctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-de-multi-fa-noctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-de-multi-fa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-de-multi-nofa-ctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-de-multi-nofa-ctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-de-multi-nofa-noctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo_q5_0-metal-6-de-multi-nofa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo-cpu-6-de-multi-fa-ctx-long.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo-cpu-6-de-multi-fa-ctx-short.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo-cpu-6-de-multi-fa-noctx-long.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo-cpu-6-de-multi-fa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo-cpu-6-de-multi-nofa-ctx-long.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo-cpu-6-de-multi-nofa-ctx-short.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo-cpu-6-de-multi-nofa-noctx-long.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo-cpu-6-de-multi-nofa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 0
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: no GPU found
+
+large_v3_turbo-metal-2-de-multi-nofa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo-metal-4-de-multi-nofa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo-metal-6-de-multi-fa-ctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo-metal-6-de-multi-fa-ctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo-metal-6-de-multi-fa-noctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo-metal-6-de-multi-fa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 1
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo-metal-6-de-multi-nofa-ctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo-metal-6-de-multi-nofa-ctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo-metal-6-de-multi-nofa-noctx-long.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+
+large_v3_turbo-metal-6-de-multi-nofa-noctx-short.log
+whisper_init_with_params_no_state: use gpu    = 1
+whisper_init_with_params_no_state: flash attn = 0
+ggml_metal_device_init: GPU name:   Apple M4 Max
+whisper_backend_init_gpu: using Metal backend
+

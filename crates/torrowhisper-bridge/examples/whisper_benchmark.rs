@@ -1,11 +1,14 @@
 //! Developer benchmark. One configuration per process; JSON on stdout, backend
 //! initialization diagnostics on stderr. No app runtime or settings mutations.
 
+use torrowhisper_bridge::benchmark::validation::{self, Clip};
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.len() != 6 {
+    if args.len() != 9 {
         return Err(
-            "usage: whisper_benchmark MODEL cpu|metal THREADS REPETITIONS de|auto single|multi"
+            "usage: whisper_benchmark MODEL cpu|metal THREADS REPETITIONS de|auto \
+             single|multi fa|nofa ctx|noctx long|short"
                 .into(),
         );
     }
@@ -25,13 +28,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "multi" => false,
         _ => return Err("segmentation must be single or multi".into()),
     };
-    let report = torrowhisper_bridge::benchmark::validation::run(
+    let flash_attn = match args[6].as_str() {
+        "fa" => true,
+        "nofa" => false,
+        _ => return Err("flash attention must be fa or nofa".into()),
+    };
+    let dynamic_audio_ctx = match args[7].as_str() {
+        "ctx" => true,
+        "noctx" => false,
+        _ => return Err("audio context must be ctx or noctx".into()),
+    };
+    let clip = match args[8].as_str() {
+        "long" => Clip::Long,
+        "short" => Clip::Short,
+        _ => return Err("clip must be long or short".into()),
+    };
+    let report = validation::run(
         model,
         gpu,
         args[2].parse()?,
         args[3].parse()?,
         language,
         single,
+        flash_attn,
+        dynamic_audio_ctx,
+        clip,
     )?;
     println!("{}", serde_json::to_string_pretty(&report)?);
     Ok(())

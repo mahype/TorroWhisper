@@ -1,0 +1,67 @@
+{
+  "model": "large_v3_turbo",
+  "model_filename": "ggml-large-v3-turbo.bin",
+  "whisper_version": "1.8.3",
+  "backend_requested": "metal",
+  "threads": 6,
+  "language": "de",
+  "single_segment": false,
+  "clip": "short",
+  "flash_attn": true,
+  "audio_ctx": 173,
+  "audio_secs": 2.44775,
+  "reference_text": "Bitte schick mir die Unterlagen bis morgen.",
+  "prepare_audio_secs": 0.000027666,
+  "load_secs": 0.4478782,
+  "load_rss_mib": 1725.8906,
+  "cold": {
+    "state_secs": 0.009393166,
+    "inference_secs": 1.5907923,
+    "total_secs": 1.6006174,
+    "real_time_factor": 0.6498998,
+    "word_error_rate": 8.0,
+    "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+  },
+  "warm": [
+    {
+      "state_secs": 0.00905075,
+      "inference_secs": 1.4792248,
+      "total_secs": 1.4887036,
+      "real_time_factor": 0.60432017,
+      "word_error_rate": 8.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.009037667,
+      "inference_secs": 1.4974915,
+      "total_secs": 1.5069556,
+      "real_time_factor": 0.61178285,
+      "word_error_rate": 8.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.010205,
+      "inference_secs": 1.5372541,
+      "total_secs": 1.5478604,
+      "real_time_factor": 0.6280274,
+      "word_error_rate": 8.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.009882125,
+      "inference_secs": 1.4931241,
+      "total_secs": 1.5034096,
+      "real_time_factor": 0.6099986,
+      "word_error_rate": 8.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.00919875,
+      "inference_secs": 1.4881183,
+      "total_secs": 1.4977137,
+      "real_time_factor": 0.60795355,
+      "word_error_rate": 8.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen, bitte schick mir die Unterlagen bis morgen. Bitte schick mir die Unterlagen bis morgen."
+    }
+  ]
+}

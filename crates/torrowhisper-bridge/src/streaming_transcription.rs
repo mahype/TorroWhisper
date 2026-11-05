@@ -25,8 +25,8 @@ use torrowhisper_core::{AppSettings, StreamingTranscriptDto};
 use whisper_rs::WhisperContext;
 
 use crate::dictation::{
-    RecordingBuffer, base_full_params, collect_transcript, resample_to_16khz,
-    try_whisper_inference_lock,
+    RecordingBuffer, WHISPER_DYNAMIC_AUDIO_CTX, audio_ctx_for, base_full_params,
+    collect_transcript, resample_to_16khz, try_whisper_inference_lock,
 };
 use crate::transcript_stabilizer::TranscriptStabilizer;
 
@@ -312,7 +312,12 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
             continue;
         }
 
-        let mut params = base_full_params(&settings, language.as_deref(), n_threads);
+        let mut params = base_full_params(
+            &settings,
+            language.as_deref(),
+            n_threads,
+            audio_ctx_for(mono_16khz.len(), WHISPER_DYNAMIC_AUDIO_CTX),
+        );
         // The state is reused across passes; without this, tokens of the
         // previous pass would bias the re-decode of the same audio.
         params.set_no_context(true);
@@ -407,8 +412,13 @@ unsafe extern "C" fn abort_when_stopped(user_data: *mut std::ffi::c_void) -> boo
 
 /// Streaming passes deliberately use fewer threads than the final pass: they
 /// run while the UI, the audio callback and the user's foreground app are all
-/// live, and preview latency matters less than system responsiveness.
+/// live, and preview latency matters less than system responsiveness. On
+/// Apple Silicon the GPU does the work: two threads were measured no slower
+/// than four on Metal (#88), so the preview takes the minimum there.
 fn streaming_thread_count() -> i32 {
+    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        return 2;
+    }
     let cores = thread::available_parallelism()
         .map(|cores| cores.get())
         .unwrap_or(4);
@@ -467,8 +477,7 @@ mod tests {
     #[test]
     #[ignore]
     fn streaming_end_to_end_with_synthesized_speech() {
-        use crate::dictation::RecordingBuffer;
-        use whisper_rs::WhisperContextParameters;
+        use crate::dictation::{RecordingBuffer, WHISPER_FLASH_ATTN, whisper_context_params};
 
         struct StderrLogger;
         impl log::Log for StderrLogger {
@@ -502,7 +511,7 @@ mod tests {
         let context = Arc::new(
             WhisperContext::new_with_params(
                 std::path::Path::new(&model_path),
-                WhisperContextParameters::default(),
+                whisper_context_params(WHISPER_FLASH_ATTN),
             )
             .expect("test model loads"),
         );

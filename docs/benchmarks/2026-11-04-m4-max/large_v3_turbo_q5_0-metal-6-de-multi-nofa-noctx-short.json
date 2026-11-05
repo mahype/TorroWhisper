@@ -1,0 +1,67 @@
+{
+  "model": "large_v3_turbo_q5_0",
+  "model_filename": "ggml-large-v3-turbo-q5_0.bin",
+  "whisper_version": "1.8.3",
+  "backend_requested": "metal",
+  "threads": 6,
+  "language": "de",
+  "single_segment": false,
+  "clip": "short",
+  "flash_attn": false,
+  "audio_ctx": 0,
+  "audio_secs": 2.44775,
+  "reference_text": "Bitte schick mir die Unterlagen bis morgen.",
+  "prepare_audio_secs": 0.00002975,
+  "load_secs": 0.19846433,
+  "load_rss_mib": 647.5469,
+  "cold": {
+    "state_secs": 0.012995833,
+    "inference_secs": 0.52881354,
+    "total_secs": 0.5422963,
+    "real_time_factor": 0.21604066,
+    "word_error_rate": 0.0,
+    "transcript": "Bitte schick mir die Unterlagen bis morgen."
+  },
+  "warm": [
+    {
+      "state_secs": 0.016686209,
+      "inference_secs": 0.2906315,
+      "total_secs": 0.30777335,
+      "real_time_factor": 0.11873414,
+      "word_error_rate": 0.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.01919296,
+      "inference_secs": 0.2904091,
+      "total_secs": 0.3100898,
+      "real_time_factor": 0.11864328,
+      "word_error_rate": 0.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.017907793,
+      "inference_secs": 0.2920272,
+      "total_secs": 0.3104389,
+      "real_time_factor": 0.11930434,
+      "word_error_rate": 0.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.01964346,
+      "inference_secs": 0.30678725,
+      "total_secs": 0.32693473,
+      "real_time_factor": 0.12533438,
+      "word_error_rate": 0.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen."
+    },
+    {
+      "state_secs": 0.018833458,
+      "inference_secs": 0.33079377,
+      "total_secs": 0.35011986,
+      "real_time_factor": 0.13514197,
+      "word_error_rate": 0.0,
+      "transcript": "Bitte schick mir die Unterlagen bis morgen."
+    }
+  ]
+}
