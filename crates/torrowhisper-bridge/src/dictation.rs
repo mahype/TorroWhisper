@@ -1084,6 +1084,9 @@ const LEVEL_HISTORY_CAPACITY: usize = 120;
 /// floor only ever falls toward the microphone's real silence level.
 const NOISE_FLOOR_CEILING: f32 = 0.02;
 
+/// Seconds of audio a new recording buffer reserves up front.
+const RECORDING_PREALLOC_SECS: usize = 30;
+
 pub(crate) struct RecordingBuffer {
     samples: Vec<f32>,
     sample_rate: u32,
@@ -1120,7 +1123,10 @@ impl RecordingBuffer {
             ((sample_rate as u64 * vad_silence_ms as u64) / 1000).max(1) as usize;
 
         Self {
-            samples: Vec::new(),
+            // Room for the first 30 s up front, so a typical take never
+            // reallocates (and copies) its growing buffer under the lock the
+            // audio callback shares (#89).
+            samples: Vec::with_capacity(sample_rate as usize * RECORDING_PREALLOC_SECS),
             sample_rate,
             vad_enabled,
             vad_threshold,
