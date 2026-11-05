@@ -243,6 +243,23 @@ Audiolänge; `max_wer` = schlechtester Wortfehlerwert der fünf Durchläufe
   Cross-Attention dann über ein auf 256 aufgerundetes Fenster ohne Maske. Der Schalter
   `WHISPER_DYNAMIC_AUDIO_CTX` bleibt aus, die Funktion `audio_ctx_for` und die
   Benchmark-Variante bleiben für künftige Modelle erhalten.
+- **Flash Attention auf den übrigen Presets (Nachmessung vom 05.11.2026).** Der
+  Schalter gilt auf Apple Silicon für alle Whisper-Presets. Deshalb wurden zusätzlich
+  Small (`standard`) und Large v3 mit Metal, `de` und vollem Fenster gemessen (Suite
+  `presets`, sauberer Commit `78ae2a2`, fünf warme Wiederholungen;
+  [summary.json](benchmarks/2026-11-05-m4-max-presets/summary.json),
+  [backend-evidence.txt](benchmarks/2026-11-05-m4-max-presets/backend-evidence.txt)):
+
+  | Modell | Clip | ohne FA | mit FA | Gewinn | `max_wer` |
+  |---|---|---:|---:|---:|---:|
+  | Small | kurz | 0,103 s (0,100–0,129) | 0,078 s (0,077–0,079) | 24,3 % | 0 % → 0 % |
+  | Small | lang | 0,221 s (0,217–0,223) | 0,180 s (0,179–0,183) | 18,6 % | 0 % → 0 % |
+  | Large v3 | kurz | 0,420 s (0,418–0,421) | 0,358 s (0,355–0,363) | 14,8 % | 0 % → 0 % |
+  | Large v3 | lang | 0,860 s (0,854–0,939) | 0,723 s (0,717–0,781) | 15,9 % | 0 % → 0 % |
+
+  Beide erfüllen die Regel: kurz mindestens 5 % schneller ohne Überschneidung, lang
+  ebenfalls schneller, keine zusätzlichen Wortfehler. Tiny, Base und Medium wurden
+  nicht gemessen; sie teilen die Architektur, der Schalter gilt für sie mit.
 - **Kombination**: entfällt, weil nur Flash Attention übernommen wird.
 - **Threads der Live-Vorschau: auf Apple Silicon zwei.** Gemessen mit Metal, kurzem
   Clip, `de`, ohne Flash Attention und mit vollem Fenster:
@@ -291,7 +308,7 @@ python3 scripts/benchmark-whisper.py \
 ```
 
 `--suite tuning` (Standard) misst die #88-Varianten (Flash Attention × `audio_ctx` ×
-Clip, siehe oben). `--suite baseline` wiederholt den #43-Vergleich (CPU/Metal,
+Clip, siehe oben), `--suite presets` Flash Attention auf Small und Large v3. `--suite baseline` wiederholt den #43-Vergleich (CPU/Metal,
 Threads 1–8, Small, automatische Sprache, ein Segment), jeweils ohne Flash Attention,
 mit vollem Fenster und dem langen Clip.
 
