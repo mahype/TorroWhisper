@@ -16,6 +16,7 @@ use crate::cloud_transcription::{self, TranscriptionOptions};
 use crate::llm::keychain;
 use crate::model_manager::validated_model_path;
 use crate::parakeet::ParakeetRuntime;
+use crate::resampler::StreamResampler;
 use crate::streaming_transcription::{
     self, SharedStreamingOutput, StreamingConfig, StreamingOutput, StreamingSession,
 };
@@ -1083,6 +1084,9 @@ const LEVEL_HISTORY_CAPACITY: usize = 120;
 /// floor only ever falls toward the microphone's real silence level.
 const NOISE_FLOOR_CEILING: f32 = 0.02;
 
+/// Seconds of audio a new recording buffer reserves up front.
+const RECORDING_PREALLOC_SECS: usize = 30;
+
 pub(crate) struct RecordingBuffer {
     samples: Vec<f32>,
     sample_rate: u32,
@@ -1119,7 +1123,10 @@ impl RecordingBuffer {
             ((sample_rate as u64 * vad_silence_ms as u64) / 1000).max(1) as usize;
 
         Self {
-            samples: Vec::new(),
+            // Room for the first 30 s up front, so a typical take never
+            // reallocates (and copies) its growing buffer under the lock the
+            // audio callback shares (#89).
+            samples: Vec::with_capacity(sample_rate as usize * RECORDING_PREALLOC_SECS),
             sample_rate,
             vad_enabled,
             vad_threshold,
@@ -1891,24 +1898,22 @@ fn normalize_for_match(text: &str) -> String {
     cleaned.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// Resamples mono audio to Whisper's 16 kHz with the band-limited filter of
+/// [`StreamResampler`] (#89) — the same filter the live preview applies chunk
+/// by chunk, so the final pass hears exactly what the preview heard.
 pub(crate) fn resample_to_16khz(samples: &[f32], sample_rate: u32) -> Vec<f32> {
     if sample_rate == 16_000 {
         return samples.to_vec();
     }
-
-    let ratio = 16_000.0 / sample_rate as f64;
-    let target_len = (samples.len() as f64 * ratio).round() as usize;
+    let target_len = if sample_rate == 0 {
+        0
+    } else {
+        (samples.len() as u64 * 16_000 / u64::from(sample_rate)) as usize + 1
+    };
     let mut output = Vec::with_capacity(target_len);
-
-    for index in 0..target_len {
-        let source_position = index as f64 / ratio;
-        let source_index = source_position.floor() as usize;
-        let frac = (source_position - source_index as f64) as f32;
-        let current = *samples.get(source_index).unwrap_or(&0.0);
-        let next = *samples.get(source_index + 1).unwrap_or(&current);
-        output.push(current + (next - current) * frac);
-    }
-
+    let mut resampler = StreamResampler::new(sample_rate);
+    resampler.push(samples, &mut output);
+    resampler.finish(&mut output);
     output
 }
 

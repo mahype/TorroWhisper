@@ -231,6 +231,100 @@ mod tests {
         assert!(invalid(4, 21, Clip::Short));
     }
 
+    /// The pre-#89 resampler (linear interpolation, no low-pass), kept only
+    /// as the baseline for the comparison below.
+    fn linear_resample_to_16khz(samples: &[f32], sample_rate: u32) -> Vec<f32> {
+        let ratio = 16_000.0 / sample_rate as f64;
+        let target_len = (samples.len() as f64 * ratio).round() as usize;
+        (0..target_len)
+            .map(|index| {
+                let source_position = index as f64 / ratio;
+                let source_index = source_position.floor() as usize;
+                let frac = (source_position - source_index as f64) as f32;
+                let current = *samples.get(source_index).unwrap_or(&0.0);
+                let next = *samples.get(source_index + 1).unwrap_or(&current);
+                current + (next - current) * frac
+            })
+            .collect()
+    }
+
+    /// The final pass must not lose quality with the band-limited resampler
+    /// (#89). Ignored by default (needs a local model and a 48 kHz clip):
+    /// ```sh
+    /// say -v Anna -o /tmp/reference-48k.wav --data-format=LEI16@48000 "<REFERENCE_TEXT>"
+    /// OW_TEST_MODEL=~/Library/Application\ Support/com.gettorro.TorroWhisper/models/ggml-large-v3-turbo-q5_0.bin \
+    /// OW_TEST_WAV48=/tmp/reference-48k.wav \
+    /// cargo test --release -p torrowhisper-bridge final_pass_resampler -- --ignored --nocapture
+    /// ```
+    /// `OW_TEST_REF_TEXT_FILE` optionally names a file with the clip's script,
+    /// for clips other than `REFERENCE_TEXT`.
+    #[test]
+    #[ignore]
+    fn final_pass_resampler_keeps_word_error_rate() {
+        use crate::dictation::{WHISPER_DYNAMIC_AUDIO_CTX, WHISPER_FLASH_ATTN};
+
+        let Some(model_path) = std::env::var_os("OW_TEST_MODEL") else {
+            eprintln!("OW_TEST_MODEL not set — skipping");
+            return;
+        };
+        let Some(wav_path) = std::env::var_os("OW_TEST_WAV48") else {
+            eprintln!("OW_TEST_WAV48 not set — skipping");
+            return;
+        };
+        let bytes = std::fs::read(&wav_path).expect("48 kHz clip readable");
+        let (audio, rate) = decode_wav(&bytes).expect("16-bit PCM clip");
+        assert_ne!(
+            rate, 16_000,
+            "the comparison needs a clip that gets resampled"
+        );
+
+        let context = WhisperContext::new_with_params(
+            std::path::Path::new(&model_path),
+            whisper_context_params(WHISPER_FLASH_ATTN),
+        )
+        .expect("test model loads");
+        let settings = AppSettings::default();
+        let reference = std::env::var_os("OW_TEST_REF_TEXT_FILE")
+            .map(|path| std::fs::read_to_string(path).expect("reference text readable"))
+            .unwrap_or_else(|| REFERENCE_TEXT.to_owned());
+
+        let started = Instant::now();
+        let linear = linear_resample_to_16khz(&audio, rate);
+        let linear_secs = started.elapsed().as_secs_f32();
+        let started = Instant::now();
+        let filtered = resample_to_16khz(&audio, rate);
+        let filtered_secs = started.elapsed().as_secs_f32();
+        eprintln!(
+            "resampling {:.1}s at {rate} Hz: linear {linear_secs:.4}s, filtered {filtered_secs:.4}s",
+            audio.len() as f32 / rate as f32
+        );
+        assert_eq!(linear.len(), filtered.len());
+
+        for language in [Some("de"), None] {
+            let wer = |samples: &[f32]| {
+                let inference = run_whisper_inference(
+                    &context,
+                    samples,
+                    &settings,
+                    language,
+                    4,
+                    WHISPER_DYNAMIC_AUDIO_CTX,
+                )
+                .expect("inference runs");
+                (word_error_rate(&reference, &inference.text), inference.text)
+            };
+            let (old_wer, old_text) = wer(&linear);
+            let (new_wer, new_text) = wer(&filtered);
+            let label = language.unwrap_or("auto");
+            eprintln!("[{label}] linear WER {old_wer:.3}: {old_text}");
+            eprintln!("[{label}] filtered WER {new_wer:.3}: {new_text}");
+            assert!(
+                new_wer <= old_wer,
+                "[{label}] filtered resampling raised the WER: {old_wer} → {new_wer}"
+            );
+        }
+    }
+
     #[test]
     fn clips_carry_their_own_reference_text() {
         assert_eq!(Clip::Long.reference_text(), REFERENCE_TEXT);
