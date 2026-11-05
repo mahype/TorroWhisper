@@ -142,15 +142,19 @@ impl TranscriptStabilizer {
     /// hypothesis tokens that took their place, so later hypotheses are
     /// compared against the new reading and can commit again. `committed`,
     /// the text on screen, is untouched and stays append-only. Returns
-    /// `false` and changes nothing when the last pass did not contradict or
-    /// offered no replacement (e.g. an empty hypothesis).
+    /// `false` without changing the basis when the last pass did not
+    /// contradict or left the revised part open (e.g. an empty or too short
+    /// hypothesis); the revision is consumed either way.
     pub(crate) fn accept_revision(&mut self) -> bool {
         let Some((prefix, replacement)) = self.revision.take() else {
             return false;
         };
-        if replacement.is_empty() {
-            return false;
-        }
+        log::debug!(
+            target: "dictation",
+            "streaming revision: {} → {}",
+            self.committed_tokens[self.window_base + prefix..].join(" "),
+            replacement.join(" ")
+        );
         self.committed_tokens.truncate(self.window_base + prefix);
         self.committed_tokens.extend(replacement);
         self.tail_agreement.clear();
@@ -201,14 +205,13 @@ impl TranscriptStabilizer {
             // stays frozen (monotonicity guarantee); everything after the
             // agreeing prefix becomes pending and stability tracking restarts.
             // The revised reading is kept in case the worker accepts it.
-            let end = revision_end(window_committed, tokens, prefix_len);
-            self.revision = Some((
-                prefix_len,
-                tokens[prefix_len..end]
+            self.revision = revision_end(window_committed, tokens, prefix_len).map(|end| {
+                let replacement = tokens[prefix_len..end]
                     .iter()
                     .map(|token| (*token).to_owned())
-                    .collect(),
-            ));
+                    .collect();
+                (prefix_len, replacement)
+            });
             self.tail_agreement = tokens[prefix_len..]
                 .iter()
                 .map(|token| ((*token).to_owned(), 1))
@@ -325,24 +328,41 @@ fn align_window(window_committed: &[String], tokens: &[&str], overlaps: bool) ->
 /// may have revised a word, or inserted or dropped some, so the end is found
 /// at the last two committed words: the match nearest to the committed length
 /// (the earlier one on a tie), at most [`MAX_OVERLAP_TOKENS`] away. Without
-/// such a match the committed length counts, capped at the hypothesis.
-fn revision_end(window_committed: &[String], tokens: &[&str], prefix: usize) -> usize {
+/// such a match:
+/// - `None` while the hypothesis is shorter than the committed words: it
+///   cannot tell yet what replaced them, and guessing would let words that
+///   are on screen already commit a second time;
+/// - `prefix` when two or more committed words remain and none of them
+///   occurs in their place: Whisper dropped them (e.g. the start of a window
+///   after a cut), and the words that follow are new;
+/// - otherwise the committed length (a revised word, "20" → "zwanzig").
+fn revision_end(window_committed: &[String], tokens: &[&str], prefix: usize) -> Option<usize> {
     let committed = window_committed.len();
-    let fallback = committed.min(tokens.len());
-    if committed < MIN_ALIGNED_TOKENS {
-        return fallback;
+    if committed >= MIN_ALIGNED_TOKENS {
+        let anchor = &window_committed[committed - MIN_ALIGNED_TOKENS..];
+        let anchored = ((prefix + 1).max(MIN_ALIGNED_TOKENS)..=tokens.len())
+            .filter(|&end| end.abs_diff(committed) <= MAX_OVERLAP_TOKENS)
+            .filter(|&end| {
+                anchor
+                    .iter()
+                    .zip(&tokens[end - MIN_ALIGNED_TOKENS..end])
+                    .all(|(committed, token)| same_word(committed, token))
+            })
+            .min_by_key(|&end| (end.abs_diff(committed), end));
+        if anchored.is_some() {
+            return anchored;
+        }
     }
-    let anchor = &window_committed[committed - MIN_ALIGNED_TOKENS..];
-    ((prefix + 1).max(MIN_ALIGNED_TOKENS)..=tokens.len())
-        .filter(|&end| end.abs_diff(committed) <= MAX_OVERLAP_TOKENS)
-        .filter(|&end| {
-            anchor
-                .iter()
-                .zip(&tokens[end - MIN_ALIGNED_TOKENS..end])
-                .all(|(committed, token)| same_word(committed, token))
-        })
-        .min_by_key(|&end| (end.abs_diff(committed), end))
-        .unwrap_or(fallback)
+    if tokens.len() < committed {
+        return None;
+    }
+    let revised = &window_committed[prefix..];
+    let in_their_place = &tokens[prefix..committed];
+    let dropped = revised.len() >= MIN_ALIGNED_TOKENS
+        && !revised
+            .iter()
+            .any(|word| in_their_place.iter().any(|token| same_word(word, token)));
+    Some(if dropped { prefix } else { committed })
 }
 
 /// Number of stabilizer tokens in `text` — what one segment of a hypothesis
@@ -825,12 +845,12 @@ mod tests {
                 &["x", "dass", "ist", "gut", "und"],
                 1
             ),
-            4
+            Some(4)
         );
         // The revised word is one of the last two: the committed length.
         assert_eq!(
             revision_end(&owned(&["x", "y", "20"]), &["x", "y", "zwanzig", "Euro"], 2),
-            3
+            Some(3)
         );
         // Words inserted before the committed ones belong to the revision.
         assert_eq!(
@@ -839,14 +859,41 @@ mod tests {
                 &["Sie", "haben", "die", "Daten", "gesichert"],
                 0
             ),
-            4
+            Some(4)
         );
-        // An anchor match too far away falls back to the committed length.
+        // An anchor match too far away falls back: here the committed
+        // words are gone from their place, so Whisper dropped them.
         let mut far = vec!["w"; MAX_OVERLAP_TOKENS + 1];
         far.extend(["die", "Daten"]);
-        assert_eq!(revision_end(&owned(&["die", "Daten"]), &far, 0), 2);
-        // Never beyond the hypothesis.
-        assert_eq!(revision_end(&owned(&["a", "b", "c"]), &["a"], 1), 1);
+        assert_eq!(revision_end(&owned(&["die", "Daten"]), &far, 0), Some(0));
+        // A shorter hypothesis leaves the revised part open.
+        assert_eq!(revision_end(&owned(&["a", "b", "c"]), &["a"], 1), None);
+        assert_eq!(
+            revision_end(
+                &owned(&["x", "das", "ist", "gut", "und", "dann"]),
+                &["x", "dass", "ist"],
+                1
+            ),
+            None
+        );
+        // A partly revised stretch keeps the committed length ...
+        assert_eq!(
+            revision_end(
+                &owned(&["x", "das", "ist", "gut"]),
+                &["x", "dass", "ist", "guten", "Tag"],
+                1
+            ),
+            Some(4)
+        );
+        // ... words missing from their place were dropped by Whisper.
+        assert_eq!(
+            revision_end(
+                &owned(&["die", "direkt", "auf", "dem", "Rechner"]),
+                &["die", "Sprache", "wird", "nicht", "gesendet", "auf", "dem"],
+                1
+            ),
+            Some(1)
+        );
     }
 
     #[test]
@@ -879,7 +926,7 @@ mod tests {
         stab.set_holdback(0);
         stab.observe("one two three");
         stab.observe("one two three");
-        // An empty hypothesis contradicts but offers no replacement.
+        // An empty hypothesis contradicts but leaves the revision open.
         assert!(stab.observe("").contradicted);
         assert!(!stab.accept_revision());
         assert_eq!(stab.window_committed_count(), 3);

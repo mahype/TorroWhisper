@@ -1154,7 +1154,13 @@ mod tests {
         let mut events = Vec::new();
         for _ in 0..STREAM_REVISION_ACCEPT_PASSES {
             let out = stabilizer.observe(REVISED);
-            events.push(cutter.after_pass(&mut stabilizer, &pass(out.contradicted, None), &audio));
+            // A pause and segments, so only the revision stops a cut.
+            let outcome = PassOutcome {
+                holdback_lifted: true,
+                pending_empty: true,
+                ..pass(out.contradicted, Some(&SEGMENTS))
+            };
+            events.push(cutter.after_pass(&mut stabilizer, &outcome, &audio));
         }
         assert_eq!(
             events,
