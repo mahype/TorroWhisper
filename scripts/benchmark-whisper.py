@@ -2,7 +2,8 @@
 """Run controlled Whisper benchmarks; keep raw JSON and backend logs.
 
 Suites: `tuning` (default, #88) compares flash attention and a fitted audio_ctx
-on a long and a short clip; `baseline` repeats #43's CPU/Metal/thread comparison.
+on a long and a short clip; `presets` checks flash attention on Small and
+Large v3; `baseline` repeats #43's CPU/Metal/thread comparison.
 
 Build first: cargo build --release -p torrowhisper-bridge --example whisper_benchmark
 Run: python3 scripts/benchmark-whisper.py --binary target/release/examples/whisper_benchmark --output /tmp/whisper-results
@@ -78,12 +79,25 @@ def tuning_configs():
     return configs
 
 
+def presets_configs():
+    """#88 follow-up: flash attention on the other Whisper presets (Metal, `de`)."""
+    variants = [(fa, "noctx", clip) for fa in ("nofa", "fa") for clip in ("short", "long")]
+    configs = []
+    for index, model in enumerate(("standard", "large_v3")):
+        order = variants if index == 0 else variants[::-1]
+        configs.extend((model, "metal", 6, "de", "multi") + v for v in order)
+    return configs
+
+
+SUITES = {"tuning": tuning_configs, "baseline": baseline_configs, "presets": presets_configs}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repetitions", type=int, default=3)
-    parser.add_argument("--suite", choices=("tuning", "baseline"), default="tuning")
+    parser.add_argument("--suite", choices=tuple(SUITES), default="tuning")
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("the CPU/Metal comparison requires macOS")
@@ -125,11 +139,12 @@ def main():
     metadata["models_sha256"] = {
         filename: sha256(model_dir / filename) for filename in (
             "ggml-large-v3-turbo-q5_0.bin", "ggml-large-v3-turbo.bin", "ggml-small.bin",
+            "ggml-large-v3.bin",
         )
     }
     (args.output / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
 
-    configs = tuning_configs() if args.suite == "tuning" else baseline_configs()
+    configs = SUITES[args.suite]()
     summary = []
     for model, backend, threads, language, segments, fa, ctx, clip in configs:
         key = f"{model}-{backend}-{threads}-{language}-{segments}-{fa}-{ctx}-{clip}"
