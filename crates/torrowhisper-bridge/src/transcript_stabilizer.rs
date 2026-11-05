@@ -14,6 +14,14 @@
 //! ([`TranscriptStabilizer::archive_window`]): they stay in `committed`, but
 //! later hypotheses, which no longer cover their audio, are only compared
 //! against the committed words that are still inside the window.
+//!
+//! A lasting revision (#93): when Whisper keeps decoding committed window
+//! words differently ("das" → "dass", "20" → "zwanzig"), the worker accepts
+//! the new reading after a few contradicting passes
+//! ([`TranscriptStabilizer::accept_revision`]). The display stays
+//! append-only — the revised words keep their old form on screen until the
+//! final pass — but later hypotheses are compared against the new reading,
+//! so committing and window cuts continue.
 
 use std::ops::Range;
 
@@ -48,6 +56,10 @@ pub(crate) struct WindowState {
 
 pub(crate) struct TranscriptStabilizer {
     committed: String,
+    /// The basis hypotheses are compared against. Mirrors the tokens of
+    /// `committed` until a revision is accepted; from then on its window
+    /// part follows Whisper's new reading and may differ from the text on
+    /// screen.
     committed_tokens: Vec<String>,
     /// Committed tokens before this index belong to audio the worker already
     /// cut off; hypotheses start at `committed_tokens[window_base]`.
@@ -65,6 +77,10 @@ pub(crate) struct TranscriptStabilizer {
     holdback: usize,
     /// Consecutive observations required before a token may commit.
     required_passes: u32,
+    /// The last pass contradicted the committed window words: the agreeing
+    /// prefix length and the hypothesis tokens that replace the committed
+    /// window words behind it, should the worker accept the revision.
+    revision: Option<(usize, Vec<String>)>,
 }
 
 impl TranscriptStabilizer {
@@ -77,6 +93,7 @@ impl TranscriptStabilizer {
             tail_agreement: Vec::new(),
             holdback,
             required_passes: required_passes.max(1),
+            revision: None,
         }
     }
 
@@ -115,8 +132,29 @@ impl TranscriptStabilizer {
     pub(crate) fn restore_window(&mut self, state: WindowState) {
         self.window_base = state.base.min(self.window_base);
         self.window_overlaps = state.overlaps;
-        // Streaks were recorded against the cut window's positions.
+        // Streaks and a revision were recorded against the cut window.
         self.tail_agreement.clear();
+        self.revision = None;
+    }
+
+    /// Accepts the reading of the last contradicting pass (#93): the
+    /// committed window words behind the agreeing prefix are replaced by the
+    /// hypothesis tokens that took their place, so later hypotheses are
+    /// compared against the new reading and can commit again. `committed`,
+    /// the text on screen, is untouched and stays append-only. Returns
+    /// `false` and changes nothing when the last pass did not contradict or
+    /// offered no replacement (e.g. an empty hypothesis).
+    pub(crate) fn accept_revision(&mut self) -> bool {
+        let Some((prefix, replacement)) = self.revision.take() else {
+            return false;
+        };
+        if replacement.is_empty() {
+            return false;
+        }
+        self.committed_tokens.truncate(self.window_base + prefix);
+        self.committed_tokens.extend(replacement);
+        self.tail_agreement.clear();
+        true
     }
 
     /// The last archived and first remaining window words around a cut of
@@ -162,6 +200,15 @@ impl TranscriptStabilizer {
             // The hypothesis contradicts already-committed words. Committed
             // stays frozen (monotonicity guarantee); everything after the
             // agreeing prefix becomes pending and stability tracking restarts.
+            // The revised reading is kept in case the worker accepts it.
+            let end = revision_end(window_committed, tokens, prefix_len);
+            self.revision = Some((
+                prefix_len,
+                tokens[prefix_len..end]
+                    .iter()
+                    .map(|token| (*token).to_owned())
+                    .collect(),
+            ));
             self.tail_agreement = tokens[prefix_len..]
                 .iter()
                 .map(|token| ((*token).to_owned(), 1))
@@ -173,6 +220,7 @@ impl TranscriptStabilizer {
             return self.result(pending, true, lead);
         }
 
+        self.revision = None;
         let in_window = window_committed.len();
         let tail = &tokens[in_window..];
         let tail_spans = &spans[in_window..];
@@ -270,6 +318,31 @@ fn align_window(window_committed: &[String], tokens: &[&str], overlaps: bool) ->
         .max_by_key(|&(count, lead)| (count, std::cmp::Reverse(lead)))
         .map_or(0, |(_, lead)| lead);
     (0, partial_lead)
+}
+
+/// Exclusive end of the hypothesis part that took the place of the committed
+/// window words in a contradicting pass, behind the agreeing `prefix`. Whisper
+/// may have revised a word, or inserted or dropped some, so the end is found
+/// at the last two committed words: the match nearest to the committed length
+/// (the earlier one on a tie), at most [`MAX_OVERLAP_TOKENS`] away. Without
+/// such a match the committed length counts, capped at the hypothesis.
+fn revision_end(window_committed: &[String], tokens: &[&str], prefix: usize) -> usize {
+    let committed = window_committed.len();
+    let fallback = committed.min(tokens.len());
+    if committed < MIN_ALIGNED_TOKENS {
+        return fallback;
+    }
+    let anchor = &window_committed[committed - MIN_ALIGNED_TOKENS..];
+    ((prefix + 1).max(MIN_ALIGNED_TOKENS)..=tokens.len())
+        .filter(|&end| end.abs_diff(committed) <= MAX_OVERLAP_TOKENS)
+        .filter(|&end| {
+            anchor
+                .iter()
+                .zip(&tokens[end - MIN_ALIGNED_TOKENS..end])
+                .all(|(committed, token)| same_word(committed, token))
+        })
+        .min_by_key(|&end| (end.abs_diff(committed), end))
+        .unwrap_or(fallback)
 }
 
 /// Number of stabilizer tokens in `text` — what one segment of a hypothesis
@@ -737,6 +810,92 @@ mod tests {
         let out = stab.observe("one too three");
         assert!(out.contradicted);
         assert_eq!(out.committed, "one two three");
+    }
+
+    fn owned(words: &[&str]) -> Vec<String> {
+        words.iter().map(|word| (*word).to_owned()).collect()
+    }
+
+    #[test]
+    fn revision_end_finds_the_revised_part() {
+        // A revised word: the last two committed words line up behind it.
+        assert_eq!(
+            revision_end(
+                &owned(&["x", "das", "ist", "gut"]),
+                &["x", "dass", "ist", "gut", "und"],
+                1
+            ),
+            4
+        );
+        // The revised word is one of the last two: the committed length.
+        assert_eq!(
+            revision_end(&owned(&["x", "y", "20"]), &["x", "y", "zwanzig", "Euro"], 2),
+            3
+        );
+        // Words inserted before the committed ones belong to the revision.
+        assert_eq!(
+            revision_end(
+                &owned(&["die", "Daten"]),
+                &["Sie", "haben", "die", "Daten", "gesichert"],
+                0
+            ),
+            4
+        );
+        // An anchor match too far away falls back to the committed length.
+        let mut far = vec!["w"; MAX_OVERLAP_TOKENS + 1];
+        far.extend(["die", "Daten"]);
+        assert_eq!(revision_end(&owned(&["die", "Daten"]), &far, 0), 2);
+        // Never beyond the hypothesis.
+        assert_eq!(revision_end(&owned(&["a", "b", "c"]), &["a"], 1), 1);
+    }
+
+    #[test]
+    fn accepted_revision_lets_new_words_commit() {
+        let mut stab = stabilizer();
+        stab.set_holdback(0);
+        let first = "x das ist gut";
+        stab.observe(first);
+        stab.observe(first);
+        let revised = "x dass ist gut und weiter";
+        let out = stab.observe(revised);
+        assert!(out.contradicted);
+        assert!(stab.accept_revision());
+        assert_eq!(stab.window_committed_count(), 4);
+        // Taken: a second call has nothing left to accept.
+        assert!(!stab.accept_revision());
+
+        let out = stab.observe(revised);
+        assert!(!out.contradicted);
+        assert_eq!(out.committed, first, "the screen keeps the old reading");
+        assert_eq!(out.pending, "und weiter");
+        let out = stab.observe(revised);
+        assert_eq!(out.committed, format!("{first} und weiter"));
+        assert_eq!(out.pending, "");
+    }
+
+    #[test]
+    fn nothing_to_accept_without_a_revised_reading() {
+        let mut stab = stabilizer();
+        stab.set_holdback(0);
+        stab.observe("one two three");
+        stab.observe("one two three");
+        // An empty hypothesis contradicts but offers no replacement.
+        assert!(stab.observe("").contradicted);
+        assert!(!stab.accept_revision());
+        assert_eq!(stab.window_committed_count(), 3);
+
+        // An agreeing pass clears the revision of the pass before.
+        assert!(stab.observe("one too three").contradicted);
+        assert!(!stab.observe("one two three four").contradicted);
+        assert!(!stab.accept_revision());
+
+        // So does undoing a cut.
+        let before = stab.window_state();
+        assert!(stab.observe("one too three four").contradicted);
+        stab.restore_window(before);
+        assert!(!stab.accept_revision());
+        let out = stab.observe("one two three four");
+        assert!(!out.contradicted);
     }
 
     #[test]
