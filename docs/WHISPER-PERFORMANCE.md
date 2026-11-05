@@ -305,7 +305,10 @@ kürzere Takes bleiben unverändert. Live-Vorschau und Warmup nutzen weiter
 `base_full_params`.
 
 Messung auf dem M4 Max, Turbo Q5_0, Clips mit `say -v Anna` bei 48 kHz,
-Wortfehlerrate (WER) und Inferenzzeit, vorher / nachher:
+Wortfehlerrate (WER) und Inferenzzeit, vorher (Stand `main`, gemessen vor dem
+Fix; der Test scheiterte bei 41 s und 163 s am Assert) / nachher. Die Clips sind
+kürzer als zunächst geplant (41 s statt 60 s, 163 s statt 180 s), beide liegen
+über einem 30-s-Fenster:
 
 | Clip | Sprache | WER vorher | WER nachher | Inferenz vorher | Inferenz nachher |
 |---|---|---|---|---|---|
