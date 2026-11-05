@@ -1653,12 +1653,21 @@ pub(crate) fn run_whisper_inference(
         .map_err(|err| format!("Whisper state could not be created: {err}"))?;
     let state_secs = state_started.elapsed().as_secs_f32();
 
-    let params = base_full_params(
+    let mut params = base_full_params(
         settings,
         language,
         n_threads,
         audio_ctx_for(samples.len(), dynamic_audio_ctx),
     );
+    if needs_window_timestamps(samples.len()) {
+        // Without timestamps whisper.cpp always jumps a fixed 30 s after each
+        // window (`single_segment` does the same). Where the decoder stopped
+        // early or fell into a repeat, the rest of the window is lost and the
+        // repeat ends up in the text. With timestamps it resumes at the last
+        // recognized one (#92). Short takes keep the settings as they are.
+        params.set_no_timestamps(false);
+        params.set_single_segment(false);
+    }
 
     // Serialize all Whisper inference process-wide. Today the paths (a live
     // dictation, a benchmark run) never overlap by design, but nothing enforced
@@ -1681,6 +1690,15 @@ pub(crate) fn run_whisper_inference(
         state_secs,
         inference_secs,
     })
+}
+
+/// Length of one Whisper decoding window (30 s at 16 kHz).
+const WHISPER_WINDOW_SAMPLES_16K: usize = 16_000 * 30;
+
+/// Whether a take of `n_samples_16k` samples spans more than one decoding
+/// window and so needs window timestamps in the final pass (#92).
+pub(crate) fn needs_window_timestamps(n_samples_16k: usize) -> bool {
+    n_samples_16k > WHISPER_WINDOW_SAMPLES_16K
 }
 
 /// Whether Whisper contexts are created with flash attention (#88). One switch
@@ -2392,6 +2410,13 @@ fn cue_playback_duration(cue: RecordingCue) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn window_timestamps_only_for_takes_over_one_window() {
+        assert!(!needs_window_timestamps(0));
+        assert!(!needs_window_timestamps(16_000 * 30));
+        assert!(needs_window_timestamps(16_000 * 30 + 1));
+    }
 
     #[test]
     fn audio_ctx_is_zero_when_disabled() {
