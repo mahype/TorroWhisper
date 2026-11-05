@@ -1,10 +1,17 @@
 //! Live transcription while a recording is running (#41).
 //!
-//! One worker thread per recording session snapshots the growing capture
-//! buffer on a fixed cadence, re-transcribes it with the already-cached
-//! Whisper context, stabilizes the hypotheses into committed/pending text
-//! and publishes the result into a shared [`StreamingOutput`] slot that the
-//! Swift overlay polls via `ow_get_streaming_transcript`.
+//! One worker thread per recording session takes the new samples of the
+//! growing capture buffer on a fixed cadence, resamples them once to 16 kHz,
+//! re-transcribes the current decode window with the already-cached Whisper
+//! context, stabilizes the hypotheses into committed/pending text and
+//! publishes the result into a shared [`StreamingOutput`] slot that the Swift
+//! overlay polls via `ow_get_streaming_transcript`.
+//!
+//! Sliding window (#89): a pass decodes only the audio since the last cut, so
+//! its duration stays roughly constant on long takes instead of growing with
+//! them. The window moves behind committed text — preferably at a speech
+//! pause, during long uninterrupted speech at a segment boundary Whisper
+//! reported. The final pass still decodes the whole take.
 //!
 //! Concurrency model: passes are sequential by construction (one worker, one
 //! loop), so results are inherently latest-wins. Whisper inference is
@@ -22,13 +29,14 @@ use std::{
 };
 
 use torrowhisper_core::{AppSettings, StreamingTranscriptDto};
-use whisper_rs::WhisperContext;
+use whisper_rs::{WhisperContext, WhisperState};
 
 use crate::dictation::{
     RecordingBuffer, WHISPER_DYNAMIC_AUDIO_CTX, audio_ctx_for, base_full_params,
-    collect_transcript, resample_to_16khz, try_whisper_inference_lock,
+    try_whisper_inference_lock,
 };
-use crate::transcript_stabilizer::TranscriptStabilizer;
+use crate::resampler::StreamResampler;
+use crate::transcript_stabilizer::{TranscriptStabilizer, token_count};
 
 /// Words become committed once they were identical this many passes in a row.
 const STREAM_REQUIRED_PASSES: u32 = 2;
@@ -52,6 +60,24 @@ const SILENCE_COMMIT_DELAY: Duration = Duration::from_millis(1_500);
 /// trailing silence beyond it — decoding into silence is where it hallucinates
 /// filler ("Vielen Dank", repeated words), which must never reach the preview.
 const SPEECH_TAIL_PADDING_MS: u64 = 500;
+/// Windows longer than this (20 s at 16 kHz) are decoded with segment
+/// timestamps so the worker can cut inside continuous speech (#89).
+const STREAM_WINDOW_SOFT_LIMIT_SAMPLES: usize = 16_000 * 20;
+/// Whisper timestamps are in centiseconds.
+const SAMPLES_PER_CENTISECOND: usize = 160;
+/// 10 ms frames for the quietest-point search around a segment cut.
+const FRAME_SAMPLES: usize = 160;
+/// Search ±200 ms around the overlap start for the actual gap.
+const CUT_SEARCH_RADIUS_SAMPLES: usize = 3_200;
+/// A segment cut starts the next window this far (800 ms) before Whisper's
+/// segment end. Segment times can be late by a few hundred ms; cutting right
+/// at them clipped the next word, the re-decode then lacked it and
+/// contradicted the committed text for good. The overlap re-decodes the last
+/// archived words instead; the stabilizer skips them by alignment.
+const CUT_OVERLAP_SAMPLES: usize = 12_800;
+/// A segment cut leaves at least this many committed words in the window —
+/// the anchor the stabilizer aligns the overlapping re-decode on.
+const SEGMENT_CUT_ANCHOR_WORDS: usize = 2;
 
 /// The published live-transcript state. One instance lives on the
 /// `DictationController` for the whole process; sessions write into it.
@@ -204,7 +230,20 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
 
     let n_threads = streaming_thread_count();
     let mut stabilizer = TranscriptStabilizer::new(STREAM_HOLDBACK_WORDS, STREAM_REQUIRED_PASSES);
-    let mut audio: Vec<f32> = Vec::new();
+    // Captured samples are resampled exactly once, as they arrive (#89):
+    // `source_len` counts the source samples taken from the buffer, `audio16k`
+    // holds everything resampled so far.
+    let mut source_len: usize = 0;
+    let mut new_samples: Vec<f32> = Vec::new();
+    let mut resampler: Option<StreamResampler> = None;
+    let mut audio16k: Vec<f32> = Vec::new();
+    // Sliding window (#89): passes decode `audio16k[window_start..]` only.
+    // The window moves behind committed text at a speech pause or, during
+    // long uninterrupted speech, at a segment boundary Whisper reported.
+    let mut window_start: usize = 0;
+    // Voiced samples at the last pause cut: the window behind a pause holds
+    // no words yet and passes the speech gate anew.
+    let mut voiced_at_cut: usize = 0;
     let session_started = Instant::now();
     let mut last_pass_started: Option<Instant> = None;
     let mut samples_at_last_pass: usize = 0;
@@ -213,8 +252,9 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
     let mut busy_logged = false;
     let mut first_pass_logged = false;
     let mut inference_warned = false;
-    // Language auto-detection runs per pass (over the growing buffer) when no
-    // language is configured; remembered so a flip can reset the preview.
+    // Language auto-detection runs per pass while the first window lasts;
+    // remembered so a flip can reset the preview, and pinned after the first
+    // cut (a short window after a pause misdetects too easily).
     let mut last_lang_id: Option<i32> = None;
     // Trailing-silence tracking for the holdback lift.
     let mut last_voiced_total: usize = 0;
@@ -232,16 +272,21 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
             return;
         }
 
-        // Short lock: append only the samples that arrived since last tick.
+        // Short lock: take only the samples that arrived since last tick.
+        new_samples.clear();
         let (sample_rate, voiced_samples, last_voiced_end) = {
             let Ok(guard) = buffer.lock() else { return };
-            guard.copy_new_samples(audio.len(), &mut audio);
+            guard.copy_new_samples(source_len, &mut new_samples);
             (
                 guard.sample_rate(),
                 guard.voiced_samples(),
                 guard.last_voiced_end(),
             )
         };
+        source_len += new_samples.len();
+        resampler
+            .get_or_insert_with(|| StreamResampler::new(sample_rate))
+            .push(&new_samples, &mut audio16k);
 
         if voiced_samples != last_voiced_total {
             last_voiced_total = voiced_samples;
@@ -257,7 +302,7 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         };
         stabilizer.set_holdback(holdback);
 
-        if !voiced_gate_reached(voiced_samples, sample_rate) {
+        if !voiced_gate_reached(voiced_samples.saturating_sub(voiced_at_cut), sample_rate) {
             continue;
         }
         if !gate_logged {
@@ -280,9 +325,13 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         // arrived, EXCEPT while a lifted holdback still has pending text to
         // commit (identical input stabilizes it within a pass or two).
         let speech_end =
-            (last_voiced_end + ms_to_samples(SPEECH_TAIL_PADDING_MS, sample_rate)).min(audio.len());
+            (last_voiced_end + ms_to_samples(SPEECH_TAIL_PADDING_MS, sample_rate)).min(source_len);
         let silence_commit_due = holdback == 0 && !last_pending_empty;
         if !enough_new_audio(samples_at_last_pass, speech_end, sample_rate) && !silence_commit_due {
+            continue;
+        }
+        let speech_end_16k = to_16khz_index(speech_end, sample_rate).min(audio16k.len());
+        if speech_end_16k <= window_start {
             continue;
         }
 
@@ -304,23 +353,30 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         last_pass_started = Some(Instant::now());
         samples_at_last_pass = speech_end;
 
-        // v1 prototype: re-transcribe the whole take (up to the end of
-        // speech) each pass — latest-wins degrades gracefully on long takes;
-        // the sliding window is follow-up.
-        let mono_16khz = resample_to_16khz(&audio[..speech_end], sample_rate);
-        if mono_16khz.is_empty() {
-            continue;
-        }
-
+        let window = &audio16k[window_start..speech_end_16k];
+        // Auto language: detect freely in the first window (and reset on a
+        // flip, below); after the first cut keep the detected language.
+        let pass_language = match (&language, window_start, last_lang_id) {
+            (Some(language), _, _) => Some(language.as_str()),
+            (None, start, Some(lang_id)) if start > 0 => whisper_rs::get_lang_str(lang_id),
+            (None, _, _) => None,
+        };
         let mut params = base_full_params(
             &settings,
-            language.as_deref(),
+            pass_language,
             n_threads,
-            audio_ctx_for(mono_16khz.len(), WHISPER_DYNAMIC_AUDIO_CTX),
+            audio_ctx_for(window.len(), WHISPER_DYNAMIC_AUDIO_CTX),
         );
         // The state is reused across passes; without this, tokens of the
         // previous pass would bias the re-decode of the same audio.
         params.set_no_context(true);
+        // Long windows (no pause for a while) need segment timestamps to find
+        // a cut position inside continuous speech.
+        let wants_segments = window.len() > STREAM_WINDOW_SOFT_LIMIT_SAMPLES;
+        if wants_segments {
+            params.set_no_timestamps(false);
+            params.set_single_segment(false);
+        }
         // Raw abort wiring instead of whisper-rs 0.16's `set_abort_callback_safe`:
         // its trampoline casts the double-boxed closure back with the wrong
         // type and reads garbage — passes then abort spuriously with encode
@@ -332,7 +388,7 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         }
 
         let pass_started = Instant::now();
-        let pass_result = state.full(params, &mono_16khz);
+        let pass_result = state.full(params, window);
         drop(inference_guard);
 
         match pass_result {
@@ -355,8 +411,10 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         // translation, and the stabilizer would freeze that wrong-language
         // text forever. Detection converges as the buffer grows, so on a flip
         // we throw the preview away and rebuild from the current hypothesis.
-        // The final pass is unaffected either way.
-        if language.is_none() {
+        // Only while the first window lasts: after a cut the earlier text is
+        // archived and the language stays pinned. The final pass is
+        // unaffected either way.
+        if language.is_none() && window_start == 0 {
             let lang_id = state.full_lang_id_from_state();
             if let Some(previous) = last_lang_id
                 && previous != lang_id
@@ -373,7 +431,8 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
             last_lang_id = Some(lang_id);
         }
 
-        let hypothesis = collect_transcript(&state);
+        let (hypothesis, segments) = collect_segments(&state);
+        let window_secs = window.len() as f32 / 16_000.0;
         pass_count += 1;
         if !first_pass_logged {
             first_pass_logged = true;
@@ -387,8 +446,8 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         } else {
             log::debug!(
                 target: "dictation",
-                "streaming pass {pass_count}: {:.1}s audio → {} chars in {:.2}s",
-                mono_16khz.len() as f32 / 16_000.0,
+                "streaming pass {pass_count}: window {:.1}s + {window_secs:.1}s audio → {} chars in {:.2}s",
+                window_start as f32 / 16_000.0,
                 hypothesis.chars().count(),
                 pass_started.elapsed().as_secs_f32()
             );
@@ -396,10 +455,136 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
 
         let stabilized = stabilizer.observe(&hypothesis);
         last_pending_empty = stabilized.pending.is_empty();
+        let contradicted = stabilized.contradicted;
+        let overlap = stabilized.overlap;
         if let Ok(mut guard) = output.lock() {
             guard.publish(stabilized.committed, stabilized.pending, false);
         }
+        if contradicted {
+            continue;
+        }
+
+        // Move the window behind committed text. Archived words stay on
+        // screen; later passes simply no longer decode their audio.
+        let window_committed = stabilizer.window_committed_count();
+        if holdback == 0 && last_pending_empty && window_committed > 0 {
+            // Speech pause and everything committed: the next window starts
+            // behind the pause, where no word can be cut in half.
+            let boundary = stabilizer.window_boundary_words(window_committed);
+            stabilizer.archive_window(window_committed);
+            window_start = speech_end_16k;
+            voiced_at_cut = voiced_samples;
+            log::info!(
+                target: "dictation",
+                "streaming window cut at pause: {:.2}s, {window_committed} words archived ({boundary})",
+                window_start as f32 / 16_000.0
+            );
+        } else if wants_segments
+            && let Some((consumed, end_cs)) =
+                segment_cut(&skip_leading_tokens(&segments, overlap), window_committed)
+        {
+            // Long speech without a pause: cut behind a fully committed
+            // segment. The new window starts a little before Whisper's
+            // segment end, in the quietest nearby frame, so no word of the
+            // window is clipped; the overlap is skipped by alignment.
+            let estimate = window_start + (end_cs.max(0) as usize) * SAMPLES_PER_CENTISECOND;
+            let refined = quietest_frame(
+                &audio16k,
+                estimate.saturating_sub(CUT_OVERLAP_SAMPLES),
+                CUT_SEARCH_RADIUS_SAMPLES,
+            );
+            let boundary = stabilizer.window_boundary_words(consumed);
+            stabilizer.archive_window(consumed);
+            window_start = refined.clamp(window_start + 1, speech_end_16k);
+            // No new speech gate here: the window still holds words, and a
+            // pause right after this cut must still commit their tail.
+            log::info!(
+                target: "dictation",
+                "streaming window cut at segment: {:.2}s (whisper end {:.2}s), {consumed} words archived ({boundary})",
+                window_start as f32 / 16_000.0,
+                estimate as f32 / 16_000.0
+            );
+        }
     }
+}
+
+/// Joins the decoded segments like `collect_transcript` and returns, per
+/// non-empty segment, its stabilizer token count and end timestamp (in
+/// centiseconds relative to the window start).
+fn collect_segments(state: &WhisperState) -> (String, Vec<(usize, i64)>) {
+    let mut texts = Vec::new();
+    let mut segments = Vec::new();
+    for segment in state.as_iter() {
+        let text = segment.to_string().trim().to_owned();
+        if text.is_empty() {
+            continue;
+        }
+        segments.push((token_count(&text), segment.end_timestamp()));
+        texts.push(text);
+    }
+    (texts.join(" "), segments)
+}
+
+/// `segments` without their first `skip` tokens — the overlap with archived
+/// text the stabilizer skipped, which must not count as committed window
+/// words. A segment inside the overlap keeps its end time with zero tokens.
+fn skip_leading_tokens(segments: &[(usize, i64)], mut skip: usize) -> Vec<(usize, i64)> {
+    segments
+        .iter()
+        .map(|&(tokens, end_cs)| {
+            let skipped = tokens.min(skip);
+            skip -= skipped;
+            (tokens - skipped, end_cs)
+        })
+        .collect()
+}
+
+/// Where a long window may be cut: behind the largest number of leading
+/// segments — never the last one, Whisper still revises it — whose tokens are
+/// all committed, with [`SEGMENT_CUT_ANCHOR_WORDS`] committed words left
+/// behind them. Returns the archived token count and the end timestamp of the
+/// last archived segment, or `None` when no such segment exists.
+fn segment_cut(segments: &[(usize, i64)], committed: usize) -> Option<(usize, i64)> {
+    let mut best = None;
+    let mut cumulative = 0;
+    for &(tokens, end_cs) in segments.iter().take(segments.len().saturating_sub(1)) {
+        cumulative += tokens;
+        if cumulative + SEGMENT_CUT_ANCHOR_WORDS > committed {
+            break;
+        }
+        if cumulative > 0 {
+            best = Some((cumulative, end_cs));
+        }
+    }
+    best
+}
+
+/// Center of the quietest 10 ms frame within `radius` samples around
+/// `center` — Whisper's segment times can be off by a few hundred ms, the cut
+/// should land in the gap between words. Falls back to `center` (clamped to
+/// the audio) when no complete frame fits.
+fn quietest_frame(audio: &[f32], center: usize, radius: usize) -> usize {
+    let from = center.saturating_sub(radius);
+    let to = center.saturating_add(radius).min(audio.len());
+    let mut best: Option<(f32, usize)> = None;
+    let mut frame_start = from;
+    while frame_start + FRAME_SAMPLES <= to {
+        let frame = &audio[frame_start..frame_start + FRAME_SAMPLES];
+        let energy: f32 = frame.iter().map(|sample| sample * sample).sum();
+        if best.is_none_or(|(quietest, _)| energy < quietest) {
+            best = Some((energy, frame_start + FRAME_SAMPLES / 2));
+        }
+        frame_start += FRAME_SAMPLES;
+    }
+    best.map_or(center.min(audio.len()), |(_, position)| position)
+}
+
+/// Source sample index → index in the 16 kHz stream.
+fn to_16khz_index(index: usize, sample_rate: u32) -> usize {
+    if sample_rate == 0 {
+        return 0;
+    }
+    (index as u64 * 16_000 / u64::from(sample_rate)) as usize
 }
 
 /// ggml abort callback for streaming passes: aborts the in-flight inference as
@@ -456,6 +641,77 @@ mod tests {
         let rate = 16_000;
         assert!(!enough_new_audio(10_000, 10_000 + 3_999, rate));
         assert!(enough_new_audio(10_000, 10_000 + 4_000, rate));
+    }
+
+    #[test]
+    fn segment_cut_takes_the_largest_committed_prefix_before_the_last_segment() {
+        let segments = [(3, 250), (4, 610), (5, 900), (2, 1_100)];
+        assert_eq!(segment_cut(&segments, 5), Some((3, 250)));
+        assert_eq!(segment_cut(&segments, 9), Some((7, 610)));
+        assert_eq!(segment_cut(&segments, 14), Some((12, 900)));
+        // The last segment never goes, even when fully committed.
+        assert_eq!(segment_cut(&segments, 30), Some((12, 900)));
+        // Two committed words must stay behind the cut as an anchor.
+        assert_eq!(segment_cut(&segments, 8), Some((3, 250)));
+        assert_eq!(segment_cut(&segments, 4), None);
+    }
+
+    #[test]
+    fn overlap_tokens_do_not_count_as_committed() {
+        let segments = [(3, 250), (4, 610), (5, 900)];
+        assert_eq!(skip_leading_tokens(&segments, 0), segments.to_vec());
+        assert_eq!(
+            skip_leading_tokens(&segments, 5),
+            vec![(0, 250), (2, 610), (5, 900)]
+        );
+        // 5 overlap tokens + 4 committed: only the second segment's two
+        // committed words (and the anchor) are behind the first cut point.
+        let discounted = skip_leading_tokens(&segments, 5);
+        assert_eq!(segment_cut(&discounted, 4), Some((2, 610)));
+        assert_eq!(segment_cut(&discounted, 3), None);
+    }
+
+    #[test]
+    fn segment_cut_needs_a_committed_segment_and_a_follower() {
+        assert_eq!(segment_cut(&[(5, 400)], 5), None, "single segment");
+        assert_eq!(
+            segment_cut(&[(5, 400), (3, 700)], 4),
+            None,
+            "first not committed"
+        );
+        assert_eq!(segment_cut(&[], 10), None);
+        // Empty leading segments carry no words to archive.
+        assert_eq!(segment_cut(&[(0, 100), (3, 400)], 3), None);
+    }
+
+    #[test]
+    fn quietest_frame_finds_the_gap_between_tones() {
+        let tone =
+            |len: usize| -> Vec<f32> { (0..len).map(|i| (i as f32 * 0.3).sin() * 0.5).collect() };
+        let mut audio = tone(8_000);
+        audio.extend(vec![0.0; 800]); // 50 ms gap at 8_000..8_800
+        audio.extend(tone(8_000));
+        // Whisper's estimate is 150 ms off; the cut lands in the gap.
+        let position = quietest_frame(&audio, 8_400 + 2_400, CUT_SEARCH_RADIUS_SAMPLES);
+        assert!((8_000..8_800).contains(&position), "cut at {position}");
+    }
+
+    #[test]
+    fn quietest_frame_stays_inside_the_audio() {
+        let audio = vec![0.1; 1_000];
+        assert!(quietest_frame(&audio, 0, CUT_SEARCH_RADIUS_SAMPLES) < audio.len());
+        assert!(quietest_frame(&audio, 999, CUT_SEARCH_RADIUS_SAMPLES) < audio.len());
+        // Center beyond the end and too little audio for one frame.
+        assert_eq!(quietest_frame(&audio[..100], 5_000, 3_200), 100);
+        assert_eq!(quietest_frame(&[], 10, 3_200), 0);
+    }
+
+    #[test]
+    fn source_index_maps_to_16khz() {
+        assert_eq!(to_16khz_index(48_000, 48_000), 16_000);
+        assert_eq!(to_16khz_index(44_100, 44_100), 16_000);
+        assert_eq!(to_16khz_index(5, 16_000), 5);
+        assert_eq!(to_16khz_index(100, 0), 0);
     }
 
     #[test]
