@@ -94,6 +94,10 @@ const STREAM_LANGUAGE_SETTLE_VOICED_MS: u64 = 4_000;
 /// The window behind a pause starts this long before speech resumed, rather
 /// than at the pause itself: a long pause is not decoded as silence.
 const SPEECH_HEAD_PADDING_MS: u64 = 500;
+/// Silence after a voiced run behind a pause that marks the run as a stray
+/// sound (a click, a breath) when it stays below the speech gate: the window
+/// start then follows the next run instead.
+const RESUME_RUN_GAP_MS: u64 = 600;
 
 /// The published live-transcript state. One instance lives on the
 /// `DictationController` for the whole process; sessions write into it.
@@ -261,7 +265,7 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
     // no words yet and passes the speech gate anew.
     let mut voiced_at_cut: usize = 0;
     // After a pause cut, the window start follows speech once it resumes.
-    let mut resume_pending = false;
+    let mut pause_resume: Option<PauseResume> = None;
     // The last segment cut until a pass confirms it (previous window start,
     // stabilizer window, archived words), and how often it was contradicted.
     let mut cut_undo: Option<(usize, WindowState, usize)> = None;
@@ -315,13 +319,23 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
             .get_or_insert_with(|| StreamResampler::new(sample_rate))
             .push(&new_samples, &mut audio16k);
 
-        if resume_pending && voiced_samples > voiced_at_cut {
-            // Speech resumed within the samples that arrived this tick.
-            resume_pending = false;
-            let resume = previous_source_len
-                .saturating_sub(ms_to_samples(SPEECH_HEAD_PADDING_MS, sample_rate));
-            window_start =
-                window_start.max(to_16khz_index(resume, sample_rate).min(audio16k.len()));
+        if let Some(resume) = pause_resume.as_mut() {
+            let tracking = resume.tick(
+                &ResumeTick {
+                    voiced_samples,
+                    voiced_before: last_voiced_total,
+                    source_before: previous_source_len,
+                    source_len,
+                    last_voiced_end,
+                    sample_rate,
+                    audio16k_len: audio16k.len(),
+                },
+                &mut window_start,
+                &mut voiced_at_cut,
+            );
+            if !tracking {
+                pause_resume = None;
+            }
         }
 
         if voiced_samples != last_voiced_total {
@@ -547,7 +561,7 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
             stabilizer.archive_window(window_committed, false);
             window_start = speech_end_16k;
             voiced_at_cut = voiced_samples;
-            resume_pending = true;
+            pause_resume = Some(PauseResume::new(window_start));
             min_cut_consumed = 0;
             cut_happened = true;
             log::info!(
@@ -590,6 +604,73 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
                 estimate as f32 / 16_000.0
             );
         }
+    }
+}
+
+/// Where the window behind a pause cut starts: just before speech resumes,
+/// not at the pause itself, so a long pause is not decoded as silence. A
+/// stray sound that stays below the speech gate (a click) and is followed by
+/// silence does not pin the start: the next voiced run moves it again, and
+/// the sound no longer counts toward the gate.
+struct PauseResume {
+    /// Window start set by the cut (16 kHz index), the earliest start.
+    cut_start: usize,
+    /// A voiced run behind the pause started and has not ended yet.
+    in_run: bool,
+}
+
+struct ResumeTick {
+    voiced_samples: usize,
+    /// Voiced samples at the previous tick.
+    voiced_before: usize,
+    /// Source samples before this tick's new ones arrived.
+    source_before: usize,
+    source_len: usize,
+    last_voiced_end: usize,
+    sample_rate: u32,
+    audio16k_len: usize,
+}
+
+impl PauseResume {
+    fn new(cut_start: usize) -> Self {
+        Self {
+            cut_start,
+            in_run: false,
+        }
+    }
+
+    /// Updates `window_start` and the gate's `voiced_at_cut` for one tick.
+    /// Returns `false` once speech passed the gate and tracking is done.
+    fn tick(
+        &mut self,
+        tick: &ResumeTick,
+        window_start: &mut usize,
+        voiced_at_cut: &mut usize,
+    ) -> bool {
+        let rate = tick.sample_rate;
+        if tick.voiced_samples > tick.voiced_before && !self.in_run {
+            // A voiced run started within this tick's samples.
+            self.in_run = true;
+            let resume = tick
+                .source_before
+                .saturating_sub(ms_to_samples(SPEECH_HEAD_PADDING_MS, rate));
+            *window_start = self
+                .cut_start
+                .max(to_16khz_index(resume, rate).min(tick.audio16k_len));
+        }
+        let voiced_since_cut = tick.voiced_samples.saturating_sub(*voiced_at_cut);
+        if voiced_gate_reached(voiced_since_cut, rate, STREAM_NEXT_WINDOW_MIN_VOICED_MS) {
+            return false;
+        }
+        if self.in_run
+            && tick.source_len.saturating_sub(tick.last_voiced_end)
+                >= ms_to_samples(RESUME_RUN_GAP_MS, rate)
+        {
+            // Too short for speech and followed by silence: a stray sound.
+            self.in_run = false;
+            *voiced_at_cut = tick.voiced_samples;
+        }
+        true
     }
 }
 
@@ -796,6 +877,76 @@ mod tests {
         assert_eq!(segment_cut(&[], 10), None);
         // Empty leading segments carry no words to archive.
         assert_eq!(segment_cut(&[(0, 100), (3, 400)], 3), None);
+    }
+
+    /// Drives [`PauseResume`] at 16 kHz with 150 ms ticks: `voiced` marks
+    /// the ticks whose audio counted as speech.
+    fn run_resume(cut_start: usize, voiced: &[bool]) -> (usize, usize, bool) {
+        let tick_len = 2_400;
+        let mut resume = PauseResume::new(cut_start);
+        let mut window_start = cut_start;
+        let mut voiced_at_cut = 0;
+        let (mut voiced_samples, mut source_len, mut last_voiced_end) = (0, cut_start, 0);
+        let mut tracking = true;
+        for &is_voiced in voiced {
+            let voiced_before = voiced_samples;
+            let source_before = source_len;
+            source_len += tick_len;
+            if is_voiced {
+                voiced_samples += tick_len;
+                last_voiced_end = source_len;
+            }
+            tracking = resume.tick(
+                &ResumeTick {
+                    voiced_samples,
+                    voiced_before,
+                    source_before,
+                    source_len,
+                    last_voiced_end,
+                    sample_rate: 16_000,
+                    audio16k_len: source_len,
+                },
+                &mut window_start,
+                &mut voiced_at_cut,
+            );
+            if !tracking {
+                break;
+            }
+        }
+        (window_start, voiced_at_cut, tracking)
+    }
+
+    #[test]
+    fn window_after_a_pause_starts_before_the_speech() {
+        // 20 ticks (3 s) of silence, then speech.
+        let mut ticks = vec![false; 20];
+        ticks.extend([true; 3]);
+        let (start, _, tracking) = run_resume(16_000, &ticks);
+        // Speech began at 16_000 + 20 * 2_400 = 64_000; minus 500 ms.
+        assert_eq!(start, 64_000 - 8_000);
+        assert!(!tracking, "two voiced ticks pass the 300 ms gate");
+    }
+
+    #[test]
+    fn stray_click_in_a_pause_does_not_pin_the_window_start() {
+        // A click (one voiced tick), 1.5 s silence, then speech.
+        let mut ticks = vec![false; 5];
+        ticks.push(true);
+        ticks.extend([false; 10]);
+        ticks.extend([true; 3]);
+        let (start, voiced_at_cut, _) = run_resume(0, &ticks);
+        // Speech began at 16 * 2_400 = 38_400; minus 500 ms.
+        assert_eq!(start, 38_400 - 8_000);
+        assert_eq!(
+            voiced_at_cut, 2_400,
+            "the click no longer counts toward the gate"
+        );
+    }
+
+    #[test]
+    fn window_start_never_moves_before_the_cut() {
+        let (start, _, _) = run_resume(50_000, &[true, true]);
+        assert_eq!(start, 50_000);
     }
 
     #[test]
