@@ -26,7 +26,7 @@ const MAX_OVERLAP_TOKENS: usize = 24;
 /// its start (the cut clipped them despite the overlap). They are already on
 /// screen and are archived instead of contradicting forever.
 const MAX_CLIPPED_TOKENS: usize = 3;
-/// Committed words that must line up after skipping clipped words.
+/// Committed words that must line up for an alignment to count.
 const MIN_ALIGNED_TOKENS: usize = 2;
 
 pub(crate) struct StabilizedText {
@@ -40,12 +40,21 @@ pub(crate) struct StabilizedText {
     pub overlap: usize,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct WindowState {
+    base: usize,
+    overlaps: bool,
+}
+
 pub(crate) struct TranscriptStabilizer {
     committed: String,
     committed_tokens: Vec<String>,
     /// Committed tokens before this index belong to audio the worker already
     /// cut off; hypotheses start at `committed_tokens[window_base]`.
     window_base: usize,
+    /// The window starts at a segment cut and re-decodes some archived words
+    /// first; only then are leading hypothesis tokens skipped by alignment.
+    window_overlaps: bool,
     /// Agreement state for the hypothesis tail beyond the committed prefix:
     /// each entry is (token, consecutive passes it was observed unchanged at
     /// this position). A change at one position resets every later entry,
@@ -64,6 +73,7 @@ impl TranscriptStabilizer {
             committed: String::new(),
             committed_tokens: Vec::new(),
             window_base: 0,
+            window_overlaps: false,
             tail_agreement: Vec::new(),
             holdback,
             required_passes: required_passes.max(1),
@@ -85,9 +95,26 @@ impl TranscriptStabilizer {
 
     /// The worker cut its decode window behind the first `consumed` committed
     /// tokens of the window: later hypotheses start after them. Never archives
-    /// more than is committed.
-    pub(crate) fn archive_window(&mut self, consumed: usize) {
+    /// more than is committed. `overlapping` marks a window that starts before
+    /// the cut and re-decodes archived words first (segment cut).
+    pub(crate) fn archive_window(&mut self, consumed: usize, overlapping: bool) {
         self.window_base += consumed.min(self.window_committed_count());
+        self.window_overlaps = overlapping;
+    }
+
+    /// Opaque window position, so the worker can undo a cut.
+    pub(crate) fn window_state(&self) -> WindowState {
+        WindowState {
+            base: self.window_base,
+            overlaps: self.window_overlaps,
+        }
+    }
+
+    /// Undoes cuts back to `state`: the words archived since are compared
+    /// against hypotheses again. Committed text is unaffected.
+    pub(crate) fn restore_window(&mut self, state: WindowState) {
+        self.window_base = state.base.min(self.window_base);
+        self.window_overlaps = state.overlaps;
     }
 
     /// The last archived and first remaining window words around a cut of
@@ -113,7 +140,7 @@ impl TranscriptStabilizer {
         let (clipped, lead) = align_window(
             &self.committed_tokens[self.window_base..],
             &all_tokens,
-            self.window_base > 0,
+            self.window_overlaps,
         );
         self.window_base += clipped;
         let window_committed = &self.committed_tokens[self.window_base..];
@@ -209,32 +236,38 @@ impl TranscriptStabilizer {
 /// How a hypothesis after a segment cut lines up with the committed window
 /// words: `(clipped, lead)` — skip the first `clipped` committed words (the
 /// cut lost their audio) and the first `lead` hypothesis tokens (overlap with
-/// archived text), so that every remaining committed word matches. Prefers
-/// losing nothing, then the shortest skip. `(0, 0)` without a cut, without
-/// committed window words, or when nothing lines up (a real contradiction).
-fn align_window(window_committed: &[String], tokens: &[&str], after_cut: bool) -> (usize, usize) {
-    if !after_cut || window_committed.is_empty() {
+/// archived text), so that every remaining committed word (at least
+/// [`MIN_ALIGNED_TOKENS`]) matches. Prefers losing nothing, then the shortest
+/// skip. When nothing lines up (a real contradiction), `lead` still skips to
+/// the longest partial match, so the pending text does not repeat archived
+/// words. `(0, 0)` for a window without overlap.
+fn align_window(window_committed: &[String], tokens: &[&str], overlaps: bool) -> (usize, usize) {
+    if !overlaps || window_committed.len() < MIN_ALIGNED_TOKENS {
         return (0, 0);
     }
+    let matched = |anchor: &[String], lead: usize| {
+        anchor
+            .iter()
+            .zip(&tokens[lead..])
+            .take_while(|(committed, token)| same_word(committed, token))
+            .count()
+    };
+    let max_lead = MAX_OVERLAP_TOKENS.min(tokens.len());
     for clipped in 0..=MAX_CLIPPED_TOKENS.min(window_committed.len()) {
         let anchor = &window_committed[clipped..];
-        if clipped > 0 && anchor.len() < MIN_ALIGNED_TOKENS {
+        if anchor.len() < MIN_ALIGNED_TOKENS {
             break;
         }
-        let max_lead = MAX_OVERLAP_TOKENS.min(tokens.len().saturating_sub(anchor.len()));
-        if tokens.len() < anchor.len() {
-            continue;
-        }
-        if let Some(lead) = (0..=max_lead).find(|&lead| {
-            anchor
-                .iter()
-                .zip(&tokens[lead..])
-                .all(|(committed, token)| same_word(committed, token))
-        }) {
+        if let Some(lead) = (0..=max_lead).find(|&lead| matched(anchor, lead) == anchor.len()) {
             return (clipped, lead);
         }
     }
-    (0, 0)
+    let partial_lead = (0..=max_lead)
+        .map(|lead| (matched(window_committed, lead), lead))
+        .filter(|&(count, _)| count > 0)
+        .max_by_key(|&(count, lead)| (count, std::cmp::Reverse(lead)))
+        .map_or(0, |(_, lead)| lead);
+    (0, partial_lead)
 }
 
 /// Number of stabilizer tokens in `text` — what one segment of a hypothesis
@@ -517,7 +550,7 @@ mod tests {
         assert_eq!(stab.window_committed_count(), 4);
 
         // Pause cut: the next window holds only the new audio.
-        stab.archive_window(4);
+        stab.archive_window(4, false);
         assert_eq!(stab.window_committed_count(), 0);
         stab.observe("five six");
         let out = stab.observe("five six");
@@ -534,7 +567,7 @@ mod tests {
         stab.observe("one two. three four");
         // Segment cut after "two.": "three four" stay committed inside the
         // window and the next hypothesis starts with them.
-        stab.archive_window(2);
+        stab.archive_window(2, true);
         assert_eq!(stab.window_committed_count(), 2);
         stab.observe("three four five");
         let out = stab.observe("three four five");
@@ -545,7 +578,7 @@ mod tests {
     #[test]
     fn archive_never_exceeds_committed() {
         let mut stab = stabilizer();
-        stab.archive_window(10);
+        stab.archive_window(10, false);
         assert_eq!(stab.window_committed_count(), 0);
         let out = stab.observe("a b c d e");
         assert!(!out.contradicted);
@@ -558,7 +591,7 @@ mod tests {
         stab.set_holdback(0);
         stab.observe("hello world. mit lokaler");
         stab.observe("hello world. mit lokaler");
-        stab.archive_window(2);
+        stab.archive_window(2, true);
         // The re-decode from the cut capitalizes and punctuates differently.
         let out = stab.observe("Mit, lokaler Verarbeitung");
         assert!(!out.contradicted);
@@ -576,7 +609,7 @@ mod tests {
         // Segment cut after "diktiert,"; the new window starts ~0.8 s early
         // and re-decodes "lange diktiert," (plus a fragment) before the
         // committed words that stay in the window.
-        stab.archive_window(3);
+        stab.archive_window(3, true);
         let overlapping = "ge lange diktiert, möchte trotzdem eine Vorschau sehen";
         let out = stab.observe(overlapping);
         assert!(!out.contradicted);
@@ -597,7 +630,8 @@ mod tests {
         let hypothesis = ["x", "möchte", "trotzdem", "eine", "neu"];
         assert_eq!(align_window(&committed, &hypothesis, true), (0, 1));
         assert_eq!(align_window(&committed, &hypothesis, false), (0, 0));
-        assert_eq!(align_window(&committed, &["x", "möchte"], true), (0, 0));
+        // No full match: the lead still skips to the best partial match.
+        assert_eq!(align_window(&committed, &["x", "möchte"], true), (0, 1));
         assert_eq!(align_window(&[], &["x", "y"], true), (0, 0));
         let mut far = vec!["w"; MAX_OVERLAP_TOKENS + 1];
         far.extend(["möchte", "trotzdem", "eine"]);
@@ -632,13 +666,60 @@ mod tests {
         let first = "wer lange diktiert, möchte trotzdem eine Vorschau";
         stab.observe(first);
         stab.observe(first);
-        stab.archive_window(2);
+        stab.archive_window(2, true);
         let clipped = "möchte trotzdem eine Vorschau sehen";
         let out = stab.observe(clipped);
         assert!(!out.contradicted);
         assert_eq!(stab.window_committed_count(), 4);
         let out = stab.observe(clipped);
         assert_eq!(out.committed, format!("{first} sehen"));
+    }
+
+    #[test]
+    fn contradiction_after_a_segment_cut_does_not_repeat_archived_words() {
+        let mut stab = stabilizer();
+        stab.set_holdback(0);
+        let first = "wer lange diktiert, möchte trotzdem eine Vorschau";
+        stab.observe(first);
+        stab.observe(first);
+        stab.archive_window(3, true);
+        let out = stab.observe("lange diktiert, möchte trotzdem keine Vorschau sehen");
+        assert!(out.contradicted);
+        assert_eq!(out.committed, first);
+        // Without the partial alignment, "lange diktiert," would show twice.
+        assert_eq!(out.pending, "keine Vorschau sehen");
+    }
+
+    #[test]
+    fn revision_after_a_pause_cut_is_a_contradiction_not_an_overlap() {
+        let mut stab = stabilizer();
+        stab.set_holdback(0);
+        stab.observe("eins zwei");
+        stab.observe("eins zwei");
+        stab.archive_window(2, false);
+        stab.observe("die Daten");
+        stab.observe("die Daten");
+        // Whisper revises the window start: the new words must stay visible.
+        let out = stab.observe("Sie haben die Daten gesichert");
+        assert!(out.contradicted);
+        assert_eq!(out.committed, "eins zwei die Daten");
+        assert_eq!(out.pending, "Sie haben die Daten gesichert");
+    }
+
+    #[test]
+    fn restore_window_undoes_a_cut() {
+        let mut stab = stabilizer();
+        stab.set_holdback(0);
+        stab.observe("a b c d e f");
+        stab.observe("a b c d e f");
+        let before = stab.window_state();
+        stab.archive_window(2, true);
+        assert_eq!(stab.window_committed_count(), 4);
+        stab.restore_window(before);
+        assert_eq!(stab.window_committed_count(), 6);
+        let out = stab.observe("a b c d e f g");
+        assert!(!out.contradicted);
+        assert_eq!(out.overlap, 0);
     }
 
     #[test]
