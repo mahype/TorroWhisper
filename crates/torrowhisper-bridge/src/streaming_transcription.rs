@@ -86,9 +86,14 @@ const SEGMENT_CUT_ANCHOR_WORDS: usize = 4;
 /// passes in a row is undone: the window falls back to its previous start,
 /// and the next cut must lie behind the undone one.
 const STREAM_CUT_UNDO_PASSES: u32 = 3;
-/// With language on auto, the detected language is pinned only once a window
-/// this long (5 s) was decoded; short windows misdetect too easily.
-const STREAM_LANGUAGE_PIN_MIN_SAMPLES: usize = 16_000 * 5;
+/// With language on auto, the window is only cut once this much speech (4 s)
+/// was heard in the first window, where detection runs over the whole take
+/// and may still reset the preview; the first cut then pins the language.
+/// Short windows misdetect too easily to detect on their own.
+const STREAM_LANGUAGE_SETTLE_VOICED_MS: u64 = 4_000;
+/// The window behind a pause starts this long before speech resumed, rather
+/// than at the pause itself: a long pause is not decoded as silence.
+const SPEECH_HEAD_PADDING_MS: u64 = 500;
 
 /// The published live-transcript state. One instance lives on the
 /// `DictationController` for the whole process; sessions write into it.
@@ -255,6 +260,8 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
     // Voiced samples at the last pause cut: the window behind a pause holds
     // no words yet and passes the speech gate anew.
     let mut voiced_at_cut: usize = 0;
+    // After a pause cut, the window start follows speech once it resumes.
+    let mut resume_pending = false;
     // The last segment cut until a pass confirms it (previous window start,
     // stabilizer window, archived words), and how often it was contradicted.
     let mut cut_undo: Option<(usize, WindowState, usize)> = None;
@@ -269,11 +276,12 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
     let mut busy_logged = false;
     let mut first_pass_logged = false;
     let mut inference_warned = false;
-    // Language auto-detection runs per pass; remembered so a flip in the
-    // first window can reset the preview, and pinned after the first cut once
-    // a long enough window was decoded (`language_settled`).
+    // Language auto-detection runs per pass over the first window (the whole
+    // take so far); remembered so a flip can reset the preview. Cuts wait
+    // until enough speech settled the detection, and the first cut pins it.
     let mut last_lang_id: Option<i32> = None;
-    let mut language_settled = false;
+    let mut language_settled = language.is_some();
+    let mut cut_happened = false;
     // Trailing-silence tracking for the holdback lift.
     let mut last_voiced_total: usize = 0;
     let mut voiced_changed_at = Instant::now();
@@ -301,10 +309,20 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
                 guard.last_voiced_end(),
             )
         };
+        let previous_source_len = source_len;
         source_len += new_samples.len();
         resampler
             .get_or_insert_with(|| StreamResampler::new(sample_rate))
             .push(&new_samples, &mut audio16k);
+
+        if resume_pending && voiced_samples > voiced_at_cut {
+            // Speech resumed within the samples that arrived this tick.
+            resume_pending = false;
+            let resume = previous_source_len
+                .saturating_sub(ms_to_samples(SPEECH_HEAD_PADDING_MS, sample_rate));
+            window_start =
+                window_start.max(to_16khz_index(resume, sample_rate).min(audio16k.len()));
+        }
 
         if voiced_samples != last_voiced_total {
             last_voiced_total = voiced_samples;
@@ -382,9 +400,8 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
 
         let window = &audio16k[window_start..speech_end_16k];
         // Auto language: detect freely in the first window (and reset on a
-        // flip, below); after the first cut keep the detected language once
-        // a long enough window confirmed it.
-        let language_pinned = window_start > 0 && language_settled;
+        // flip, below); from the first cut on keep the detected language.
+        let language_pinned = cut_happened;
         let pass_language = match (&language, last_lang_id) {
             (Some(language), _) => Some(language.as_str()),
             (None, Some(lang_id)) if language_pinned => whisper_rs::get_lang_str(lang_id),
@@ -440,17 +457,16 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         // translation, and the stabilizer would freeze that wrong-language
         // text forever. Detection converges as the buffer grows, so on a flip
         // we throw the preview away and rebuild from the current hypothesis.
-        // Reset only while the first window lasts: after a cut the earlier
-        // text is archived, and the language is pinned once settled. The
-        // final pass is unaffected either way.
+        // This only happens in the first window: cuts wait for the detection
+        // to settle, and the first cut pins the language. The final pass is
+        // unaffected either way.
         if language.is_none() && !language_pinned {
             let lang_id = state.full_lang_id_from_state();
-            if window.len() >= STREAM_LANGUAGE_PIN_MIN_SAMPLES {
+            if voiced_samples >= ms_to_samples(STREAM_LANGUAGE_SETTLE_VOICED_MS, sample_rate) {
                 language_settled = true;
             }
             if let Some(previous) = last_lang_id
                 && previous != lang_id
-                && window_start == 0
             {
                 stabilizer =
                     TranscriptStabilizer::new(STREAM_HOLDBACK_WORDS, STREAM_REQUIRED_PASSES);
@@ -520,7 +536,7 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         // Move the window behind committed text. Archived words stay on
         // screen; later passes simply no longer decode their audio.
         let window_committed = stabilizer.window_committed_count();
-        if holdback == 0 && last_pending_empty && window_committed > 0 {
+        if language_settled && holdback == 0 && last_pending_empty && window_committed > 0 {
             // Speech pause and everything committed: the next window starts
             // behind the pause, where no word can be cut in half.
             log::debug!(
@@ -531,13 +547,16 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
             stabilizer.archive_window(window_committed, false);
             window_start = speech_end_16k;
             voiced_at_cut = voiced_samples;
+            resume_pending = true;
             min_cut_consumed = 0;
+            cut_happened = true;
             log::info!(
                 target: "dictation",
                 "streaming window cut at pause: {:.2}s, {window_committed} words archived",
                 window_start as f32 / 16_000.0
             );
         } else if wants_segments
+            && language_settled
             && let Some((consumed, end_cs)) =
                 segment_cut(&skip_leading_tokens(&segments, overlap), window_committed)
             && consumed > min_cut_consumed
@@ -561,6 +580,7 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
             stabilizer.archive_window(consumed, true);
             window_start = refined.clamp(window_start + 1, speech_end_16k);
             min_cut_consumed = 0;
+            cut_happened = true;
             // No new speech gate here: the window still holds words, and a
             // pause right after this cut must still commit their tail.
             log::info!(

@@ -115,6 +115,8 @@ impl TranscriptStabilizer {
     pub(crate) fn restore_window(&mut self, state: WindowState) {
         self.window_base = state.base.min(self.window_base);
         self.window_overlaps = state.overlaps;
+        // Streaks were recorded against the cut window's positions.
+        self.tail_agreement.clear();
     }
 
     /// The last archived and first remaining window words around a cut of
@@ -264,7 +266,7 @@ fn align_window(window_committed: &[String], tokens: &[&str], overlaps: bool) ->
     }
     let partial_lead = (0..=max_lead)
         .map(|lead| (matched(window_committed, lead), lead))
-        .filter(|&(count, _)| count > 0)
+        .filter(|&(count, _)| count >= MIN_ALIGNED_TOKENS)
         .max_by_key(|&(count, lead)| (count, std::cmp::Reverse(lead)))
         .map_or(0, |(_, lead)| lead);
     (0, partial_lead)
@@ -630,8 +632,12 @@ mod tests {
         let hypothesis = ["x", "möchte", "trotzdem", "eine", "neu"];
         assert_eq!(align_window(&committed, &hypothesis, true), (0, 1));
         assert_eq!(align_window(&committed, &hypothesis, false), (0, 0));
-        // No full match: the lead still skips to the best partial match.
-        assert_eq!(align_window(&committed, &["x", "möchte"], true), (0, 1));
+        // No full match: the lead skips to a partial match of two words.
+        assert_eq!(
+            align_window(&committed, &["x", "möchte", "trotzdem"], true),
+            (0, 1)
+        );
+        assert_eq!(align_window(&committed, &["x", "möchte"], true), (0, 0));
         assert_eq!(align_window(&[], &["x", "y"], true), (0, 0));
         let mut far = vec!["w"; MAX_OVERLAP_TOKENS + 1];
         far.extend(["möchte", "trotzdem", "eine"]);
