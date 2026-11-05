@@ -332,9 +332,9 @@ fn align_window(window_committed: &[String], tokens: &[&str], overlaps: bool) ->
 /// - `None` while the hypothesis is shorter than the committed words: it
 ///   cannot tell yet what replaced them, and guessing would let words that
 ///   are on screen already commit a second time;
-/// - `prefix` when two or more committed words remain and none of them
-///   occurs in their place: Whisper dropped them (e.g. the start of a window
-///   after a cut), and the words that follow are new;
+/// - `prefix` when more than [`MAX_CLIPPED_TOKENS`] committed words remain
+///   and none of them occurs in their place: Whisper dropped them (e.g. the
+///   start of a window after a cut), and the words that follow are new;
 /// - otherwise the committed length (a revised word, "20" → "zwanzig").
 fn revision_end(window_committed: &[String], tokens: &[&str], prefix: usize) -> Option<usize> {
     let committed = window_committed.len();
@@ -358,7 +358,9 @@ fn revision_end(window_committed: &[String], tokens: &[&str], prefix: usize) -> 
     }
     let revised = &window_committed[prefix..];
     let in_their_place = &tokens[prefix..committed];
-    let dropped = revised.len() >= MIN_ALIGNED_TOKENS
+    // A short stretch rewritten word for word is a revision ("zwanzig
+    // Euro" → "20 €"), not a drop.
+    let dropped = revised.len() > MAX_CLIPPED_TOKENS
         && !revised
             .iter()
             .any(|word| in_their_place.iter().any(|token| same_word(word, token)));
@@ -861,11 +863,10 @@ mod tests {
             ),
             Some(4)
         );
-        // An anchor match too far away falls back: here the committed
-        // words are gone from their place, so Whisper dropped them.
+        // An anchor match too far away falls back to the committed length.
         let mut far = vec!["w"; MAX_OVERLAP_TOKENS + 1];
         far.extend(["die", "Daten"]);
-        assert_eq!(revision_end(&owned(&["die", "Daten"]), &far, 0), Some(0));
+        assert_eq!(revision_end(&owned(&["die", "Daten"]), &far, 0), Some(2));
         // A shorter hypothesis leaves the revised part open.
         assert_eq!(revision_end(&owned(&["a", "b", "c"]), &["a"], 1), None);
         assert_eq!(
@@ -888,11 +889,20 @@ mod tests {
         // ... words missing from their place were dropped by Whisper.
         assert_eq!(
             revision_end(
-                &owned(&["die", "direkt", "auf", "dem", "Rechner"]),
-                &["die", "Sprache", "wird", "nicht", "gesendet", "auf", "dem"],
+                &owned(&["die", "direkt", "auf", "dem", "eigenen", "Rechner"]),
+                &["die", "Sprache", "wird", "nicht", "in", "eine", "Cloud"],
                 1
             ),
             Some(1)
+        );
+        // A short stretch rewritten word for word is a revision.
+        assert_eq!(
+            revision_end(
+                &owned(&["x", "zwanzig", "Euro"]),
+                &["x", "20", "€", "und", "mehr"],
+                1
+            ),
+            Some(3)
         );
     }
 
