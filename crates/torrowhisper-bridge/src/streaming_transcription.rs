@@ -472,8 +472,9 @@ mod tests {
     /// OW_TEST_WAV=/tmp/speech-de.wav \
     /// cargo test -p torrowhisper-bridge streaming_end_to_end -- --ignored --nocapture
     /// ```
-    /// Generate the WAV with:
-    /// `say -v Anna -o /tmp/speech-de.wav --data-format=LEI16@16000 "<German text>"`
+    /// Generate the WAV with (any sample rate; 48 kHz exercises the resampler
+    /// like a real microphone):
+    /// `say -v Anna -o /tmp/speech-de.wav --data-format=LEI16@48000 "<German text>"`
     #[test]
     #[ignore]
     fn streaming_end_to_end_with_synthesized_speech() {
@@ -502,11 +503,10 @@ mod tests {
             return;
         };
 
-        let samples = read_wav_lei16_mono(std::path::Path::new(&wav_path));
-        assert!(
-            samples.len() > 16_000 * 5,
-            "need at least 5 s of test speech"
-        );
+        let (samples, sample_rate) = read_wav_lei16_mono(std::path::Path::new(&wav_path));
+        let rate = sample_rate as usize;
+        assert!(samples.len() > rate * 5, "need at least 5 s of test speech");
+        let clip_secs = samples.len() / rate;
 
         let context = Arc::new(
             WhisperContext::new_with_params(
@@ -516,7 +516,12 @@ mod tests {
             .expect("test model loads"),
         );
 
-        let buffer = Arc::new(Mutex::new(RecordingBuffer::new(16_000, false, 0.014, 900)));
+        let buffer = Arc::new(Mutex::new(RecordingBuffer::new(
+            sample_rate,
+            false,
+            0.014,
+            900,
+        )));
         let output: SharedStreamingOutput = Arc::new(Mutex::new(StreamingOutput::new()));
         reset_output(&output);
 
@@ -542,10 +547,10 @@ mod tests {
         // (The first pass pays the Metal state cold-start, so the feed must
         // not outrun the worker completely.)
         let (event_tx, _event_rx) = std::sync::mpsc::channel();
-        let chunk_len = 16_000 / 10 * 2;
+        let chunk_len = rate / 10 * 2;
         let mut fed = 0usize;
         let mut snapshots: Vec<StreamingTranscriptDto> = vec![snapshot_dto(&output)];
-        let deadline = Instant::now() + Duration::from_secs(90);
+        let deadline = Instant::now() + Duration::from_secs(clip_secs as u64 / 2 + 30);
         while fed < samples.len() && Instant::now() < deadline {
             let end = (fed + chunk_len).min(samples.len());
             buffer
@@ -622,19 +627,31 @@ mod tests {
     }
 
     /// Minimal WAV reader for the test fixture: 16-bit little-endian mono PCM.
-    fn read_wav_lei16_mono(path: &std::path::Path) -> Vec<f32> {
+    /// Returns the samples and the sample rate from the `fmt ` chunk.
+    fn read_wav_lei16_mono(path: &std::path::Path) -> (Vec<f32>, u32) {
         let bytes = std::fs::read(path).expect("test wav readable");
+        let fmt_start = bytes
+            .windows(4)
+            .position(|window| window == b"fmt ")
+            .expect("wav fmt chunk")
+            + 8;
+        let sample_rate = u32::from_le_bytes(
+            bytes[fmt_start + 4..fmt_start + 8]
+                .try_into()
+                .expect("fmt sample rate"),
+        );
         let data_start = bytes
             .windows(4)
             .position(|window| window == b"data")
             .expect("wav data chunk")
             + 8;
-        bytes[data_start..]
+        let samples = bytes[data_start..]
             .as_chunks::<2>()
             .0
             .iter()
             .map(|pair| i16::from_le_bytes(*pair) as f32 / 32_768.0)
-            .collect()
+            .collect();
+        (samples, sample_rate)
     }
 
     #[test]
