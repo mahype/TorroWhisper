@@ -1,0 +1,31 @@
+{
+  "source_commit": "78ae2a28256f5ad5f7633279b0e9f5aafc62aafc",
+  "source_dirty": false,
+  "os": "27.0.1",
+  "hardware": "Mac16,5",
+  "chip": "Apple M4 Max",
+  "memory_bytes": 137438953472,
+  "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+  "binary_sha256": "9f323b184f3d8e1908296ae606fc0a336a102b3782422e11dd4858ba9ccb16da",
+  "suite": "presets",
+  "reference_sha256": "7a870173d19c2b67d838f9746e9c7d82d1794329aae18ab012c3de3287bb9606",
+  "reference_short_sha256": "0804d446ba66ca1040cfb6ab0b43ee64e76afbc867d609ee7d43eaf293ce8d15",
+  "source_sha256": {
+    "crates/torrowhisper-bridge/src/benchmark.rs": "d8cd119225001cf4947d870ef8a31e25e8e04555c7ae460e78d4585bd822b5bb",
+    "crates/torrowhisper-bridge/src/benchmark/validation.rs": "a319072b978a53cd0b2a1e86c100e21fc99e4cdf5987709e73fd94d220986c26",
+    "crates/torrowhisper-bridge/src/dictation.rs": "55f0d10bd718f957736021acc722da8485ce8582be3db88fb29056acd691c0ee",
+    "crates/torrowhisper-bridge/src/streaming_transcription.rs": "5c9809bb3a61715947609d8741e09c0bc1f2ce98bccf5e77ebe25195bd98758b",
+    "crates/torrowhisper-bridge/examples/whisper_benchmark.rs": "aa4c8f4ce0c3529958d1650eca68b943dc9f60337ae5268e2bbb60c015845187",
+    "scripts/benchmark-whisper.py": "1b5a7d5ff4565a87d142f8c6cdd2e70577ee1a90595f7716d1be7f0c2835286a",
+    "Cargo.lock": "7c5621078c7513eea0f1ecf3b559d392fcf1f29232d05f1daa0eb4bf5bd3a34e"
+  },
+  "repetitions": 5,
+  "scope": "Whisper only; excludes capture, VAD trimming, LLM post-processing and insertion",
+  "baseline": "Same binary and decoding, use_gpu=false; CPU backend may use Accelerate/BLAS. Not a historical-build replay.",
+  "models_sha256": {
+    "ggml-large-v3-turbo-q5_0.bin": "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
+    "ggml-large-v3-turbo.bin": "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+    "ggml-small.bin": "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+    "ggml-large-v3.bin": "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2"
+  }
+}

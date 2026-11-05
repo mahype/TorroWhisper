@@ -1,0 +1,67 @@
+{
+  "model": "large_v3",
+  "model_filename": "ggml-large-v3.bin",
+  "whisper_version": "1.8.3",
+  "backend_requested": "metal",
+  "threads": 6,
+  "language": "de",
+  "single_segment": false,
+  "clip": "long",
+  "flash_attn": false,
+  "audio_ctx": 0,
+  "audio_secs": 13.58125,
+  "reference_text": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet.",
+  "prepare_audio_secs": 0.000283542,
+  "load_secs": 0.8182314,
+  "load_rss_mib": 3128.7969,
+  "cold": {
+    "state_secs": 0.03151933,
+    "inference_secs": 0.9085002,
+    "total_secs": 0.9417381,
+    "real_time_factor": 0.06689371,
+    "word_error_rate": 0.0,
+    "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet."
+  },
+  "warm": [
+    {
+      "state_secs": 0.0342925,
+      "inference_secs": 0.81811833,
+      "total_secs": 0.8542686,
+      "real_time_factor": 0.06023881,
+      "word_error_rate": 0.0,
+      "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet."
+    },
+    {
+      "state_secs": 0.03449071,
+      "inference_secs": 0.823182,
+      "total_secs": 0.8595057,
+      "real_time_factor": 0.06061165,
+      "word_error_rate": 0.0,
+      "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet."
+    },
+    {
+      "state_secs": 0.04152204,
+      "inference_secs": 0.8295141,
+      "total_secs": 0.8728747,
+      "real_time_factor": 0.06107789,
+      "word_error_rate": 0.0,
+      "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet."
+    },
+    {
+      "state_secs": 0.03899704,
+      "inference_secs": 0.8985658,
+      "total_secs": 0.93928903,
+      "real_time_factor": 0.06616223,
+      "word_error_rate": 0.0,
+      "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet."
+    },
+    {
+      "state_secs": 0.036132876,
+      "inference_secs": 0.818145,
+      "total_secs": 0.8561276,
+      "real_time_factor": 0.06024077,
+      "word_error_rate": 0.0,
+      "transcript": "Das schnelle Diktieren funktioniert am besten, wenn die Spracherkennung zuverlässig und ohne Verzögerung arbeitet. Mit lokaler Verarbeitung bleiben alle Daten auf dem Gerät, und die Privatsphäre ist jederzeit gewährleistet."
+    }
+  ]
+}
