@@ -325,6 +325,75 @@ mod tests {
         }
     }
 
+    /// Longest word error rate the final pass may reach on a long take (#92).
+    const LONG_TAKE_MAX_WER: f32 = 0.05;
+
+    /// Measures the final pass on a long take (#92): a clip over 30 s, spoken
+    /// without a pause, must come out complete. Without window timestamps
+    /// whisper.cpp jumps a fixed 30 s after every window and loses the text
+    /// the decoder did not reach.
+    ///
+    /// ```text
+    /// OW_TEST_MODEL=~/Library/Application\ Support/com.gettorro.TorroWhisper/models/ggml-large-v3-turbo-q5_0.bin \
+    /// OW_TEST_WAV48=/tmp/long-180s.wav \
+    /// OW_TEST_REF_TEXT_FILE=/tmp/long-180s.txt \
+    /// cargo test --release -p torrowhisper-bridge final_pass_long_take -- --ignored --nocapture
+    /// ```
+    /// All three variables are required; the clip may have any sample rate.
+    #[test]
+    #[ignore]
+    fn final_pass_long_take_keeps_word_error_rate() {
+        use crate::dictation::{WHISPER_DYNAMIC_AUDIO_CTX, WHISPER_FLASH_ATTN};
+
+        let (Some(model_path), Some(wav_path), Some(ref_path)) = (
+            std::env::var_os("OW_TEST_MODEL"),
+            std::env::var_os("OW_TEST_WAV48"),
+            std::env::var_os("OW_TEST_REF_TEXT_FILE"),
+        ) else {
+            eprintln!("OW_TEST_MODEL, OW_TEST_WAV48 or OW_TEST_REF_TEXT_FILE not set — skipping");
+            return;
+        };
+        let bytes = std::fs::read(&wav_path).expect("clip readable");
+        let (audio, rate) = decode_wav(&bytes).expect("16-bit PCM clip");
+        let samples = resample_to_16khz(&audio, rate);
+        let reference = std::fs::read_to_string(ref_path).expect("reference text readable");
+
+        let context = WhisperContext::new_with_params(
+            std::path::Path::new(&model_path),
+            whisper_context_params(WHISPER_FLASH_ATTN),
+        )
+        .expect("test model loads");
+        let settings = AppSettings::default();
+        let audio_secs = samples.len() as f32 / 16_000.0;
+
+        let mut failures = Vec::new();
+        for language in [Some("de"), None] {
+            let inference = run_whisper_inference(
+                &context,
+                &samples,
+                &settings,
+                language,
+                4,
+                WHISPER_DYNAMIC_AUDIO_CTX,
+            )
+            .expect("inference runs");
+            let wer = word_error_rate(&reference, &inference.text);
+            let label = language.unwrap_or("auto");
+            eprintln!(
+                "[{label}] WER {wer:.3} ({audio_secs:.1}s audio, inference {:.1}s): {}",
+                inference.inference_secs, inference.text
+            );
+            if wer >= LONG_TAKE_MAX_WER {
+                failures.push(format!("[{label}] WER {wer:.3}"));
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "long take lost text, WER must be below {LONG_TAKE_MAX_WER}: {}",
+            failures.join(", ")
+        );
+    }
+
     #[test]
     fn clips_carry_their_own_reference_text() {
         assert_eq!(Clip::Long.reference_text(), REFERENCE_TEXT);

@@ -1239,7 +1239,8 @@ pub struct AppSettings {
     #[serde(default)]
     pub whisper_thread_count: u32,
     /// Force Whisper to emit a single segment. Faster on very short dictations
-    /// but can hurt punctuation on longer ones, so it stays opt-in (#43).
+    /// but can hurt punctuation on longer ones, so it stays opt-in (#43). Ignored
+    /// for final-pass takes over 30 s, where it would drop text (#92).
     #[serde(default)]
     pub whisper_single_segment: bool,
 }
