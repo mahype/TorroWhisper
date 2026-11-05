@@ -36,7 +36,7 @@ use crate::dictation::{
     try_whisper_inference_lock,
 };
 use crate::resampler::StreamResampler;
-use crate::transcript_stabilizer::{TranscriptStabilizer, token_count};
+use crate::transcript_stabilizer::{TranscriptStabilizer, WindowState, token_count};
 
 /// Words become committed once they were identical this many passes in a row.
 const STREAM_REQUIRED_PASSES: u32 = 2;
@@ -50,6 +50,9 @@ const STREAM_PASS_INTERVAL: Duration = Duration::from_millis(500);
 /// A first pass only makes sense once actual speech was heard; this gate also
 /// keeps silence-only recordings at zero inference (no hallucinated text).
 const STREAM_FIRST_PASS_MIN_VOICED_MS: u64 = 600;
+/// The window behind a pause needs less new speech before its first pass, so
+/// a short word after a pause ("Danke.") still reaches the preview (#89).
+const STREAM_NEXT_WINDOW_MIN_VOICED_MS: u64 = 300;
 /// Skip a pass when almost no new audio arrived since the previous one.
 const STREAM_MIN_NEW_AUDIO_MS: u64 = 250;
 /// After this much trailing silence the holdback is lifted: the user stopped
@@ -76,8 +79,16 @@ const CUT_SEARCH_RADIUS_SAMPLES: usize = 3_200;
 /// archived words instead; the stabilizer skips them by alignment.
 const CUT_OVERLAP_SAMPLES: usize = 12_800;
 /// A segment cut leaves at least this many committed words in the window —
-/// the anchor the stabilizer aligns the overlapping re-decode on.
-const SEGMENT_CUT_ANCHOR_WORDS: usize = 2;
+/// the anchor the stabilizer aligns the overlapping re-decode on. Four leave
+/// room to drop up to two clipped words and still align on two.
+const SEGMENT_CUT_ANCHOR_WORDS: usize = 4;
+/// A segment cut whose re-decode contradicts the committed text this many
+/// passes in a row is undone: the window falls back to its previous start,
+/// and the next cut must lie behind the undone one.
+const STREAM_CUT_UNDO_PASSES: u32 = 3;
+/// With language on auto, the detected language is pinned only once a window
+/// this long (5 s) was decoded; short windows misdetect too easily.
+const STREAM_LANGUAGE_PIN_MIN_SAMPLES: usize = 16_000 * 5;
 
 /// The published live-transcript state. One instance lives on the
 /// `DictationController` for the whole process; sessions write into it.
@@ -244,6 +255,12 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
     // Voiced samples at the last pause cut: the window behind a pause holds
     // no words yet and passes the speech gate anew.
     let mut voiced_at_cut: usize = 0;
+    // The last segment cut until a pass confirms it (previous window start,
+    // stabilizer window, archived words), and how often it was contradicted.
+    let mut cut_undo: Option<(usize, WindowState, usize)> = None;
+    let mut contradicted_after_cut: u32 = 0;
+    // After an undo, a new segment cut must archive more words than this.
+    let mut min_cut_consumed: usize = 0;
     let session_started = Instant::now();
     let mut last_pass_started: Option<Instant> = None;
     let mut samples_at_last_pass: usize = 0;
@@ -252,10 +269,11 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
     let mut busy_logged = false;
     let mut first_pass_logged = false;
     let mut inference_warned = false;
-    // Language auto-detection runs per pass while the first window lasts;
-    // remembered so a flip can reset the preview, and pinned after the first
-    // cut (a short window after a pause misdetects too easily).
+    // Language auto-detection runs per pass; remembered so a flip in the
+    // first window can reset the preview, and pinned after the first cut once
+    // a long enough window was decoded (`language_settled`).
     let mut last_lang_id: Option<i32> = None;
+    let mut language_settled = false;
     // Trailing-silence tracking for the holdback lift.
     let mut last_voiced_total: usize = 0;
     let mut voiced_changed_at = Instant::now();
@@ -302,7 +320,16 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         };
         stabilizer.set_holdback(holdback);
 
-        if !voiced_gate_reached(voiced_samples.saturating_sub(voiced_at_cut), sample_rate) {
+        let gate_ms = if window_start == 0 {
+            STREAM_FIRST_PASS_MIN_VOICED_MS
+        } else {
+            STREAM_NEXT_WINDOW_MIN_VOICED_MS
+        };
+        if !voiced_gate_reached(
+            voiced_samples.saturating_sub(voiced_at_cut),
+            sample_rate,
+            gate_ms,
+        ) {
             continue;
         }
         if !gate_logged {
@@ -355,11 +382,13 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
 
         let window = &audio16k[window_start..speech_end_16k];
         // Auto language: detect freely in the first window (and reset on a
-        // flip, below); after the first cut keep the detected language.
-        let pass_language = match (&language, window_start, last_lang_id) {
-            (Some(language), _, _) => Some(language.as_str()),
-            (None, start, Some(lang_id)) if start > 0 => whisper_rs::get_lang_str(lang_id),
-            (None, _, _) => None,
+        // flip, below); after the first cut keep the detected language once
+        // a long enough window confirmed it.
+        let language_pinned = window_start > 0 && language_settled;
+        let pass_language = match (&language, last_lang_id) {
+            (Some(language), _) => Some(language.as_str()),
+            (None, Some(lang_id)) if language_pinned => whisper_rs::get_lang_str(lang_id),
+            (None, _) => None,
         };
         let mut params = base_full_params(
             &settings,
@@ -411,13 +440,17 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         // translation, and the stabilizer would freeze that wrong-language
         // text forever. Detection converges as the buffer grows, so on a flip
         // we throw the preview away and rebuild from the current hypothesis.
-        // Only while the first window lasts: after a cut the earlier text is
-        // archived and the language stays pinned. The final pass is
-        // unaffected either way.
-        if language.is_none() && window_start == 0 {
+        // Reset only while the first window lasts: after a cut the earlier
+        // text is archived, and the language is pinned once settled. The
+        // final pass is unaffected either way.
+        if language.is_none() && !language_pinned {
             let lang_id = state.full_lang_id_from_state();
+            if window.len() >= STREAM_LANGUAGE_PIN_MIN_SAMPLES {
+                language_settled = true;
+            }
             if let Some(previous) = last_lang_id
                 && previous != lang_id
+                && window_start == 0
             {
                 stabilizer =
                     TranscriptStabilizer::new(STREAM_HOLDBACK_WORDS, STREAM_REQUIRED_PASSES);
@@ -461,8 +494,28 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
             guard.publish(stabilized.committed, stabilized.pending, false);
         }
         if contradicted {
+            // A segment cut whose re-decode keeps disagreeing (a clipped or
+            // differently decoded word right at the cut) would freeze the
+            // preview and let the window grow without bound: undo it.
+            if let Some((previous_start, previous_window, consumed)) = cut_undo {
+                contradicted_after_cut += 1;
+                if contradicted_after_cut >= STREAM_CUT_UNDO_PASSES {
+                    stabilizer.restore_window(previous_window);
+                    window_start = previous_start;
+                    min_cut_consumed = consumed;
+                    cut_undo = None;
+                    contradicted_after_cut = 0;
+                    log::info!(
+                        target: "dictation",
+                        "streaming segment cut undone after {STREAM_CUT_UNDO_PASSES} contradicting passes, window back at {:.2}s",
+                        window_start as f32 / 16_000.0
+                    );
+                }
+            }
             continue;
         }
+        cut_undo = None;
+        contradicted_after_cut = 0;
 
         // Move the window behind committed text. Archived words stay on
         // screen; later passes simply no longer decode their audio.
@@ -470,18 +523,24 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         if holdback == 0 && last_pending_empty && window_committed > 0 {
             // Speech pause and everything committed: the next window starts
             // behind the pause, where no word can be cut in half.
-            let boundary = stabilizer.window_boundary_words(window_committed);
-            stabilizer.archive_window(window_committed);
+            log::debug!(
+                target: "dictation",
+                "streaming cut boundary: {}",
+                stabilizer.window_boundary_words(window_committed)
+            );
+            stabilizer.archive_window(window_committed, false);
             window_start = speech_end_16k;
             voiced_at_cut = voiced_samples;
+            min_cut_consumed = 0;
             log::info!(
                 target: "dictation",
-                "streaming window cut at pause: {:.2}s, {window_committed} words archived ({boundary})",
+                "streaming window cut at pause: {:.2}s, {window_committed} words archived",
                 window_start as f32 / 16_000.0
             );
         } else if wants_segments
             && let Some((consumed, end_cs)) =
                 segment_cut(&skip_leading_tokens(&segments, overlap), window_committed)
+            && consumed > min_cut_consumed
         {
             // Long speech without a pause: cut behind a fully committed
             // segment. The new window starts a little before Whisper's
@@ -493,14 +552,20 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
                 estimate.saturating_sub(CUT_OVERLAP_SAMPLES),
                 CUT_SEARCH_RADIUS_SAMPLES,
             );
-            let boundary = stabilizer.window_boundary_words(consumed);
-            stabilizer.archive_window(consumed);
+            log::debug!(
+                target: "dictation",
+                "streaming cut boundary: {}",
+                stabilizer.window_boundary_words(consumed)
+            );
+            cut_undo = Some((window_start, stabilizer.window_state(), consumed));
+            stabilizer.archive_window(consumed, true);
             window_start = refined.clamp(window_start + 1, speech_end_16k);
+            min_cut_consumed = 0;
             // No new speech gate here: the window still holds words, and a
             // pause right after this cut must still commit their tail.
             log::info!(
                 target: "dictation",
-                "streaming window cut at segment: {:.2}s (whisper end {:.2}s), {consumed} words archived ({boundary})",
+                "streaming window cut at segment: {:.2}s (whisper end {:.2}s), {consumed} words archived",
                 window_start as f32 / 16_000.0,
                 estimate as f32 / 16_000.0
             );
@@ -510,19 +575,38 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
 
 /// Joins the decoded segments like `collect_transcript` and returns, per
 /// non-empty segment, its stabilizer token count and end timestamp (in
-/// centiseconds relative to the window start).
+/// centiseconds relative to the window start). An end beyond the start of the
+/// following segment is pulled back to that start, so a late end never puts
+/// a cut behind words of the next segment.
 fn collect_segments(state: &WhisperState) -> (String, Vec<(usize, i64)>) {
     let mut texts = Vec::new();
-    let mut segments = Vec::new();
+    let mut bounds: Vec<(usize, i64, i64)> = Vec::new();
     for segment in state.as_iter() {
         let text = segment.to_string().trim().to_owned();
         if text.is_empty() {
             continue;
         }
-        segments.push((token_count(&text), segment.end_timestamp()));
+        bounds.push((
+            token_count(&text),
+            segment.start_timestamp(),
+            segment.end_timestamp(),
+        ));
         texts.push(text);
     }
-    (texts.join(" "), segments)
+    (texts.join(" "), segment_ends(&bounds))
+}
+
+/// `(tokens, start_cs, end_cs)` → `(tokens, end_cs)` with each end capped at
+/// the next segment's start.
+fn segment_ends(bounds: &[(usize, i64, i64)]) -> Vec<(usize, i64)> {
+    bounds
+        .iter()
+        .enumerate()
+        .map(|(index, &(tokens, _, end_cs))| {
+            let next_start = bounds.get(index + 1).map_or(end_cs, |next| next.1);
+            (tokens, end_cs.min(next_start))
+        })
+        .collect()
 }
 
 /// `segments` without their first `skip` tokens — the overlap with archived
@@ -614,8 +698,8 @@ fn ms_to_samples(ms: u64, sample_rate: u32) -> usize {
     (sample_rate as u64 * ms / 1000) as usize
 }
 
-fn voiced_gate_reached(voiced_samples: usize, sample_rate: u32) -> bool {
-    sample_rate > 0 && voiced_samples >= ms_to_samples(STREAM_FIRST_PASS_MIN_VOICED_MS, sample_rate)
+fn voiced_gate_reached(voiced_samples: usize, sample_rate: u32, min_voiced_ms: u64) -> bool {
+    sample_rate > 0 && voiced_samples >= ms_to_samples(min_voiced_ms, sample_rate)
 }
 
 fn enough_new_audio(previous_len: usize, current_len: usize, sample_rate: u32) -> bool {
@@ -631,9 +715,19 @@ mod tests {
         let rate = 48_000;
         let gate = ms_to_samples(STREAM_FIRST_PASS_MIN_VOICED_MS, rate);
         assert_eq!(gate, 28_800);
-        assert!(!voiced_gate_reached(gate - 1, rate));
-        assert!(voiced_gate_reached(gate, rate));
-        assert!(!voiced_gate_reached(usize::MAX, 0), "zero rate never gates");
+        let first = STREAM_FIRST_PASS_MIN_VOICED_MS;
+        assert!(!voiced_gate_reached(gate - 1, rate, first));
+        assert!(voiced_gate_reached(gate, rate, first));
+        assert!(
+            !voiced_gate_reached(usize::MAX, 0, first),
+            "zero rate never gates"
+        );
+        // Behind a pause, a short word is enough.
+        assert!(voiced_gate_reached(
+            14_400,
+            rate,
+            STREAM_NEXT_WINDOW_MIN_VOICED_MS
+        ));
     }
 
     #[test]
@@ -646,14 +740,14 @@ mod tests {
     #[test]
     fn segment_cut_takes_the_largest_committed_prefix_before_the_last_segment() {
         let segments = [(3, 250), (4, 610), (5, 900), (2, 1_100)];
-        assert_eq!(segment_cut(&segments, 5), Some((3, 250)));
-        assert_eq!(segment_cut(&segments, 9), Some((7, 610)));
-        assert_eq!(segment_cut(&segments, 14), Some((12, 900)));
+        assert_eq!(segment_cut(&segments, 7), Some((3, 250)));
+        assert_eq!(segment_cut(&segments, 11), Some((7, 610)));
+        assert_eq!(segment_cut(&segments, 16), Some((12, 900)));
         // The last segment never goes, even when fully committed.
         assert_eq!(segment_cut(&segments, 30), Some((12, 900)));
-        // Two committed words must stay behind the cut as an anchor.
-        assert_eq!(segment_cut(&segments, 8), Some((3, 250)));
-        assert_eq!(segment_cut(&segments, 4), None);
+        // Four committed words must stay behind the cut as an anchor.
+        assert_eq!(segment_cut(&segments, 10), Some((3, 250)));
+        assert_eq!(segment_cut(&segments, 6), None);
     }
 
     #[test]
@@ -667,8 +761,8 @@ mod tests {
         // 5 overlap tokens + 4 committed: only the second segment's two
         // committed words (and the anchor) are behind the first cut point.
         let discounted = skip_leading_tokens(&segments, 5);
-        assert_eq!(segment_cut(&discounted, 4), Some((2, 610)));
-        assert_eq!(segment_cut(&discounted, 3), None);
+        assert_eq!(segment_cut(&discounted, 6), Some((2, 610)));
+        assert_eq!(segment_cut(&discounted, 5), None);
     }
 
     #[test]
@@ -682,6 +776,13 @@ mod tests {
         assert_eq!(segment_cut(&[], 10), None);
         // Empty leading segments carry no words to archive.
         assert_eq!(segment_cut(&[(0, 100), (3, 400)], 3), None);
+    }
+
+    #[test]
+    fn segment_ends_are_capped_at_the_next_start() {
+        let bounds = [(3, 0, 420), (4, 380, 900), (2, 950, 1_200)];
+        assert_eq!(segment_ends(&bounds), vec![(3, 380), (4, 900), (2, 1_200)]);
+        assert!(segment_ends(&[]).is_empty());
     }
 
     #[test]
