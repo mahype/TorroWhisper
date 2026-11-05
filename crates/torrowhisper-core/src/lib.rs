@@ -1821,7 +1821,7 @@ pub struct StageTimingDto {
     pub audio_secs: f32,
     /// Model load time — `0` on a cache hit (the common warm case).
     pub whisper_load_secs: f32,
-    /// Linear resample of the captured audio to 16 kHz mono.
+    /// Band-limited resample of the captured audio to 16 kHz mono (#89).
     pub resample_secs: f32,
     /// `WhisperContext::create_state` for this run.
     pub state_secs: f32,
