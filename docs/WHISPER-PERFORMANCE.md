@@ -1,4 +1,4 @@
-# Whisper-Performance: Messnachweise zu #43 und #88
+# Whisper-Performance: Messnachweise zu #43, #88 und #92
 
 Messung vom **08.10.2026** auf einem **Apple M4 Max (Mac16,5), 128 GiB RAM,
 macOS 26.6.2**, Rust 1.96.0, whisper-rs 0.16.0 / whisper.cpp 1.8.3.
@@ -290,6 +290,42 @@ sagt wenig über Intel-Macs aus. Fällt auf Apple Silicon der Metal-Start aus un
 whisper.cpp rechnet auf der CPU, bleibt Flash Attention trotzdem an und macht diesen
 seltenen Notfallpfad langsamer. Gemessen wurde nur Whisper, nicht Aufnahme,
 VAD-Kürzung, Nachbearbeitung und Einfügen.
+
+## Final-Pass bei langen Takes (#92)
+
+Bei Aufnahmen über 30 s fehlte im eingefügten Text ein großer Teil, und Teile
+standen doppelt da. Ursache: Mit `set_no_timestamps(true)` springt whisper.cpp
+nach jedem 30-s-Fenster fest 30 s weiter (`seek_delta` im Zweig
+`single_segment || no_timestamps` von `whisper_full_with_state`). Hört der
+Decoder im Fenster früher auf oder gerät in eine Wiederholung, fällt der Rest
+des Fensters weg. Mit Zeitstempeln springt whisper.cpp nur bis zum letzten
+erkannten Zeitstempel. `run_whisper_inference` schaltet deshalb für Takes über
+30 s `no_timestamps` und `single_segment` aus (`needs_window_timestamps`);
+kürzere Takes bleiben unverändert. Live-Vorschau und Warmup nutzen weiter
+`base_full_params`.
+
+Messung auf dem M4 Max, Turbo Q5_0, Clips mit `say -v Anna` bei 48 kHz,
+Wortfehlerrate (WER) und Inferenzzeit, vorher / nachher:
+
+| Clip | Sprache | WER vorher | WER nachher | Inferenz vorher | Inferenz nachher |
+|---|---|---|---|---|---|
+| 13,8 s | de | 0,000 | 0,000 | 0,5 s | 0,5 s |
+| 13,8 s | auto | 0,000 | 0,000 | 1,2 s | 1,2 s |
+| 41 s mit Pausen | de | 0,146 | 0,011 | 1,2 s | 1,8 s |
+| 41 s mit Pausen | auto | 0,146 | 0,011 | 1,8 s | 2,3 s |
+| 163 s ohne Pause | de | 0,620 | 0,000 | 4,0 s | 6,0 s |
+| 163 s ohne Pause | auto | 0,620 | 0,000 | 4,3 s | 6,0 s |
+
+Aufruf (alle drei Variablen sind Pflicht, der Test bricht bei WER ≥ 0,05 ab):
+
+```bash
+OW_TEST_MODEL=~/Library/Application\ Support/com.gettorro.TorroWhisper/models/ggml-large-v3-turbo-q5_0.bin \
+OW_TEST_WAV48=/tmp/long.wav OW_TEST_REF_TEXT_FILE=/tmp/long.txt \
+cargo test --release -p torrowhisper-bridge final_pass_long_take -- --ignored --nocapture
+```
+
+Bekannte Grenze (in der Planung gemessen): Large v3 liegt beim 180-s-Clip nach dem Fix bei WER 6,9 %
+(vorher 68 %), also über der Zielmarke; dieser Rest ist nicht Teil von #92.
 
 ## Reproduzieren
 
