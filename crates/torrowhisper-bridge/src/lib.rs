@@ -29,6 +29,7 @@ pub mod plugin_log;
 #[allow(dead_code)]
 mod pipeline;
 mod remote_models;
+mod resampler;
 mod session_marker;
 #[allow(dead_code)]
 mod settings_store;
