@@ -180,7 +180,7 @@ pub fn run(
 
 /// Ordered word edit distance, unlike the UI benchmark's rough word coverage:
 /// extra, missing and reordered words all count as recognition errors.
-fn word_error_rate(reference: &str, hypothesis: &str) -> f32 {
+pub(crate) fn word_error_rate(reference: &str, hypothesis: &str) -> f32 {
     let reference = normalized_words(reference);
     let hypothesis = normalized_words(hypothesis);
     let mut previous: Vec<usize> = (0..=hypothesis.len()).collect();

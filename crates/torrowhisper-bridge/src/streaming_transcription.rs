@@ -13,6 +13,13 @@
 //! pause, during long uninterrupted speech at a segment boundary Whisper
 //! reported. The final pass still decodes the whole take.
 //!
+//! The window only moves in passes that agree with the committed text. When
+//! Whisper keeps decoding committed window words differently (#93), the
+//! worker accepts the new reading after [`STREAM_REVISION_ACCEPT_PASSES`]
+//! contradicting passes in a row: the display stays append-only, but later
+//! passes are compared against the new reading, so words commit and the
+//! window moves again.
+//!
 //! Concurrency model: passes are sequential by construction (one worker, one
 //! loop), so results are inherently latest-wins. Whisper inference is
 //! additionally serialized process-wide through `whisper_inference_lock`, and
@@ -86,6 +93,11 @@ const SEGMENT_CUT_ANCHOR_WORDS: usize = 4;
 /// passes in a row is undone: the window falls back to its previous start,
 /// and the next cut must lie behind the undone one.
 const STREAM_CUT_UNDO_PASSES: u32 = 3;
+/// Outside a fresh segment cut, Whisper's reading of committed window words
+/// is accepted once this many passes in a row contradicted them (#93). Until
+/// then nothing commits and the window cannot move. Undoing a fresh segment
+/// cut takes precedence.
+const STREAM_REVISION_ACCEPT_PASSES: u32 = 3;
 /// With language on auto, the window is only cut once this much speech (4 s)
 /// was heard in the first window, where detection runs over the whole take
 /// and may still reset the preview; the first cut then pins the language.
@@ -523,6 +535,7 @@ enum CutEvent {
     Pause { archived: usize },
     Segment { archived: usize },
     Undone,
+    RevisionAccepted,
 }
 
 /// A segment cut until a pass confirms it.
@@ -545,10 +558,11 @@ struct WindowCutter {
     voiced_at_cut: usize,
     /// After a pause cut, the window start follows speech once it resumes.
     pause_resume: Option<PauseResume>,
-    /// The last segment cut until a pass confirms it, and how often it was
-    /// contradicted since.
+    /// The last segment cut until a pass confirms it.
     cut_undo: Option<CutUndo>,
-    contradicted_after_cut: u32,
+    /// Contradicting passes in a row, since the last agreeing pass, undo or
+    /// accepted revision.
+    contradicted_passes: u32,
     /// After an undo, a new segment cut must archive more words than this.
     min_cut_consumed: usize,
     /// Pins the auto language from the first cut on.
@@ -564,7 +578,7 @@ impl WindowCutter {
             voiced_at_cut: 0,
             pause_resume: None,
             cut_undo: None,
-            contradicted_after_cut: 0,
+            contradicted_passes: 0,
             min_cut_consumed: 0,
             cut_happened: false,
             language_settled: language_fixed,
@@ -612,30 +626,45 @@ impl WindowCutter {
         audio16k: &[f32],
     ) -> CutEvent {
         if pass.contradicted {
+            self.contradicted_passes += 1;
             // A segment cut whose re-decode keeps disagreeing (a clipped or
             // differently decoded word right at the cut) would freeze the
             // preview and let the window grow without bound: undo it.
-            let Some(undo) = &self.cut_undo else {
-                return CutEvent::None;
-            };
-            self.contradicted_after_cut += 1;
-            if self.contradicted_after_cut < STREAM_CUT_UNDO_PASSES {
+            if let Some(undo) = &self.cut_undo {
+                if self.contradicted_passes < STREAM_CUT_UNDO_PASSES {
+                    return CutEvent::None;
+                }
+                stabilizer.restore_window(undo.window);
+                self.window_start = undo.window_start;
+                self.min_cut_consumed = undo.consumed;
+                self.cut_undo = None;
+                self.contradicted_passes = 0;
+                log::info!(
+                    target: "dictation",
+                    "streaming segment cut undone after {STREAM_CUT_UNDO_PASSES} contradicting passes, window back at {:.2}s",
+                    self.window_start as f32 / 16_000.0
+                );
+                return CutEvent::Undone;
+            }
+            // Anywhere else a lasting revision would freeze the preview the
+            // same way (#93): accept Whisper's new reading as the comparison
+            // basis. The screen keeps the old words; no cut in this pass.
+            if self.contradicted_passes < STREAM_REVISION_ACCEPT_PASSES
+                || !stabilizer.accept_revision()
+            {
                 return CutEvent::None;
             }
-            stabilizer.restore_window(undo.window);
-            self.window_start = undo.window_start;
-            self.min_cut_consumed = undo.consumed;
-            self.cut_undo = None;
-            self.contradicted_after_cut = 0;
             log::info!(
                 target: "dictation",
-                "streaming segment cut undone after {STREAM_CUT_UNDO_PASSES} contradicting passes, window back at {:.2}s",
-                self.window_start as f32 / 16_000.0
+                "streaming revision accepted after {} contradicting passes, {} window words",
+                self.contradicted_passes,
+                stabilizer.window_committed_count()
             );
-            return CutEvent::Undone;
+            self.contradicted_passes = 0;
+            return CutEvent::RevisionAccepted;
         }
         self.cut_undo = None;
-        self.contradicted_after_cut = 0;
+        self.contradicted_passes = 0;
         if !self.language_settled {
             return CutEvent::None;
         }
@@ -1113,6 +1142,94 @@ mod tests {
         assert_eq!(cutter.window_start, cut_at);
     }
 
+    /// [`TWELVE`] with `zwei` lastingly revised to `2`, plus new words.
+    const REVISED: &str =
+        "eins 2 drei vier fünf sechs sieben acht neun zehn elf zwölf dreizehn vierzehn";
+
+    #[test]
+    fn cutter_accepts_a_lasting_revision_and_cuts_again() {
+        let mut stabilizer = committed_stabilizer(TWELVE);
+        let mut cutter = WindowCutter::new(true);
+        let audio = vec![0.0; 16_000 * 25];
+        let mut events = Vec::new();
+        for _ in 0..STREAM_REVISION_ACCEPT_PASSES {
+            let out = stabilizer.observe(REVISED);
+            // A pause and segments, so only the revision stops a cut.
+            let outcome = PassOutcome {
+                holdback_lifted: true,
+                pending_empty: true,
+                ..pass(out.contradicted, Some(&SEGMENTS))
+            };
+            events.push(cutter.after_pass(&mut stabilizer, &outcome, &audio));
+        }
+        assert_eq!(
+            events,
+            [CutEvent::None, CutEvent::None, CutEvent::RevisionAccepted]
+        );
+        assert_eq!(cutter.window_start, 0, "no cut in the accepting pass");
+
+        // The new reading is the basis now: the new words commit again.
+        let mut committed = String::new();
+        for _ in 0..2 {
+            let out = stabilizer.observe(REVISED);
+            assert!(!out.contradicted);
+            committed = out.committed;
+            assert_eq!(
+                cutter.after_pass(&mut stabilizer, &pass(false, None), &audio),
+                CutEvent::None
+            );
+        }
+        assert_eq!(committed, format!("{TWELVE} dreizehn vierzehn"));
+
+        // And the window moves at the next pause.
+        let out = stabilizer.observe(REVISED);
+        let outcome = PassOutcome {
+            holdback_lifted: true,
+            pending_empty: out.pending.is_empty(),
+            ..pass(out.contradicted, None)
+        };
+        assert_eq!(
+            cutter.after_pass(&mut stabilizer, &outcome, &audio),
+            CutEvent::Pause { archived: 14 }
+        );
+    }
+
+    #[test]
+    fn cutter_accepts_a_revision_after_undoing_a_cut() {
+        let mut stabilizer = committed_stabilizer(TWELVE);
+        let mut cutter = WindowCutter::new(true);
+        let audio = vec![0.0; 16_000 * 25];
+        let out = stabilizer.observe(TWELVE);
+        assert_eq!(
+            cutter.after_pass(
+                &mut stabilizer,
+                &pass(out.contradicted, Some(&SEGMENTS)),
+                &audio
+            ),
+            CutEvent::Segment { archived: 6 }
+        );
+
+        // The re-decode behind the cut revises "zwölf": the cut is undone
+        // first, the revision is only accepted after three more passes.
+        let mut drive = |hypothesis: &str| -> Vec<CutEvent> {
+            (0..3)
+                .map(|_| {
+                    let out = stabilizer.observe(hypothesis);
+                    cutter.after_pass(&mut stabilizer, &pass(out.contradicted, None), &audio)
+                })
+                .collect()
+        };
+        assert_eq!(
+            drive("sechs sieben acht neun zehn elf 12 dreizehn"),
+            [CutEvent::None, CutEvent::None, CutEvent::Undone]
+        );
+        assert_eq!(
+            drive("eins zwei drei vier fünf sechs sieben acht neun zehn elf 12 dreizehn"),
+            [CutEvent::None, CutEvent::None, CutEvent::RevisionAccepted]
+        );
+        assert_eq!(stabilizer.window_committed_count(), 12);
+    }
+
     #[test]
     fn short_windows_are_not_segment_cut() {
         let mut stabilizer = committed_stabilizer(TWELVE);
@@ -1249,6 +1366,11 @@ mod tests {
     /// Generate the WAV with (any sample rate; 48 kHz exercises the resampler
     /// like a real microphone):
     /// `say -v Anna -o /tmp/speech-de.wav --data-format=LEI16@48000 "<German text>"`
+    ///
+    /// With `OW_TEST_REF_TEXT_FILE` pointing to the spoken text (without
+    /// `say` commands like `[[slnc 4000]]`), the test also prints the word
+    /// error rate of the last live text (`committed` + `pending`) as
+    /// `live text WER`, without asserting on it.
     #[test]
     #[ignore]
     fn streaming_end_to_end_with_synthesized_speech() {
@@ -1364,6 +1486,15 @@ mod tests {
             snapshots.iter().map(|s| s.revision).collect::<Vec<_>>()
         );
         eprintln!("final streaming text: {full_text}");
+        if let Some(reference_path) = std::env::var_os("OW_TEST_REF_TEXT_FILE") {
+            let reference =
+                std::fs::read_to_string(&reference_path).expect("reference text readable");
+            let live_text = format!("{} {}", last.committed, last.pending);
+            eprintln!(
+                "live text WER {:.3}",
+                crate::benchmark::validation::word_error_rate(&reference, &live_text)
+            );
+        }
 
         let revisions: Vec<u64> = snapshots.iter().map(|s| s.revision).collect();
         assert!(
