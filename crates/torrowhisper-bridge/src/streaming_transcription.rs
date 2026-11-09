@@ -249,6 +249,10 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         settings,
         language,
     } = config;
+    let diagnostics = match buffer.lock() {
+        Ok(guard) => guard.diagnostics.clone(),
+        Err(_) => return,
+    };
 
     // One state per session, reused across passes — recreating it every
     // 750 ms would reallocate the KV caches (noticeable on large models).
@@ -303,13 +307,19 @@ fn worker_loop(config: StreamingConfig, stop: Arc<AtomicBool>) {
         // Short lock: take only the samples that arrived since last tick.
         new_samples.clear();
         let (sample_rate, voiced_samples, last_voiced_end) = {
+            let waiting = Instant::now();
             let Ok(guard) = buffer.lock() else { return };
+            diagnostics.streaming_wait.record(waiting.elapsed());
+            let held = Instant::now();
             guard.copy_new_samples(source_len, &mut new_samples);
-            (
+            let snapshot = (
                 guard.sample_rate(),
                 guard.voiced_samples(),
                 guard.last_voiced_end(),
-            )
+            );
+            drop(guard);
+            diagnostics.streaming_hold.record(held.elapsed());
+            snapshot
         };
         let previous_source_len = source_len;
         source_len += new_samples.len();

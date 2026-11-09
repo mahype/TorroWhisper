@@ -17,51 +17,6 @@ enum IndicatorPhase: Equatable {
     case done
 }
 
-@MainActor
-final class RecordingLevelFeed: ObservableObject {
-    static let barCount = 28
-    static let pollingInterval: TimeInterval = 1.0 / 30.0
-    static let levelGain: Float = 2.8
-    static let noiseFloor: Float = 0.002
-
-    @Published private(set) var bars: [Float] = Array(repeating: 0, count: RecordingLevelFeed.barCount)
-
-    private let bridge = BridgeClient()
-    private var timer: Timer?
-
-    func start() {
-        stop()
-        let newTimer = Timer(timeInterval: Self.pollingInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.tick()
-            }
-        }
-        RunLoop.main.add(newTimer, forMode: .common)
-        timer = newTimer
-    }
-
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-        bars = Array(repeating: 0, count: Self.barCount)
-    }
-
-    private func tick() {
-        guard let levels = try? bridge.getRecordingLevels().levels else {
-            return
-        }
-
-        let slice = Array(levels.suffix(Self.barCount))
-        if slice.count == Self.barCount {
-            bars = slice
-        } else {
-            var padded = Array(repeating: Float(0), count: Self.barCount - slice.count)
-            padded.append(contentsOf: slice)
-            bars = padded
-        }
-    }
-}
-
 /// Polls the live transcript (#41) on its own cadence, decoupled from the
 /// 0.35 s status poll (which must stay change-detected and idle-cheap) and
 /// from the 30 Hz waveform feed. Publishes only when the Rust-side revision
@@ -86,10 +41,7 @@ final class StreamingTranscriptFeed: ObservableObject {
     private var timer: Timer?
 
     /// Idempotent — runs on every state-change pass while the bubble shows an
-    /// active phase. Unlike `RecordingLevelFeed.start()` it must not restart
-    /// the timer or touch the snapshot: blanking visible text mid-recording
-    /// would be a visible glitch (bars just refill on the next 33 ms tick,
-    /// text would not).
+    /// active phase. Must not restart the timer or touch the snapshot.
     func start() {
         guard timer == nil else { return }
         let newTimer = Timer(timeInterval: Self.pollingInterval, repeats: true) { [weak self] _ in

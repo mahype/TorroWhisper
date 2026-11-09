@@ -13,6 +13,7 @@ use std::{
 
 use crate::audio_export;
 use crate::cloud_transcription::{self, TranscriptionOptions};
+use crate::latency::{self, RecordingDiagnostics};
 use crate::llm::keychain;
 use crate::model_manager::validated_model_path;
 use crate::parakeet::ParakeetRuntime;
@@ -25,8 +26,8 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use torrowhisper_core::{
-    AppSettings, CloudTranscriptionModel, ParakeetModelStatusDto, SYSTEM_DEFAULT_DEVICE_LABEL,
-    StreamingTranscriptDto, TranscriptionBackend, TriggerMode,
+    AppSettings, CloudTranscriptionModel, ParakeetModelStatusDto, RecordingLevelsDto,
+    SYSTEM_DEFAULT_DEVICE_LABEL, StreamingTranscriptDto, TranscriptionBackend, TriggerMode,
 };
 use whisper_rs::{
     FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState,
@@ -304,11 +305,21 @@ impl DictationController {
         self.transcription_rx.is_some()
     }
 
-    pub fn current_levels(&self) -> Vec<f32> {
-        self.recording
-            .as_ref()
+    pub(crate) fn recording_diagnostics(&self) -> Option<Arc<RecordingDiagnostics>> {
+        self.recording.as_ref().map(|r| r.diagnostics.clone())
+    }
+
+    pub fn current_levels(&mut self) -> RecordingLevelsDto {
+        let recording_id = self.recording.as_ref().map(|r| r.diagnostics.id);
+        let levels = self
+            .recording
+            .as_mut()
             .map(ActiveRecording::levels_snapshot)
-            .unwrap_or_default()
+            .unwrap_or_default();
+        RecordingLevelsDto {
+            levels,
+            recording_id,
+        }
     }
 
     pub fn invalidate_model_cache(&mut self) {
@@ -552,6 +563,7 @@ impl DictationController {
 
         let resolved_name = resolve_input_device_name(settings, &self.available_input_devices);
         let (recording, used_name) = ActiveRecording::start(settings, &resolved_name)?;
+        let recording_id = recording.diagnostics.id;
         self.recording = Some(recording);
         self.active_input_device_name = used_name.clone();
         self.clear_blocked();
@@ -568,7 +580,7 @@ impl DictationController {
         // completion before the Swift host can apply output attenuation, so a
         // 0% recording volume cannot swallow the confirmation sound — but never
         // let a stuck output device hold the recording (and the indicator) back.
-        play_start_cue_bounded();
+        play_start_cue_bounded(recording_id);
         log::info!(
             target: "dictation",
             "recording started via '{used_name}' (vad: {})",
@@ -608,9 +620,11 @@ impl DictationController {
         // Anchor the "total after stop" stopwatch at the very moment the user
         // stopped recording, before any post-stop work (#43).
         let stop_instant = Instant::now();
+        let recording_id = recording.diagnostics.id;
+        let diagnostics = recording.diagnostics.clone();
         let device_name = recording.current_device_name.clone();
         let audio = recording.finish()?;
-        play_recording_cue(cue);
+        play_recording_cue(cue, recording_id);
         if audio.samples.is_empty() || audio.duration < Duration::from_millis(200) {
             return Ok(vec![DictationOutcome::Status(
                 "Recording was too short or empty.".to_owned(),
@@ -696,16 +710,40 @@ impl DictationController {
             // finish (its current pass aborts via the stop flag, so this is
             // quick) before the final inference starts.
             if let Some(session) = streaming {
-                session.join();
+                let _ = latency::stage(recording_id, "backend.streaming_join", || {
+                    session.join();
+                    Ok::<_, ()>(())
+                });
             }
+            diagnostics.log_summary("backend_ready");
             let started = Instant::now();
             let result = match engine {
-                TranscriptionEngine::Parakeet(runtime) => transcribe_with_parakeet(&runtime, audio),
+                TranscriptionEngine::Parakeet(runtime) => {
+                    latency::stage(recording_id, "backend.parakeet.total", || {
+                        transcribe_with_parakeet(&runtime, audio, recording_id)
+                    })
+                }
                 TranscriptionEngine::Whisper(context) => {
-                    transcribe_with_whisper(context, &app_settings, audio, language.as_deref())
+                    latency::stage(recording_id, "backend.whisper.total", || {
+                        transcribe_with_whisper(
+                            context,
+                            &app_settings,
+                            audio,
+                            language.as_deref(),
+                            recording_id,
+                        )
+                    })
                 }
                 TranscriptionEngine::Cloud(model) => {
-                    transcribe_with_cloud(&model, &app_settings, audio, language.as_deref())
+                    latency::stage(recording_id, "backend.cloud.total", || {
+                        transcribe_with_cloud(
+                            &model,
+                            &app_settings,
+                            audio,
+                            language.as_deref(),
+                            recording_id,
+                        )
+                    })
                 }
             };
             match &result {
@@ -744,8 +782,10 @@ impl DictationController {
 
     pub fn cancel_recording(&mut self) -> bool {
         self.stop_streaming();
-        if self.recording.take().is_some() {
-            play_recording_cue(RecordingCue::Cancel);
+        if let Some(recording) = self.recording.take() {
+            let id = recording.diagnostics.id;
+            drop(recording);
+            play_recording_cue(RecordingCue::Cancel, id);
             true
         } else {
             false
@@ -913,6 +953,9 @@ struct ActiveRecording {
     shared: Arc<Mutex<RecordingBuffer>>,
     sample_rate: u32,
     current_device_name: String,
+    diagnostics: Arc<RecordingDiagnostics>,
+    latest_levels: Vec<f32>,
+    last_summary: Instant,
 }
 
 impl ActiveRecording {
@@ -925,27 +968,34 @@ impl ActiveRecording {
         let sample_rate = config.sample_rate();
         let channels = config.channels() as usize;
         let (event_tx, event_rx) = mpsc::channel();
-        let (readiness, ready_rx) = input_readiness_channel();
         let shared = Arc::new(Mutex::new(RecordingBuffer::new(
             sample_rate,
             settings.vad_enabled,
             settings.vad_threshold,
             settings.vad_silence_ms,
         )));
+        let diagnostics = shared.lock().unwrap().diagnostics.clone();
+        let (readiness, ready_rx) = input_readiness_channel(diagnostics.clone(), sample_rate);
 
-        let stream = build_input_stream(
-            &device,
-            &config,
-            channels,
-            shared.clone(),
-            event_tx.clone(),
-            readiness,
-        )?;
+        let stream = latency::stage(diagnostics.id, "input.build", || {
+            build_input_stream(
+                &device,
+                &config,
+                channels,
+                shared.clone(),
+                event_tx.clone(),
+                readiness,
+            )
+        })?;
         let input_start = Instant::now();
-        stream
-            .play()
-            .map_err(|err| format!("Audio recording could not be started: {err}"))?;
-        wait_for_first_input(ready_rx, INPUT_READY_TIMEOUT)?;
+        latency::stage(diagnostics.id, "input.play", || {
+            stream
+                .play()
+                .map_err(|err| format!("Audio recording could not be started: {err}"))
+        })?;
+        latency::stage(diagnostics.id, "input.first_callback_wait", || {
+            wait_for_first_input(ready_rx, INPUT_READY_TIMEOUT)
+        })?;
         log::info!(
             target: "dictation",
             "microphone input ready after {:.0}ms via '{used_name}'",
@@ -960,6 +1010,9 @@ impl ActiveRecording {
                 shared,
                 sample_rate,
                 current_device_name: used_name.clone(),
+                diagnostics,
+                latest_levels: Vec::new(),
+                last_summary: Instant::now(),
             },
             used_name,
         ))
@@ -987,7 +1040,8 @@ impl ActiveRecording {
         }
 
         let channels = config.channels() as usize;
-        let (readiness, ready_rx) = input_readiness_channel();
+        let (readiness, ready_rx) =
+            input_readiness_channel(self.diagnostics.clone(), self.sample_rate);
         let stream = build_input_stream(
             &device,
             &config,
@@ -1007,28 +1061,78 @@ impl ActiveRecording {
     }
 
     fn poll_event(&mut self) -> Option<RecordingEvent> {
+        self.maybe_log_summary();
         self.event_rx.try_recv().ok()
     }
 
-    fn levels_snapshot(&self) -> Vec<f32> {
-        self.shared
-            .lock()
-            .map(|guard| guard.levels_snapshot())
-            .unwrap_or_default()
+    fn maybe_log_summary(&mut self) {
+        if self.last_summary.elapsed() >= Duration::from_secs(5) {
+            self.diagnostics.log_summary("capture");
+            self.last_summary = Instant::now();
+        }
     }
 
-    fn finish(self) -> Result<RecordedAudio, String> {
+    fn levels_snapshot(&mut self) -> Vec<f32> {
+        let started = Instant::now();
+        update_level_snapshot(&self.shared, &mut self.latest_levels, &self.diagnostics);
+        self.diagnostics.level_snapshot.record(started.elapsed());
+        self.latest_levels.clone()
+    }
+
+    fn finish(mut self) -> Result<RecordedAudio, String> {
+        let started = Instant::now();
         let mut guard = self
             .shared
             .lock()
             .map_err(|_| "Recording buffer could not be read.".to_owned())?;
-        Ok(guard.finish())
+        self.diagnostics.finish_wait.record(started.elapsed());
+        let held = Instant::now();
+        let audio = guard.finish();
+        drop(guard);
+        self.diagnostics.finish_hold.record(held.elapsed());
+        // Preserve the existing take-buffer-then-drop-stream order. Separate
+        // teardown from mutex wait/hold, and never log with the guard held.
+        let _ = latency::stage(self.diagnostics.id, "input.drop", || {
+            self.stream.take();
+            Ok::<_, ()>(())
+        });
+        Ok(audio)
+    }
+}
+
+impl Drop for ActiveRecording {
+    fn drop(&mut self) {
+        self.stream.take();
+        self.diagnostics.log_summary("capture_end");
+    }
+}
+
+fn update_level_snapshot(
+    shared: &Mutex<RecordingBuffer>,
+    latest: &mut Vec<f32>,
+    diagnostics: &RecordingDiagnostics,
+) {
+    let started = Instant::now();
+    let result = shared.try_lock();
+    diagnostics.level_wait.record(started.elapsed());
+    match result {
+        Ok(guard) => {
+            let held = Instant::now();
+            *latest = guard.levels_snapshot();
+            drop(guard);
+            diagnostics.level_hold.record(held.elapsed());
+        }
+        Err(_) => {
+            diagnostics.level_misses.fetch_add(1, Ordering::Relaxed);
+        }
     }
 }
 
 struct InputReadinessSignal {
     sent: AtomicBool,
     tx: SyncSender<()>,
+    diagnostics: Arc<RecordingDiagnostics>,
+    sample_rate: u32,
 }
 
 impl InputReadinessSignal {
@@ -1043,12 +1147,17 @@ impl InputReadinessSignal {
     }
 }
 
-fn input_readiness_channel() -> (Arc<InputReadinessSignal>, Receiver<()>) {
+fn input_readiness_channel(
+    diagnostics: Arc<RecordingDiagnostics>,
+    sample_rate: u32,
+) -> (Arc<InputReadinessSignal>, Receiver<()>) {
     let (tx, rx) = mpsc::sync_channel(1);
     (
         Arc::new(InputReadinessSignal {
             sent: AtomicBool::new(false),
             tx,
+            diagnostics,
+            sample_rate,
         }),
         rx,
     )
@@ -1088,6 +1197,7 @@ const NOISE_FLOOR_CEILING: f32 = 0.02;
 const RECORDING_PREALLOC_SECS: usize = 30;
 
 pub(crate) struct RecordingBuffer {
+    pub(crate) diagnostics: Arc<RecordingDiagnostics>,
     samples: Vec<f32>,
     sample_rate: u32,
     vad_enabled: bool,
@@ -1123,6 +1233,7 @@ impl RecordingBuffer {
             ((sample_rate as u64 * vad_silence_ms as u64) / 1000).max(1) as usize;
 
         Self {
+            diagnostics: Arc::new(RecordingDiagnostics::new()),
             // Room for the first 30 s up front, so a typical take never
             // reallocates (and copies) its growing buffer under the lock the
             // audio callback shares (#89).
@@ -1263,7 +1374,9 @@ fn build_input_stream(
 ) -> Result<Stream, String> {
     let stream_config = config.config();
     let error_sender = event_tx.clone();
-    let error_callback = move |err| {
+    let error_diagnostics = readiness.diagnostics.clone();
+    let error_callback = move |err: cpal::Error| {
+        error_diagnostics.capture_error(err.kind());
         let _ = error_sender.send(RecordingEvent::StreamError(format!(
             "Audio error in stream: {err}"
         )));
@@ -1417,13 +1530,41 @@ fn handle_input_data_f32(
     event_tx: &Sender<RecordingEvent>,
     readiness: &InputReadinessSignal,
 ) {
+    let started = Instant::now();
+    readiness.diagnostics.callback_started(
+        started,
+        Duration::from_secs_f64(
+            data.len() as f64 / channels.max(1) as f64 / readiness.sample_rate.max(1) as f64,
+        ),
+    );
+    push_input_data(data, channels, shared, event_tx, readiness);
+    readiness.diagnostics.callback.record(started.elapsed());
+}
+
+fn push_input_data(
+    data: &[f32],
+    channels: usize,
+    shared: &Arc<Mutex<RecordingBuffer>>,
+    event_tx: &Sender<RecordingEvent>,
+    readiness: &InputReadinessSignal,
+) {
     let mono_chunk = interleaved_to_mono(data, channels);
     if mono_chunk.is_empty() {
         return;
     }
+    let waiting = Instant::now();
     if let Ok(mut guard) = shared.lock() {
+        readiness.diagnostics.capture_wait.record(waiting.elapsed());
+        let held = Instant::now();
         guard.push_chunk(&mono_chunk, event_tx);
+        drop(guard);
+        readiness.diagnostics.capture_hold.record(held.elapsed());
         readiness.notify();
+    } else {
+        readiness
+            .diagnostics
+            .capture_lock_errors
+            .fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -1434,8 +1575,17 @@ fn handle_input_data_iter(
     event_tx: &Sender<RecordingEvent>,
     readiness: &InputReadinessSignal,
 ) {
+    let started = Instant::now();
     let collected: Vec<f32> = data.collect();
-    handle_input_data_f32(&collected, channels, shared, event_tx, readiness);
+    // Include sample conversion in callback duration, unlike the f32 fast path.
+    readiness.diagnostics.callback_started(
+        started,
+        Duration::from_secs_f64(
+            collected.len() as f64 / channels.max(1) as f64 / readiness.sample_rate.max(1) as f64,
+        ),
+    );
+    push_input_data(&collected, channels, shared, event_tx, readiness);
+    readiness.diagnostics.callback.record(started.elapsed());
 }
 
 fn interleaved_to_mono(data: &[f32], channels: usize) -> Vec<f32> {
@@ -1488,6 +1638,7 @@ fn transcribe_with_whisper(
     settings: &AppSettings,
     audio: RecordedAudio,
     language: Option<&str>,
+    recording_id: u64,
 ) -> Result<TranscriptionOutput, String> {
     // Discard trailing silence before decoding: Whisper hallucinates subtitle-
     // style filler when it decodes into (near-)silent audio, and that garbage
@@ -1513,14 +1664,16 @@ fn transcribe_with_whisper(
     }
 
     let n_threads = resolve_thread_count(settings.whisper_thread_count);
-    let inference = run_whisper_inference(
-        &context,
-        &mono_16khz,
-        settings,
-        language,
-        n_threads,
-        WHISPER_DYNAMIC_AUDIO_CTX,
-    )?;
+    let inference = latency::stage(recording_id, "backend.whisper.call", || {
+        run_whisper_inference(
+            &context,
+            &mono_16khz,
+            settings,
+            language,
+            n_threads,
+            WHISPER_DYNAMIC_AUDIO_CTX,
+        )
+    })?;
 
     // Belt-and-suspenders over the silence trim: a short residual pause can
     // still trigger a hallucinated subtitle/broadcast phrase. Strip those known
@@ -1546,6 +1699,7 @@ fn transcribe_with_whisper(
 fn transcribe_with_parakeet(
     runtime: &ParakeetRuntime,
     audio: RecordedAudio,
+    recording_id: u64,
 ) -> Result<TranscriptionOutput, String> {
     let speech = trim_trailing_silence(&audio.samples, audio.sample_rate, audio.last_voiced_end);
     let resample_started = Instant::now();
@@ -1556,7 +1710,9 @@ fn transcribe_with_parakeet(
     }
 
     let inference_started = Instant::now();
-    let text = runtime.transcribe(&mono_16khz)?;
+    let text = latency::stage(recording_id, "backend.parakeet.call", || {
+        runtime.transcribe(&mono_16khz)
+    })?;
     let inference_secs = inference_started.elapsed().as_secs_f32();
 
     Ok(TranscriptionOutput {
@@ -1588,6 +1744,7 @@ fn transcribe_with_cloud(
     settings: &AppSettings,
     audio: RecordedAudio,
     language: Option<&str>,
+    recording_id: u64,
 ) -> Result<TranscriptionOutput, String> {
     // The full buffer goes to the provider. Trimming at the last tracked voice
     // end can cut off trailing speech that voice tracking missed; the trim only
@@ -1614,7 +1771,9 @@ fn transcribe_with_cloud(
     };
 
     let inference_started = Instant::now();
-    let text = cloud_transcription::transcribe(model, &mono_16khz, &options)?;
+    let text = latency::stage(recording_id, "backend.cloud.call", || {
+        cloud_transcription::transcribe(model, &mono_16khz, &options)
+    })?;
     let inference_secs = inference_started.elapsed().as_secs_f32();
 
     Ok(TranscriptionOutput {
@@ -2188,16 +2347,20 @@ const START_CUE_GRACE: Duration = Duration::from_millis(400);
 /// blocks the start of the output unit for about five seconds before it
 /// fails; waiting for that delayed every recording start and its indicator by
 /// the same five seconds. The cue then finishes (or fails) in the background.
-fn play_start_cue_bounded() {
+fn play_start_cue_bounded(recording_id: u64) {
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
-        if let Err(err) = play_recording_cue_blocking(RecordingCue::Start) {
+        if let Err(err) = play_recording_cue_blocking(RecordingCue::Start, recording_id) {
             log::warn!(target: "dictation", "recording start cue failed: {err}");
         }
         let _ = tx.send(());
     });
     let limit = cue_playback_duration(RecordingCue::Start) + START_CUE_GRACE;
-    if rx.recv_timeout(limit).is_err() {
+    if latency::stage(recording_id, "cue.start.deadline_wait", || {
+        rx.recv_timeout(limit)
+    })
+    .is_err()
+    {
         log::warn!(
             target: "dictation",
             "recording start cue did not finish within {} ms — audio output is not responding; starting without it",
@@ -2206,24 +2369,79 @@ fn play_start_cue_bounded() {
     }
 }
 
-fn play_recording_cue(cue: RecordingCue) {
+fn play_recording_cue(cue: RecordingCue, recording_id: u64) {
     thread::spawn(move || {
-        let _ = play_recording_cue_blocking(cue);
+        let _ = play_recording_cue_blocking(cue, recording_id);
     });
 }
 
 pub fn play_cancel_cue() {
-    play_recording_cue(RecordingCue::Cancel);
+    // No active recording (e.g. cancelling post-processing).
+    play_recording_cue(RecordingCue::Cancel, 0);
 }
 
-fn play_recording_cue_blocking(cue: RecordingCue) -> Result<(), String> {
-    let Some(device) = cpal::default_host().default_output_device() else {
+#[derive(Default)]
+struct CueCallbacks {
+    first_us: std::sync::atomic::AtomicU64,
+    count: std::sync::atomic::AtomicU64,
+    errors: std::sync::atomic::AtomicU64,
+    xruns: std::sync::atomic::AtomicU64,
+}
+
+impl CueCallbacks {
+    fn callback(&self, elapsed: Duration) {
+        if self.count.fetch_add(1, Ordering::Relaxed) == 0 {
+            self.first_us
+                .store(elapsed.as_micros() as u64, Ordering::Relaxed);
+        }
+    }
+
+    fn error(&self, kind: cpal::ErrorKind) {
+        self.errors.fetch_add(1, Ordering::Relaxed);
+        if kind == cpal::ErrorKind::Xrun {
+            self.xruns.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
+
+struct CueReport {
+    id: u64,
+    cue: &'static str,
+    callbacks: Arc<CueCallbacks>,
+}
+
+impl Drop for CueReport {
+    fn drop(&mut self) {
+        log::info!(target: "latency", "recording={} cue={} callbacks={} first_from_build_us={} errors={} xruns={} playback_verified=false",
+            self.id, self.cue, self.callbacks.count.load(Ordering::Relaxed),
+            self.callbacks.first_us.load(Ordering::Relaxed), self.callbacks.errors.load(Ordering::Relaxed), self.callbacks.xruns.load(Ordering::Relaxed));
+    }
+}
+
+fn play_recording_cue_blocking(cue: RecordingCue, recording_id: u64) -> Result<(), String> {
+    let cue_name = match cue {
+        RecordingCue::Start => "start",
+        RecordingCue::Stop => "stop",
+        RecordingCue::Cancel => "cancel",
+    };
+    let stage = |name: &str| format!("cue.{cue_name}.{name}");
+    let report = CueReport {
+        id: recording_id,
+        cue: cue_name,
+        callbacks: Arc::new(CueCallbacks::default()),
+    };
+    let device = latency::stage(recording_id, &stage("device"), || {
+        Ok::<_, String>(cpal::default_host().default_output_device())
+    })?;
+    let Some(device) = device else {
         return Ok(());
     };
 
-    let config = device
-        .default_output_config()
-        .map_err(|err| format!("Output configuration could not be loaded: {err}"))?;
+    let config = latency::stage(recording_id, &stage("config"), || {
+        device
+            .default_output_config()
+            .map_err(|err| format!("Output configuration could not be loaded: {err}"))
+    })?;
     let stream_config = config.config();
     let sample_rate = stream_config.sample_rate;
     let channels = stream_config.channels as usize;
@@ -2233,54 +2451,111 @@ fn play_recording_cue_blocking(cue: RecordingCue) -> Result<(), String> {
     }
 
     let playback_duration = cue_playback_duration(cue);
-    let stream = match config.sample_format() {
-        SampleFormat::I8 => {
-            build_cue_output_stream::<i8>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::I16 => {
-            build_cue_output_stream::<i16>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::I24 => {
-            build_cue_output_stream::<I24>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::I32 => {
-            build_cue_output_stream::<i32>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::I64 => {
-            build_cue_output_stream::<i64>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::U8 => {
-            build_cue_output_stream::<u8>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::U16 => {
-            build_cue_output_stream::<u16>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::U24 => {
-            build_cue_output_stream::<U24>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::U32 => {
-            build_cue_output_stream::<u32>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::U64 => {
-            build_cue_output_stream::<u64>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::F32 => {
-            build_cue_output_stream::<f32>(&device, &stream_config, channels, samples)?
-        }
-        SampleFormat::F64 => {
-            build_cue_output_stream::<f64>(&device, &stream_config, channels, samples)?
-        }
-        other => {
-            return Err(format!(
+    let stream = latency::stage(recording_id, &stage("build"), || {
+        match config.sample_format() {
+            SampleFormat::I8 => build_cue_output_stream::<i8>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::I16 => build_cue_output_stream::<i16>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::I24 => build_cue_output_stream::<I24>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::I32 => build_cue_output_stream::<i32>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::I64 => build_cue_output_stream::<i64>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::U8 => build_cue_output_stream::<u8>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::U16 => build_cue_output_stream::<u16>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::U24 => build_cue_output_stream::<U24>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::U32 => build_cue_output_stream::<u32>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::U64 => build_cue_output_stream::<u64>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::F32 => build_cue_output_stream::<f32>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            SampleFormat::F64 => build_cue_output_stream::<f64>(
+                &device,
+                &stream_config,
+                channels,
+                samples,
+                report.callbacks.clone(),
+            ),
+            other => Err(format!(
                 "Sample format '{other}' for output signal is not currently supported."
-            ));
+            )),
         }
-    };
+    })?;
 
-    stream
-        .play()
-        .map_err(|err| format!("Output signal could not be started: {err}"))?;
-    thread::sleep(playback_duration);
+    latency::stage(recording_id, &stage("play"), || {
+        stream
+            .play()
+            .map_err(|err| format!("Output signal could not be started: {err}"))
+    })?;
+    latency::stage(recording_id, &stage("scheduled_wait"), || {
+        thread::sleep(playback_duration);
+        Ok::<_, String>(())
+    })?;
+    latency::stage(recording_id, &stage("drop"), || {
+        drop(stream);
+        Ok::<_, String>(())
+    })?;
     Ok(())
 }
 
@@ -2289,16 +2564,24 @@ fn build_cue_output_stream<T>(
     config: &cpal::StreamConfig,
     channels: usize,
     samples: Vec<f32>,
+    callbacks: Arc<CueCallbacks>,
 ) -> Result<Stream, String>
 where
     T: Sample + SizedSample + FromSample<f32>,
 {
     let mut cursor = 0usize;
+    let started = Instant::now();
+    let errors = callbacks.clone();
     device
         .build_output_stream(
             *config,
-            move |data: &mut [T], _| write_cue_output_data(data, channels, &samples, &mut cursor),
-            |_err| {},
+            move |data: &mut [T], _| {
+                callbacks.callback(started.elapsed());
+                write_cue_output_data(data, channels, &samples, &mut cursor);
+            },
+            move |err| {
+                errors.error(err.kind());
+            },
             None,
         )
         .map_err(|err| err.to_string())
@@ -2410,6 +2693,83 @@ fn cue_playback_duration(cue: RecordingCue) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn level_snapshots_do_not_wait_and_keep_latest_valid_history() {
+        let buffer = Mutex::new(RecordingBuffer::new(16_000, false, 0.02, 500));
+        let diagnostics = buffer.lock().unwrap().diagnostics.clone();
+        let mut latest = Vec::new();
+        let (tx, _rx) = mpsc::channel();
+        buffer.lock().unwrap().push_chunk(&[0.25; 160], &tx);
+        update_level_snapshot(&buffer, &mut latest, &diagnostics);
+        assert_eq!(latest, vec![0.25]);
+        {
+            // Same-thread held lock makes blocking lock() deadlock: this is a
+            // deterministic contention test, not a wall-clock speed assertion.
+            let mut held = buffer.lock().unwrap();
+            held.push_chunk(&[0.5; 160], &tx);
+            update_level_snapshot(&buffer, &mut latest, &diagnostics);
+            assert_eq!(latest, vec![0.25]);
+            assert_eq!(diagnostics.level_misses.load(Ordering::Relaxed), 1);
+        }
+        update_level_snapshot(&buffer, &mut latest, &diagnostics);
+        assert_eq!(latest, vec![0.25, 0.5]);
+    }
+
+    #[test]
+    fn poisoned_snapshot_preserves_cache_and_a_new_buffer_does_not_inherit_it() {
+        let buffer = Mutex::new(RecordingBuffer::new(16_000, false, 0.02, 500));
+        let diagnostics = buffer.lock().unwrap().diagnostics.clone();
+        let _ = std::panic::catch_unwind(|| {
+            let _held = buffer.lock().unwrap();
+            panic!("test poison");
+        });
+        let mut latest = vec![0.25];
+        update_level_snapshot(&buffer, &mut latest, &diagnostics);
+        assert_eq!(latest, vec![0.25]);
+        let fresh = Mutex::new(RecordingBuffer::new(16_000, false, 0.02, 500));
+        let fresh_diagnostics = fresh.lock().unwrap().diagnostics.clone();
+        assert_ne!(diagnostics.id, fresh_diagnostics.id);
+        update_level_snapshot(&fresh, &mut latest, &fresh_diagnostics);
+        assert!(latest.is_empty());
+    }
+
+    #[test]
+    fn capture_updates_timing_and_readiness_without_changing_audio() {
+        let shared = Arc::new(Mutex::new(RecordingBuffer::new(16_000, false, 0.02, 500)));
+        let diagnostics = shared.lock().unwrap().diagnostics.clone();
+        let (ready, ready_rx) = input_readiness_channel(diagnostics.clone(), 16_000);
+        let (tx, _rx) = mpsc::channel();
+        handle_input_data_f32(&[0.25, 0.75], 2, &shared, &tx, &ready);
+        handle_input_data_iter([0.1, 0.3].into_iter(), 2, &shared, &tx, &ready);
+        assert!(ready_rx.try_recv().is_ok());
+        assert!(ready_rx.try_recv().is_err());
+        assert_eq!(shared.lock().unwrap().samples, vec![0.5, 0.2]);
+        assert_eq!(diagnostics.capture_errors.load(Ordering::Relaxed), 0);
+        assert_eq!(diagnostics.callback.count(), 2);
+        assert_eq!(diagnostics.callback_gap.count(), 1);
+        assert_eq!(diagnostics.capture_wait.count(), 2);
+        assert_eq!(diagnostics.capture_hold.count(), 2);
+    }
+
+    #[test]
+    fn cue_callback_telemetry_is_bounded_and_independent_of_capture() {
+        let cue = CueCallbacks::default();
+        cue.callback(Duration::from_millis(5));
+        cue.callback(Duration::from_millis(15));
+        cue.error(cpal::ErrorKind::Xrun);
+        cue.error(cpal::ErrorKind::BackendError);
+        assert_eq!(cue.count.load(Ordering::Relaxed), 2);
+        assert_eq!(cue.first_us.load(Ordering::Relaxed), 5_000);
+        assert_eq!(cue.errors.load(Ordering::Relaxed), 2);
+        assert_eq!(cue.xruns.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            RecordingDiagnostics::new()
+                .capture_errors
+                .load(Ordering::Relaxed),
+            0
+        );
+    }
 
     #[test]
     fn window_timestamps_only_for_takes_over_one_window() {

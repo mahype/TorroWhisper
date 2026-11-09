@@ -11,6 +11,7 @@ mod dictionary;
 mod focus_probe;
 mod history_store;
 mod i18n;
+mod latency;
 mod llm;
 #[allow(dead_code)]
 mod llm_model_manager;
@@ -1216,9 +1217,7 @@ impl BridgeRuntime {
     }
 
     fn recording_levels(&mut self) -> RecordingLevelsDto {
-        RecordingLevelsDto {
-            levels: self.dictation.current_levels(),
-        }
+        self.dictation.current_levels()
     }
 
     /// Live-transcript snapshot for the overlay's dedicated poll (#41).
@@ -1967,7 +1966,13 @@ pub extern "C" fn ow_get_runtime_status() -> *mut c_char {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ow_get_recording_levels() -> *mut c_char {
-    response_ok(with_runtime_value(BridgeRuntime::recording_levels))
+    let started = std::time::Instant::now();
+    let diagnostics = with_runtime_value(|runtime| runtime.dictation.recording_diagnostics());
+    let response = response_ok(with_runtime_value(BridgeRuntime::recording_levels));
+    if let Some(diagnostics) = diagnostics {
+        diagnostics.bridge.record(started.elapsed());
+    }
+    response
 }
 
 /// Live transcription while recording (#41): committed/pending text plus a

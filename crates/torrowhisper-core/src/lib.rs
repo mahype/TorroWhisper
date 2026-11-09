@@ -1733,6 +1733,9 @@ pub struct RemoteModelDto {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RecordingLevelsDto {
     pub levels: Vec<f32>,
+    /// Process-local correlation only; never an audio/device/user identifier.
+    #[serde(default)]
+    pub recording_id: Option<u64>,
 }
 
 /// Snapshot of the live transcription while a recording is running (#41).
@@ -2013,6 +2016,25 @@ mod tests {
         assert_eq!(
             LlmModelRef::AppleSystem.backend_kind(),
             LlmBackendKind::AppleFoundation
+        );
+    }
+
+    #[test]
+    fn recording_levels_correlation_is_additive_and_uses_snake_case() {
+        let old: RecordingLevelsDto = serde_json::from_str(r#"{"levels":[]}"#).unwrap();
+        assert_eq!(old.recording_id, None);
+        let dto = RecordingLevelsDto {
+            levels: Vec::new(),
+            recording_id: Some(17),
+        };
+        let json = serde_json::to_value(&dto).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "levels": [], "recording_id": 17 })
+        );
+        assert_eq!(
+            serde_json::from_value::<RecordingLevelsDto>(json).unwrap(),
+            dto
         );
     }
 

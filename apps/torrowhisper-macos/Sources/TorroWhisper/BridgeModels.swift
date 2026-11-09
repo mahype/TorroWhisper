@@ -1365,6 +1365,7 @@ struct DiagnosticsDTO: Codable {
 
 struct RecordingLevelsDTO: Codable {
     var levels: [Float]
+    var recordingId: UInt64? = nil
 
     static let empty = RecordingLevelsDTO(levels: [])
 }

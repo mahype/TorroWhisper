@@ -180,7 +180,7 @@ impl Log for FileLogger {
             || target.starts_with("whisper_rs")
             || matches!(
                 target,
-                "bridge" | "dictation" | "app" | "panic" | "models" | "diag"
+                "bridge" | "dictation" | "app" | "panic" | "models" | "diag" | "latency"
             )
     }
 
@@ -252,9 +252,11 @@ mod tests {
         unsafe { std::env::set_var("OW_LOG_DIR", &dir) };
         init();
         log::info!(target: "bridge", "test line");
+        log::info!(target: "latency", "timing target admitted");
         let content = fs::read_to_string(dir.join(LOG_FILE_NAME)).expect("log file must exist");
         assert!(content.contains("logging started"));
         assert!(content.contains("test line"));
+        assert!(content.contains("timing target admitted"));
         let _ = fs::remove_dir_all(&dir);
     }
 
