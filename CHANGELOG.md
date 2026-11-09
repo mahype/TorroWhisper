@@ -6,11 +6,17 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+## [0.12.2] — 2026-11-09
+
+### Added
+- **Privacy-safe audio timing diagnostics** — recording-correlated summaries separate waveform MainActor cadence, bridge duration, capture callback scheduling and errors, buffer-lock wait/hold, output-cue stages, and backend calls. Realtime callbacks only update bounded counters; the new diagnostics never log audio samples, level traces, transcripts, or runtime dumps. These measurements help distinguish microphone underruns, cue deadlines, and slow transcription calls; they do not establish that the underlying device/backend problems are resolved.
+
 ### Changed
 - **Live preview stays fast on long dictations** (#89) — the live preview no longer re-transcribes the whole recording on every pass. It now decodes only the part since the last point where the text is settled: after a pause of 1.5 seconds, or during longer speech without a pause at a segment boundary reported by Whisper. On the M4 Max with Turbo Q5_0, the last preview passes of a 180-second dictation take about 0.4 s instead of about 2.8 s, and 60 seconds with pauses take 0.3 s instead of 0.8 s; short dictations are unchanged. On long takes the preview now also shows the complete text, where it used to fall behind and drop parts. Microphone audio is converted to 16 kHz once, as it arrives, with an anti-aliasing filter instead of plain interpolation; the inserted final text uses the same filter (no additional recognition errors in the comparison, about 0.06 s for 3 minutes of 48 kHz audio). With language set to automatic, the preview keeps the language it detected in the first settled section, because short sections are easily misdetected.
 - **Faster local Whisper transcription on Apple Silicon** (#88) — Whisper now runs with flash attention on Macs with Apple chips. In the M4 Max benchmark, a short dictation finishes about 15–17 % faster (Turbo Q5_0: 0.310 s → 0.262 s) and the 13.6 s reference clip about 17–18 % faster, with no additional recognition errors; Small and Large v3 gain 15–24 % as well. Intel Macs are unchanged: they could not be measured, and on the M4 Max's CPU flash attention made decoding about 80 % slower. The live preview uses two threads on Apple Silicon, which measured no slower than four. A shortened audio window (`audio_ctx`) was measured too and rejected: the Turbo models then repeat or drop text. The developer benchmark gains a short clip and variants for both settings; results are in `docs/WHISPER-PERFORMANCE.md`.
 
 ### Fixed
+- **Waveform polling no longer restarts or clears the bars on repeated starts** — starting the feed is idempotent, and ticks queued before stop or restart cannot read or publish into a later feed. Level snapshots use a nonblocking buffer-lock attempt and keep the latest valid bars during contention instead of making the UI wait for capture or live transcription.
 - **Long dictations are no longer missing text in the inserted result** (#92) — for dictations over 30 seconds, the final text could lose about half of the words and repeat others, so it was worse than the live preview. Whisper always skipped a fixed 30 seconds after each window, even where it had stopped earlier. Dictations over 30 seconds now use Whisper's own timestamps to continue where the recognized text ends; shorter dictations are unchanged. On the M4 Max with Turbo Q5_0, a 163-second dictation without a pause drops from 62 % to 0 % word errors (about 2 s longer to transcribe), and a 41-second one with pauses from 14.6 % to 1.1 % (reproducible with the ignored test `final_pass_long_take_keeps_word_error_rate`, see `docs/WHISPER-PERFORMANCE.md`). The expert setting *Force single segment* no longer applies to dictations over 30 seconds.
 - **Live preview no longer stalls when Whisper keeps revising a settled word** (#93) — when Whisper lastingly read a word of the settled preview text differently (for example "das" as "dass" or "20" as "zwanzig"), the preview stopped settling words until the end of the recording, and on long takes every pass decoded the whole recording again. Once three passes in a row contradict the settled text, the preview now takes over Whisper's latest reading and continues normally. The settled text on screen never jumps back: the revised word keeps its old form in the preview, and words Whisper inserts before it do not appear there. The inserted final text is not affected.
 
@@ -298,7 +304,8 @@ First public release. Everything below has landed since the project was initiali
 - CI runner bumped to `macos-15` for a newer Metal.framework ([`47caf7d`](https://github.com/mahype/TorroWhisper/commit/47caf7d)); Xcode 16 pinned on `macos-14` for Swift 6 ([`a1a2b63`](https://github.com/mahype/TorroWhisper/commit/a1a2b63)).
 - Legacy egui desktop app removed ([`82a3f6d`](https://github.com/mahype/TorroWhisper/commit/82a3f6d)).
 
-[Unreleased]: https://github.com/mahype/TorroWhisper/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/mahype/TorroWhisper/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/mahype/TorroWhisper/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/mahype/TorroWhisper/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/mahype/TorroWhisper/compare/v0.11.0...v0.12.0
 [0.9.1]: https://github.com/mahype/TorroWhisper/compare/v0.9.0...v0.9.1
