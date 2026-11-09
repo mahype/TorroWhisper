@@ -8,6 +8,8 @@ struct FeedTimingAggregate {
     private(set) var total: TimeInterval = 0
     private(set) var maximum: TimeInterval = 0
 
+    var isEmpty: Bool { count == 0 }
+
     mutating func record(_ seconds: TimeInterval) {
         let value = max(0, seconds)
         count += 1
@@ -112,7 +114,7 @@ final class RecordingLevelFeed: ObservableObject {
     }
 
     private func report() {
-        guard bridgeTiming.count > 0 else { return }
+        guard !bridgeTiming.isEmpty else { return }
         log(
             "latency recording=\(recordingId ?? 0) waveform cumulative main_cadence=[\(cadence.summary)] main_lateness=[\(lateness.summary)] ffi_decode=[\(bridgeTiming.summary)] errors=\(errors)"
         )
