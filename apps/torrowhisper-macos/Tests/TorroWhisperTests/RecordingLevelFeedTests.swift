@@ -110,7 +110,7 @@ final class RecordingLevelFeedTests: XCTestCase {
         aggregate.record(0.01)
         aggregate.record(0.05)
         XCTAssertFalse(aggregate.isEmpty)
-        XCTAssertEqual(aggregate.count, 2)
+        XCTAssertEqual(aggregate.sampleCount, 2)
         XCTAssertEqual(aggregate.total, 0.06, accuracy: 0.000001)
         XCTAssertEqual(aggregate.maximum, 0.05)
         let decoder = JSONDecoder()

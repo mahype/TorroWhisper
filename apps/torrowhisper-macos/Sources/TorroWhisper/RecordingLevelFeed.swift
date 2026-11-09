@@ -4,21 +4,21 @@ import Foundation
 /// Fixed-size timing aggregates only: never retain levels or transcript data
 /// in diagnostics. Clock/read/log injection keeps cadence tests deterministic.
 struct FeedTimingAggregate {
-    private(set) var count = 0
+    private(set) var sampleCount = 0
     private(set) var total: TimeInterval = 0
     private(set) var maximum: TimeInterval = 0
 
-    var isEmpty: Bool { count == 0 }
+    var isEmpty: Bool { sampleCount == 0 }
 
     mutating func record(_ seconds: TimeInterval) {
         let value = max(0, seconds)
-        count += 1
+        sampleCount += 1
         total += value
         maximum = max(maximum, value)
     }
 
     var summary: String {
-        "n=\(count),mean_ms=\(total * 1000 / Double(max(1, count))),max_ms=\(maximum * 1000)"
+        "n=\(sampleCount),mean_ms=\(total * 1000 / Double(max(1, sampleCount))),max_ms=\(maximum * 1000)"
     }
 }
 
