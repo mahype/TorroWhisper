@@ -472,6 +472,11 @@
 "Other audio" = "Other audio";
 "Output volume while recording" = "Output volume while recording";
 "Muted" = "Muted";
+"Run when recording starts" = "Run when recording starts";
+"Run when recording ends" = "Run when recording ends";
+"Command" = "Command";
+"Commands" = "Commands";
+"Optional shell commands that follow the recording, for example to mute another app's microphone. The end command also runs on cancel, error and quit. They run in the background, never block dictation and are stopped after 10 seconds. The environment variable TORROWHISPER_EVENT is recording_started or recording_stopped." = "Optional shell commands that follow the recording, for example to mute another app's microphone. The end command also runs on cancel, error and quit. They run in the background, never block dictation and are stopped after 10 seconds. The environment variable TORROWHISPER_EVENT is recording_started or recording_stopped.";
 "Unchanged" = "Unchanged";
 "During a recording, TorroWhisper sets the system output to this percentage of its previous volume and restores it afterwards. 0% mutes it. Some output devices do not support software volume control." = "During a recording, TorroWhisper sets the system output to this percentage of its previous volume and restores it afterwards. 0% mutes it. Some output devices do not support software volume control.";
 "Move up" = "Move up";

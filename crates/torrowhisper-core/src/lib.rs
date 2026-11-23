@@ -1144,6 +1144,14 @@ pub struct AppSettings {
     /// System output volume while recording, relative to the volume that was
     /// active when the recording started. `100` leaves it unchanged; `0` mutes.
     pub recording_output_volume_percent: u32,
+    /// Shell command run (via `/bin/sh -c`) when a recording starts. Empty
+    /// disables it. Runs in the background and never blocks dictation; the
+    /// environment carries `TORROWHISPER_EVENT=recording_started`.
+    pub recording_start_command: String,
+    /// Shell command run when a recording ends for any reason (stop, cancel,
+    /// error, app quit). Empty disables it. The environment carries
+    /// `TORROWHISPER_EVENT=recording_stopped`.
+    pub recording_stop_command: String,
     pub transcription_language: String,
     pub insert_text_automatically: bool,
     pub insert_delay_ms: u32,
@@ -1521,6 +1529,8 @@ impl Default for AppSettings {
             hotkey: "Ctrl+Shift+Space".to_owned(),
             trigger_mode: TriggerMode::default(),
             recording_output_volume_percent: 100,
+            recording_start_command: String::new(),
+            recording_stop_command: String::new(),
             transcription_language: "auto".to_owned(),
             insert_text_automatically: true,
             insert_delay_ms: 120,
@@ -1928,6 +1938,25 @@ mod tests {
         let configured: AppSettings = serde_json::from_str(r#"{"trigger_mode":"toggle"}"#)
             .expect("configured settings parse");
         assert_eq!(configured.trigger_mode, TriggerMode::Toggle);
+    }
+
+    #[test]
+    fn recording_commands_default_to_empty_and_round_trip() {
+        let legacy: AppSettings = serde_json::from_str("{}").unwrap();
+        assert!(legacy.recording_start_command.is_empty());
+        assert!(legacy.recording_stop_command.is_empty());
+
+        let configured: AppSettings = serde_json::from_str(
+            r#"{"recording_start_command":"echo start","recording_stop_command":"echo stop"}"#,
+        )
+        .unwrap();
+        assert_eq!(configured.recording_start_command, "echo start");
+        assert_eq!(configured.recording_stop_command, "echo stop");
+
+        let json = serde_json::to_string(&configured).unwrap();
+        let again: AppSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(again.recording_start_command, "echo start");
+        assert_eq!(again.recording_stop_command, "echo stop");
     }
 
     #[test]

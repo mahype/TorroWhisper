@@ -1036,6 +1036,10 @@ struct AppSettings: Codable, Equatable {
     /// System output while recording, relative to its previous volume.
     /// 100 leaves it unchanged; 0 mutes it.
     var recordingOutputVolumePercent: UInt32
+    /// Shell command run when a recording starts; empty disables it.
+    var recordingStartCommand: String
+    /// Shell command run when a recording ends (stop, cancel, error, quit).
+    var recordingStopCommand: String
     var transcriptionLanguage: String
     var insertTextAutomatically: Bool
     var insertDelayMs: UInt32
@@ -1105,6 +1109,8 @@ struct AppSettings: Codable, Equatable {
         hotkey: "Ctrl+Shift+Space",
         triggerMode: .pushToTalk,
         recordingOutputVolumePercent: 100,
+        recordingStartCommand: "",
+        recordingStopCommand: "",
         transcriptionLanguage: "auto",
         insertTextAutomatically: true,
         insertDelayMs: 120,
