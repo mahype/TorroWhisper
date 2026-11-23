@@ -494,6 +494,11 @@
 "Other audio" = "Andere Töne";
 "Output volume while recording" = "Ausgabelautstärke während der Aufnahme";
 "Muted" = "Stumm";
+"Run when recording starts" = "Bei Aufnahmebeginn ausführen";
+"Run when recording ends" = "Bei Aufnahmeende ausführen";
+"Command" = "Befehl";
+"Commands" = "Befehle";
+"Optional shell commands that follow the recording, for example to mute another app's microphone. The end command also runs on cancel, error and quit. They run in the background, never block dictation and are stopped after 10 seconds. The environment variable TORROWHISPER_EVENT is recording_started or recording_stopped." = "Optionale Shell-Befehle rund um die Aufnahme, zum Beispiel um das Mikrofon einer anderen App stummzuschalten. Der Befehl zum Aufnahmeende läuft auch bei Abbruch, Fehler und Beenden der App. Sie laufen im Hintergrund, blockieren das Diktat nie und werden nach 10 Sekunden gestoppt. Die Umgebungsvariable TORROWHISPER_EVENT lautet recording_started oder recording_stopped.";
 "Unchanged" = "Unverändert";
 "During a recording, TorroWhisper sets the system output to this percentage of its previous volume and restores it afterwards. 0% mutes it. Some output devices do not support software volume control." = "Während einer Aufnahme setzt TorroWhisper die Systemausgabe auf diesen Anteil der vorherigen Lautstärke und stellt sie danach wieder her. 0 % schaltet sie stumm. Manche Ausgabegeräte unterstützen keine softwaregesteuerte Lautstärke.";
 "Move up" = "Nach oben";

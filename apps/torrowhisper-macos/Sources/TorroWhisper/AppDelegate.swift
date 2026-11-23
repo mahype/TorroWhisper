@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     private var powerEventObservers: [NSObjectProtocol] = []
     private let audioDeviceMonitor = AudioDeviceMonitor()
     private let recordingOutputVolumeController = RecordingOutputVolumeController()
+    private let recordingCommandRunner = RecordingCommandRunner()
     private var recordingOutputSettingsCancellable: AnyCancellable?
     private let keyboardHardwareMonitor = KeyboardHardwareMonitor()
     private let recordingLevelFeed = RecordingLevelFeed()
@@ -194,6 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         parakeetUpgradeCancellable?.cancel()
         recordingOutputVolumeController.stopMonitoring()
         recordingOutputVolumeController.restore()
+        recordingCommandRunner.finish()
         BridgeClient().sessionEndedCleanly()
     }
 
@@ -362,6 +364,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         recordingOutputVolumeController.update(
             isRecording: runtime.isRecording,
             outputVolumePercent: model.settings.recordingOutputVolumePercent
+        )
+        recordingCommandRunner.update(
+            isRecording: runtime.isRecording,
+            startCommand: model.settings.recordingStartCommand,
+            stopCommand: model.settings.recordingStopCommand
         )
         let dictationLabel = runtime.isRecording
             ? L("Stop dictation", locale: locale)

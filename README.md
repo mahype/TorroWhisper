@@ -85,6 +85,7 @@ Need permissions help, autostart setup, or uninstall steps? → [docs/INSTALL.md
 
 ### System integration
 
+- **Recording commands** — optional shell commands that run when a recording starts and when it ends (stop, cancel, error or quit), set under Settings → *Recording*. They run in the background, never block dictation and receive `TORROWHISPER_EVENT` (`recording_started` / `recording_stopped`) in their environment. Use them to hook anything onto the recording lifecycle, for example muting another app's virtual microphone while you dictate.
 - **Auto-updates** via [Sparkle](https://sparkle-project.org). The Updates tab lets users run a manual *Check Now* or disable background checks. Updates are cryptographically signed with an Ed25519 key.
 - **Diagnostics** tab for microphone, accessibility, and input-monitoring permissions, with one-click access to System Settings.
 - **Help** tab shows the running app version and bundle identifier and lets users re-run onboarding.

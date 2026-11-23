@@ -308,6 +308,35 @@ struct SettingsView: View {
         }
 
         Section {
+            TextField(
+                text: recordingStartCommandBinding,
+                prompt: Text("Command", bundle: .module)
+            ) {
+                Text("Run when recording starts", bundle: .module)
+            }
+            .textFieldStyle(.roundedBorder)
+            .font(.system(.body, design: .monospaced))
+            .autocorrectionDisabled()
+
+            TextField(
+                text: recordingStopCommandBinding,
+                prompt: Text("Command", bundle: .module)
+            ) {
+                Text("Run when recording ends", bundle: .module)
+            }
+            .textFieldStyle(.roundedBorder)
+            .font(.system(.body, design: .monospaced))
+            .autocorrectionDisabled()
+        } header: {
+            Text("Commands", bundle: .module)
+        } footer: {
+            Text("Optional shell commands that follow the recording, for example to mute another app's microphone. The end command also runs on cancel, error and quit. They run in the background, never block dictation and are stopped after 10 seconds. The environment variable TORROWHISPER_EVENT is recording_started or recording_stopped.", bundle: .module)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
+        Section {
             HotkeyRecorderField(
                 title: model.hotkeyFieldTitle,
                 currentHotkey: model.settings.hotkey,
@@ -429,6 +458,26 @@ struct SettingsView: View {
         case let percent:
             return "\(percent) %"
         }
+    }
+
+    private var recordingStartCommandBinding: Binding<String> {
+        Binding(
+            get: { model.settings.recordingStartCommand },
+            set: { newValue in
+                model.settings.recordingStartCommand = newValue
+                model.requestAutoSave()
+            }
+        )
+    }
+
+    private var recordingStopCommandBinding: Binding<String> {
+        Binding(
+            get: { model.settings.recordingStopCommand },
+            set: { newValue in
+                model.settings.recordingStopCommand = newValue
+                model.requestAutoSave()
+            }
+        )
     }
 
     @ViewBuilder

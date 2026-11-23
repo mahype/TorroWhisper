@@ -6,6 +6,9 @@ All notable changes to TorroWhisper are documented here. The format is based on 
 
 ## [Unreleased]
 
+### Added
+- **Recording commands** (#100) — two optional shell commands in Settings → Recording run when a recording starts and when it ends. The end command also runs on cancel, error and app quit, so whatever the start command changed can always be put back. Both run in the background through `/bin/sh -c`, never block dictation, are stopped after 10 seconds and get `TORROWHISPER_EVENT` (`recording_started` or `recording_stopped`) in their environment. Meant as a generic integration point, for example to mute a virtual microphone another app listens to while you dictate.
+
 ## [0.12.2] — 2026-11-09
 
 ### Added
